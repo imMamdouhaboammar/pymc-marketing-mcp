@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pymc-marketing-mcp"
+version = "0.2.0"
+description = "A decision-safe MCP interface for Bayesian marketing science with PyMC-Marketing"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+license = {text = "Apache-2.0"}
+authors = [{name = "PyMC Marketing MCP contributors"}]
+dependencies = [
+  "pydantic>=2.12,<2.13",
+  "pandas>=2.2,<3",
+  "numpy>=2.0,<3",
+  "xarray>=2025.1",
+  "arviz>=0.21,<2",
+  "pymc-marketing>=0.19.4,<0.20",
+  "mcp[cli]>=2,<3",
+  "uvicorn>=0.34,<1",
+  "structlog>=25,<26",
+  "pyarrow>=18,<24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "pytest-cov>=6,<8", "ruff>=0.12,<1"]
+
+[project.scripts]
+marketing-mcp = "marketing_mcp.cli:main"
+marketing-mcp-demo = "marketing_mcp.demo:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/marketing_mcp"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+  "statistical: requires pymc-marketing and runs sampling",
+  "mcp: requires MCP Python SDK",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

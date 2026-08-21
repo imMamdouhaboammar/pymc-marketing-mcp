@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+artifacts/
+metadata.db
+*.nc
+*.zarr
+.coverage
+htmlcov/
+graphify-out/
+.ruff_cache/
