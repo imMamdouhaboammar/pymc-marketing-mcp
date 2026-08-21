@@ -15,7 +15,7 @@ def _json_scalar(value: Any) -> Any:
 
 
 def model_dimensions(model) -> list[str]:
-    return list(tuple(getattr(model, "dims", ()) or ()))
+    return list(getattr(model, "dims", ()) or ())
 
 
 def _dimension_coords(model) -> dict[str, list[Any]]:
@@ -72,9 +72,7 @@ def historical_allocation(
 
     if not dims:
         totals = recent[channels].apply(pd.to_numeric, errors="coerce").sum(axis=0)
-        allocation: dict[str, Any] = {
-            channel: float(totals[channel]) for channel in channels
-        }
+        allocation: dict[str, Any] = {channel: float(totals[channel]) for channel in channels}
     else:
         coords = _dimension_coords(model)
         cells = []
@@ -170,9 +168,7 @@ def apply_changes(
     }
     for cell in scenario["cells"]:
         if cell["channel"] in channel_changes:
-            cell["amount"] = change_value(
-                cell["amount"], channel_changes[cell["channel"]]
-            )
+            cell["amount"] = change_value(cell["amount"], channel_changes[cell["channel"]])
 
     index = {
         (
@@ -185,9 +181,7 @@ def apply_changes(
     for change in cell_changes:
         channel = change.channel if hasattr(change, "channel") else change["channel"]
         dimensions = (
-            dict(change.dimensions)
-            if hasattr(change, "dimensions")
-            else dict(change["dimensions"])
+            dict(change.dimensions) if hasattr(change, "dimensions") else dict(change["dimensions"])
         )
         _validate_selector(model, channel, dimensions)
         key = (channel, tuple((dim, dimensions[dim]) for dim in dims))
@@ -272,9 +266,7 @@ def allocation_from_xarray(model, allocation: xr.DataArray) -> dict[str, Any]:
     dims = model_dimensions(model)
     if not dims:
         array = allocation.transpose("channel")
-        return {
-            channel: float(array.sel(channel=channel).item()) for channel in channels
-        }
+        return {channel: float(array.sel(channel=channel).item()) for channel in channels}
     array = allocation.transpose("channel", *dims)
     cells = []
     for channel in channels:
@@ -304,8 +296,7 @@ def build_budget_bounds(
             "Channel-level min/max/fixed constraints are ambiguous for a multidimensional MMM",
             evidence={"dims": dims, "channels": sorted(channel_constraints)},
             next_action=(
-                "Use cell_constraints with an exact dimension selector for each "
-                "constrained cell"
+                "Use cell_constraints with an exact dimension selector for each constrained cell"
             ),
         )
 
@@ -391,14 +382,84 @@ def _validate_selector(model, channel: str, dimensions: dict[str, Any]) -> None:
             evidence={"expected_dimensions": dims, "received_dimensions": sorted(dimensions)},
         )
     coords = _dimension_coords(model)
-    unknown_values = {
-        dim: value
-        for dim, value in dimensions.items()
-        if value not in coords[dim]
-    }
+    unknown_values = {dim: value for dim, value in dimensions.items() if value not in coords[dim]}
     if unknown_values:
         raise DomainError(
             "INVALID_CONSTRAINT",
             "Dimension selector contains values not present in the fitted model",
             evidence={"unknown_values": unknown_values, "known_values": coords},
         )
+
+
+def check_extrapolation_risk(
+    model,
+    allocation: dict[str, Any],
+    planning_periods: int,
+    threshold_ratio: float = 1.5,
+) -> list[dict[str, Any]]:
+    """Detect when allocated weekly spend materially exceeds historical observed support."""
+    if not hasattr(model, "X") or planning_periods <= 0:
+        return []
+
+    channels = list(model.channel_columns)
+    dims = model_dimensions(model)
+    warnings = []
+
+    if not dims:
+        for ch in channels:
+            if ch not in allocation or ch not in model.X.columns:
+                continue
+            hist_vals = pd.to_numeric(model.X[ch], errors="coerce").dropna().values
+            if len(hist_vals) == 0:
+                continue
+            p95 = float(np.percentile(hist_vals, 95))
+            weekly_spend = float(allocation[ch]) / float(planning_periods)
+            if p95 > 0 and weekly_spend > threshold_ratio * p95:
+                ratio = round(weekly_spend / p95, 2)
+                warnings.append(
+                    {
+                        "code": "EXTRAPOLATION_RISK",
+                        "channel": ch,
+                        "recommended_weekly_spend": round(weekly_spend, 2),
+                        "historical_p95": round(p95, 2),
+                        "ratio_to_p95": ratio,
+                        "message": (
+                            f"Allocated weekly spend for {ch} ({round(weekly_spend, 2)}) is {ratio}x "
+                            f"higher than historical 95th percentile ({round(p95, 2)})."
+                        ),
+                    }
+                )
+    else:
+        for cell in allocation.get("cells", []):
+            ch = cell.get("channel")
+            cell_dims = cell.get("dimensions", {})
+            amount = cell.get("amount", 0.0)
+            if ch not in channels or ch not in model.X.columns:
+                continue
+            mask = np.ones(len(model.X), dtype=bool)
+            for d_name, d_val in cell_dims.items():
+                if d_name in model.X.columns:
+                    mask = mask & (model.X[d_name] == d_val)
+            hist_vals = pd.to_numeric(model.X.loc[mask, ch], errors="coerce").dropna().values
+            if len(hist_vals) == 0:
+                continue
+            p95 = float(np.percentile(hist_vals, 95))
+            weekly_spend = float(amount) / float(planning_periods)
+            if p95 > 0 and weekly_spend > threshold_ratio * p95:
+                ratio = round(weekly_spend / p95, 2)
+                warnings.append(
+                    {
+                        "code": "EXTRAPOLATION_RISK",
+                        "channel": ch,
+                        "dimensions": cell_dims,
+                        "recommended_weekly_spend": round(weekly_spend, 2),
+                        "historical_p95": round(p95, 2),
+                        "ratio_to_p95": ratio,
+                        "message": (
+                            f"Allocated weekly spend for {ch} in {cell_dims} ({round(weekly_spend, 2)}) "
+                            f"is {ratio}x higher than historical 95th percentile ({round(p95, 2)})."
+                        ),
+                    }
+                )
+
+    return warnings

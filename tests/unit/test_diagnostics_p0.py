@@ -15,12 +15,8 @@ def _idata_with_ppc(observed, predictive):
     idata["sample_stats"] = xr.Dataset(
         {"diverging": (("chain", "draw"), np.zeros((2, 20), dtype=int))}
     )
-    idata["posterior"] = xr.Dataset(
-        {"beta": (("chain", "draw"), np.ones((2, 20)))}
-    )
-    idata["observed_data"] = xr.Dataset(
-        {"y": (("date",), np.asarray(observed, dtype=float))}
-    )
+    idata["posterior"] = xr.Dataset({"beta": (("chain", "draw"), np.ones((2, 20)))})
+    idata["observed_data"] = xr.Dataset({"y": (("date",), np.asarray(observed, dtype=float))})
     idata["posterior_predictive"] = xr.Dataset(
         {
             "y": (
@@ -50,9 +46,7 @@ def test_diagnostics_approves_sampler_but_cautions_when_predictive_check_missing
     idata["sample_stats"] = xr.Dataset(
         {"diverging": (("chain", "draw"), np.zeros((2, 20), dtype=int))}
     )
-    idata["posterior"] = xr.Dataset(
-        {"beta": (("chain", "draw"), np.ones((2, 20)))}
-    )
+    idata["posterior"] = xr.Dataset({"beta": (("chain", "draw"), np.ones((2, 20)))})
     result = diagnose_inferencedata(
         idata,
         summary_override={"r_hat": 1.0, "ess_bulk": 1000},

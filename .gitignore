@@ -9,5 +9,9 @@ metadata.db
 *.zarr
 .coverage
 htmlcov/
+dist/
+build/
+*.egg-info/
+.demo-runtime/
 graphify-out/
 .ruff_cache/

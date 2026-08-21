@@ -63,8 +63,11 @@ def test_incremental_roas_uses_official_total_and_marginal_apis():
     assert meta["marginal_iroas"]["probability_gt_1"] == 0.5
 
 
+from typing import ClassVar
+
+
 class FakeBudgetWrapper:
-    instances = []
+    instances: ClassVar[list] = []
 
     def __init__(self, model, start_date, end_date):
         self.model = model

@@ -123,8 +123,11 @@ def test_simulation_supports_channel_dimension_cell_changes():
     assert _cell_amount(scenario, "google", "jeddah") == pytest.approx(119.6)
 
 
+from typing import ClassVar
+
+
 class FakeMultidimensionalWrapper:
-    instances = []
+    instances: ClassVar[list] = []
 
     def __init__(self, model, start_date, end_date):
         self.model = model

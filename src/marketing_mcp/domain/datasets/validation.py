@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from itertools import product
 
-import numpy as np
 import pandas as pd
 
 from marketing_mcp.schemas.models import Finding
@@ -49,7 +48,9 @@ def _panel_findings(df: pd.DataFrame, dates: pd.Series, dims: list[str]) -> list
                 "Multidimensional MMM data must contain the same dates for every dimension combination",
                 {
                     "dims": dims,
-                    "missing_dimension_combinations": [list(x) for x in sorted(missing_combos, key=str)][:20],
+                    "missing_dimension_combinations": [
+                        list(x) for x in sorted(missing_combos, key=str)
+                    ][:20],
                     "groups_with_missing_dates": dict(list(incomplete.items())[:20]),
                 },
                 "Complete the date × dimension grid or remove unsupported panel slices",
@@ -196,11 +197,7 @@ def validate_mmm_dataset(
                 )
             )
         zero_run = (series.fillna(0) == 0).astype(int)
-        longest = (
-            int(zero_run.groupby((zero_run == 0).cumsum()).sum().max())
-            if len(series)
-            else 0
-        )
+        longest = int(zero_run.groupby((zero_run == 0).cumsum()).sum().max()) if len(series) else 0
         if longest >= 13:
             findings.append(
                 _f(

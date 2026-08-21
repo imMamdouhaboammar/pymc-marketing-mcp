@@ -22,9 +22,7 @@ def _panel():
 
 
 def test_panel_allows_same_date_across_different_dimension_values():
-    findings = validate_mmm_dataset(
-        _panel(), "date", "revenue", ["meta"], [], dims=["geo"]
-    )
+    findings = validate_mmm_dataset(_panel(), "date", "revenue", ["meta"], [], dims=["geo"])
     assert not any(f.code == "DUPLICATE_PERIOD" for f in findings)
     assert not any(f.code == "NON_RECTANGULAR_PANEL" for f in findings)
 
@@ -32,16 +30,12 @@ def test_panel_allows_same_date_across_different_dimension_values():
 def test_panel_rejects_duplicate_date_dimension_key():
     df = _panel()
     df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
-    findings = validate_mmm_dataset(
-        df, "date", "revenue", ["meta"], [], dims=["geo"]
-    )
+    findings = validate_mmm_dataset(df, "date", "revenue", ["meta"], [], dims=["geo"])
     assert any(f.code == "DUPLICATE_PERIOD" for f in findings)
 
 
 def test_panel_rejects_non_rectangular_dimension_grid():
     df = _panel()
     df = df[~((df["geo"] == "jeddah") & (df["date"] == df["date"].max()))]
-    findings = validate_mmm_dataset(
-        df, "date", "revenue", ["meta"], [], dims=["geo"]
-    )
+    findings = validate_mmm_dataset(df, "date", "revenue", ["meta"], [], dims=["geo"])
     assert any(f.code == "NON_RECTANGULAR_PANEL" for f in findings)

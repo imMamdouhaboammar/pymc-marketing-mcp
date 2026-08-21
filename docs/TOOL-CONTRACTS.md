@@ -1,104 +1,77 @@
-# Tool Contracts
+# MCP Tool Contracts (v0.3.0)
 
-Every MCP tool returns structured, agent-oriented data. Stable errors explain what failed, evidence where available, and a next action. Large posterior arrays stay server-side.
+Every MCP tool returns structured, agent-oriented data wrapped in a standard `ToolEnvelope` (summary, evidence, warnings, provenance, next_actions). Large posterior arrays stay server-side.
 
-## Dataset
+## 1. Dataset Tools
 
-### `register_dataset(path)`
-Returns a stable dataset ID, format, row count, and SHA-256 fingerprint.
+### `register_dataset(path: str)`
+- Registers a local CSV or Parquet file from the safe ingest root.
+- Returns `dataset_id`, format, row count, and SHA-256 fingerprint.
 
-### `inspect_dataset(dataset_id)`
-Returns row count, inferred frequency, date range, candidate target/channel/control columns, missing periods, and inspection findings.
+### `inspect_dataset(dataset_id: str)`
+- Returns row count, inferred temporal frequency, date range, candidate target/channel/control columns, missing periods, and inspection findings.
 
-### `validate_dataset(...)`
-Runs MMM-specific validation. When `dims` are present, observation uniqueness is evaluated on `date + dims`, and the panel must contain the same dates for every dimension combination.
+### `validate_dataset(dataset_id: str, date_column: str, target_column: str, channel_columns: list[str], control_columns: list[str] | None, dims: list[str] | None)`
+- Runs statistical and panel-shape validation: 52+ week minimum, zero-spend variation, extreme channel correlation (>= 0.90), negative spend, duplicate periods, and rectangular panel integrity across dimension cells.
 
-## Modeling
+## 2. Modeling & Lineage Tools
 
-### `fit_mmm(config)`
-Fits a PyMC-Marketing MMM from a controlled typed configuration. Arbitrary Python is not accepted.
+### `fit_mmm(config: FitMMMInput)`
+- Fits a real Bayesian Marketing Mix Model using PyMC-Marketing.
+- Controls sampler configuration (draws, tune, chains, target_accept, random_seed), adstock (geometric), saturation (logistic), and yearly seasonality.
+- Automatically hashes semantic configuration, records dataset fingerprint, and attaches package provenance.
 
-### `get_model_status(model_id)`
-Returns persisted lifecycle state and safe failure information.
+### `get_model_status(model_id: str)`
+- Returns model record, execution status (`queued`, `running`, `completed`, `failed`, `cancelled`), lineage stage (`initial_fit`, `calibrated`, `refit`), and error details.
 
-### `diagnose_mmm(model_id)`
-Returns:
+### `calibrate_mmm(input: CalibrateMMMInput)`
+- Calibrates an existing fitted MMM using experimental incrementality lift tests (`add_lift_test_measurements`).
+- Produces a new calibrated model artifact with `parent_model_id` lineage linkage.
 
-- divergences
-- maximum R-hat
-- minimum bulk ESS
-- posterior predictive target
-- 94% posterior predictive coverage when available
-- posterior predictive RMSE and normalized RMSE
-- lag-1 residual autocorrelation when a date dimension is available
-- `approved | approved_with_caution | rejected`
+### `compare_models(input: CompareModelsInput)`
+- Compares sampler diagnostics, predictive RMSE/NRMSE, divergences, R-hat, ESS, and lineage stages across multiple fitted models.
 
-## Analysis
+### `archive_model(input: ArchiveModelInput)`
+- Transitions a model record to `cancelled`/archived state.
 
-### `get_channel_contributions(model_id)`
-Returns posterior contribution summaries from the fitted model artifact.
+## 3. Diagnostics & Cross-Validation Tools
 
-### `get_incremental_roas(model_id)`
-Returns total and marginal iROAS from PyMC-Marketing incrementality calculations. Each summary contains mean, median, 94% interval, and probability of exceeding 1.
+### `diagnose_mmm(model_id: str)`
+- Mandatory statistical gate. Checks divergences (= 0), R-hat (<= 1.05 fail, <= 1.01 clean), bulk ESS (>= 50 fail, >= 400 clean), 94% posterior predictive coverage (>= 50% fail, >= 80% clean), normalized RMSE, and residual autocorrelation.
+- Computes decision status: `approved`, `approved_with_caution`, or `rejected`.
 
-### `get_response_curves(model_id)`
-Returns compact response/saturation summaries from the supported PyMC-Marketing response-curve API.
+### `cross_validate_mmm(input: CrossValidateMMMInput)`
+- Runs rolling Time-Slice Cross-Validation with `TimeSliceCrossValidator`.
+- Evaluates out-of-sample predictive RMSE and NRMSE across rolling folds.
 
-## Decisions
+### `evaluate_prior_sensitivity(input: PriorSensitivityInput)`
+- Evaluates commercial conclusion stability (channel rank ordering and iROAS) under altered adstock and saturation priors.
 
-### `simulate_budget(config)`
-Requires a diagnosed model that passed the decision gate. It evaluates the requested allocation directly through posterior response sampling.
+## 4. Decision & Incrementality Tools
 
-Single-dimensional input can use:
+### `get_channel_contributions(model_id: str)`
+- Returns posterior channel contribution summaries (median and 94% credible intervals in original scale).
 
-```json
-{
-  "changes": {
-    "meta": {"type": "relative", "value": -0.20}
-  }
-}
-```
+### `get_incremental_roas(model_id: str)`
+- Returns total iROAS and marginal iROAS from PyMC-Marketing official incrementality API with posterior uncertainty ($P(\text{iROAS} > 1)$, median, 94% CI).
 
-Multidimensional input can use:
+### `get_response_curves(model_id: str)`
+- Returns sampled saturation and response curve data.
 
-```json
-{
-  "cell_changes": [
-    {
-      "channel": "meta",
-      "dimensions": {"geo": "riyadh"},
-      "type": "relative",
-      "value": -0.20
-    }
-  ]
-}
-```
+### `simulate_budget(config: BudgetSimulationInput)`
+- Evaluates exact requested channel or dimension-cell spend scenarios with posterior response sampling.
+- Emits `EXTRAPOLATION_RISK` warning if spend exceeds 1.5x of historical 95th percentile spend.
 
-Output includes baseline allocation, scenario allocation, baseline posterior response, scenario posterior response, difference interval, and probability that the scenario beats baseline.
+### `optimize_budget(config: BudgetOptimizationInput)`
+- Computes SLSQP budget optimization subject to channel or cell constraints.
+- Compares baseline vs recommended posterior responses with uncertainty intervals.
 
-### `optimize_budget(config)`
-Requires a diagnosed model that passed the decision gate. It uses PyMC-Marketing budget allocation and samples the response distribution for both the baseline and recommended allocation.
+### `recommend_next_measurement(model_id: str)`
+- Recommends evidence-gathering experiments when data or model uncertainties are high.
 
-For a multidimensional model, exact cell bounds are supplied through `cell_constraints`:
+## 5. MCP Resources
 
-```json
-{
-  "cell_constraints": [
-    {
-      "channel": "google",
-      "dimensions": {"geo": "jeddah"},
-      "min": 100000,
-      "max": 600000
-    }
-  ]
-}
-```
-
-Channel-only bounds remain supported for models without extra dimensions.
-
-### `recommend_next_measurement(model_id)`
-Returns evidence-gathering suggestions only when current validation or diagnostic signals support them. It can explicitly return that no single measurement is implied.
-
-## Prohibited surfaces
-
-No tool accepts Python source, shell commands, SQL, serialized Python objects, or caller-selected model artifact paths. Rejected models return `MODEL_NOT_VALIDATED` for budget decision calls.
+- `marketing://datasets/{dataset_id}`: Full dataset metadata and inspection status.
+- `marketing://models/{model_id}`: Full model record and configuration.
+- `marketing://models/{model_id}/diagnostics`: Detailed diagnostic metrics and findings.
+- `marketing://models/{model_id}/lineage`: Model parent linkage, semantic hash, and package provenance.

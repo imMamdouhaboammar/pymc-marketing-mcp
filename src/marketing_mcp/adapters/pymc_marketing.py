@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import importlib.metadata
+import platform
 from pathlib import Path
 from typing import Any
-import importlib.metadata
 
 import numpy as np
 import pandas as pd
@@ -20,25 +21,30 @@ from marketing_mcp.errors import DomainError
 class PyMCMarketingAdapter:
     def __init__(self):
         try:
-            from pymc_marketing.mmm import GeometricAdstock, LogisticSaturation
+            from pymc_marketing.mmm import (
+                MMM,
+                BudgetOptimizerWrapper,
+                GeometricAdstock,
+                LogisticSaturation,
+            )
+
+            optimizer_wrapper = BudgetOptimizerWrapper
+        except ImportError:
             try:
-                # PyMC-Marketing 0.19.x canonical multidimensional path.
+                from pymc_marketing.mmm import GeometricAdstock, LogisticSaturation
                 from pymc_marketing.mmm.multidimensional import (
                     MMM,
                     MultiDimensionalBudgetOptimizerWrapper,
                 )
+
                 optimizer_wrapper = MultiDimensionalBudgetOptimizerWrapper
-            except ImportError:
-                # Forward-compatible fallback for the post-0.19 rename.
-                from pymc_marketing.mmm.mmm import MMM, BudgetOptimizerWrapper
-                optimizer_wrapper = BudgetOptimizerWrapper
-        except ImportError as e:
-            raise DomainError(
-                "DEPENDENCY_UNAVAILABLE",
-                "PyMC-Marketing is not installed in this runtime",
-                evidence={"dependency": "pymc-marketing>=0.19.4,<0.20"},
-                next_action="Install project dependencies with uv sync",
-            ) from e
+            except ImportError as e:
+                raise DomainError(
+                    "DEPENDENCY_UNAVAILABLE",
+                    "PyMC-Marketing is not installed in this runtime",
+                    evidence={"dependency": "pymc-marketing>=1.0.0"},
+                    next_action="Install project dependencies with uv sync",
+                ) from e
         self.MMM = MMM
         self.GeometricAdstock = GeometricAdstock
         self.LogisticSaturation = LogisticSaturation
@@ -46,8 +52,8 @@ class PyMCMarketingAdapter:
 
     @staticmethod
     def versions():
-        names = ["pymc-marketing", "pymc", "arviz", "mcp"]
-        out = {}
+        names = ["pymc-marketing", "pymc", "arviz", "xarray", "h5netcdf", "h5py", "mcp"]
+        out = {"python": platform.python_version()}
         for name in names:
             try:
                 out[name] = importlib.metadata.version(name)
@@ -55,7 +61,13 @@ class PyMCMarketingAdapter:
                 out[name] = None
         return out
 
-    def fit(self, df: pd.DataFrame, config: dict, artifact: Path):
+    def fit(
+        self,
+        df: pd.DataFrame,
+        config: dict,
+        artifact: Path,
+        lift_df: pd.DataFrame | None = None,
+    ):
         target = config["target_column"]
         xcols = [
             config["date_column"],
@@ -78,9 +90,9 @@ class PyMCMarketingAdapter:
         )
         sampler = config["sampler"]
         model.build_model(X, y)
-        model.add_original_scale_contribution_variable(
-            var=["channel_contribution", "y"]
-        )
+        model.add_original_scale_contribution_variable(var=["channel_contribution", "y"])
+        if lift_df is not None and not lift_df.empty:
+            model.add_lift_test_measurements(lift_df)
         model.fit(
             X,
             y,
@@ -94,6 +106,227 @@ class PyMCMarketingAdapter:
         artifact.parent.mkdir(parents=True, exist_ok=True)
         model.save(artifact)
         return model
+
+    def time_slice_cross_validate(
+        self,
+        df: pd.DataFrame,
+        config: dict,
+        n_init: int = 40,
+        forecast_horizon: int = 10,
+        step_size: int = 10,
+        sampler_config: dict | None = None,
+    ) -> dict[str, Any]:
+        """Run rolling time-slice cross-validation using PyMC-Marketing's TimeSliceCrossValidator."""
+        try:
+            from pymc_marketing.mmm import TimeSliceCrossValidator
+        except ImportError as e:
+            raise DomainError(
+                "DEPENDENCY_UNAVAILABLE",
+                "TimeSliceCrossValidator is unavailable in this runtime",
+            ) from e
+
+        target = config["target_column"]
+        date_col = config["date_column"]
+        xcols = [
+            date_col,
+            *config["channel_columns"],
+            *config.get("control_columns", []),
+            *config.get("dims", []),
+        ]
+        X = df[xcols].copy()
+        X[date_col] = pd.to_datetime(X[date_col])
+        y = pd.to_numeric(df[target], errors="raise").rename(target)
+
+        model = self.MMM(
+            date_column=date_col,
+            channel_columns=config["channel_columns"],
+            control_columns=config.get("control_columns") or None,
+            target_column=target,
+            adstock=self.GeometricAdstock(l_max=config["adstock"]["l_max"]),
+            saturation=self.LogisticSaturation(),
+            yearly_seasonality=config.get("yearly_seasonality"),
+            dims=tuple(config.get("dims", [])),
+        )
+
+        s_cfg = sampler_config or config.get("sampler", {})
+        cv = TimeSliceCrossValidator(
+            n_init=n_init,
+            forecast_horizon=forecast_horizon,
+            date_column=date_col,
+            step_size=step_size,
+            sampler_config={
+                "draws": s_cfg.get("draws", 100),
+                "tune": s_cfg.get("tune", 100),
+                "chains": s_cfg.get("chains", 2),
+                "target_accept": s_cfg.get("target_accept", 0.9),
+                "random_seed": s_cfg.get("random_seed", 42),
+            },
+        )
+
+        cv.run(
+            X,
+            y,
+            mmm=model,
+            original_scale_vars=["channel_contribution", "y"],
+        )
+
+        fold_metrics = []
+        rmses = []
+        nrmses = []
+        if hasattr(cv, "_cv_results"):
+            for idx, res in enumerate(cv._cv_results):
+                try:
+                    y_test = np.asarray(res.y_test, dtype=float).reshape(-1)
+                    pp = res.idata.posterior_predictive
+                    y_var = (
+                        "y_original_scale"
+                        if "y_original_scale" in pp
+                        else ("y" if "y" in pp else next(iter(pp.data_vars.keys())))
+                    )
+                    sample_dims = [d for d in ("chain", "draw", "sample") if d in pp[y_var].dims]
+                    pred_mean = np.asarray(
+                        pp[y_var].mean(dim=sample_dims),
+                        dtype=float,
+                    ).reshape(-1)
+                    test_pred = pred_mean[-len(y_test) :]
+                    fold_rmse = float(np.sqrt(np.mean((y_test - test_pred) ** 2)))
+                    scale = float(np.std(y_test))
+                    fold_nrmse = float(fold_rmse / scale) if scale > 0 else None
+                except (KeyError, AttributeError, ValueError):
+                    fold_rmse = 0.0
+                    fold_nrmse = None
+                rmses.append(fold_rmse)
+                if fold_nrmse is not None:
+                    nrmses.append(fold_nrmse)
+                fold_metrics.append(
+                    {
+                        "fold": idx + 1,
+                        "train_periods": len(res.X_train),
+                        "test_periods": len(res.X_test),
+                        "out_of_sample_rmse": round(fold_rmse, 2),
+                        "out_of_sample_nrmse": round(fold_nrmse, 4)
+                        if fold_nrmse is not None
+                        else None,
+                    }
+                )
+
+        mean_rmse = float(np.mean(rmses)) if rmses else 0.0
+        mean_nrmse = float(np.mean(nrmses)) if nrmses else None
+
+        stability_findings = []
+        if nrmses and max(nrmses) > 1.8 * min(nrmses) and max(nrmses) > 0.6:
+            stability_findings.append(
+                {
+                    "code": "CV_PREDICTIVE_INSTABILITY",
+                    "severity": "warning",
+                    "message": "Out-of-sample predictive performance degrades substantially across later time splits.",
+                    "evidence": {
+                        "min_nrmse": round(min(nrmses), 4),
+                        "max_nrmse": round(max(nrmses), 4),
+                    },
+                }
+            )
+
+        return {
+            "folds": len(fold_metrics),
+            "metrics": fold_metrics,
+            "mean_out_of_sample_rmse": round(mean_rmse, 2),
+            "mean_out_of_sample_nrmse": round(mean_nrmse, 4) if mean_nrmse is not None else None,
+            "stability_findings": stability_findings,
+            "decision_impact": "warning" if stability_findings else "approved",
+        }
+
+    def evaluate_prior_sensitivity(
+        self,
+        model,
+        df: pd.DataFrame,
+        config: dict,
+    ) -> dict[str, Any]:
+        """Evaluate sensitivity of commercial conclusions under alternative adstock/saturation priors."""
+        base_contrib = self.channel_contributions(model)
+        base_ranks = {
+            c["channel"]: i
+            for i, c in enumerate(
+                sorted(
+                    base_contrib["channels"], key=lambda x: x["contribution_median"], reverse=True
+                )
+            )
+        }
+
+        alt_config = dict(config)
+        alt_adstock_max = max(2, config.get("adstock", {}).get("l_max", 8) // 2)
+        alt_config["adstock"] = {"l_max": alt_adstock_max}
+        alt_sampler = dict(config.get("sampler", {}))
+        alt_sampler["draws"] = min(alt_sampler.get("draws", 200), 100)
+        alt_sampler["tune"] = min(alt_sampler.get("tune", 200), 100)
+        alt_sampler["chains"] = 2
+        alt_config["sampler"] = alt_sampler
+
+        target = alt_config["target_column"]
+        date_col = alt_config["date_column"]
+        xcols = [
+            date_col,
+            *alt_config["channel_columns"],
+            *alt_config.get("control_columns", []),
+            *alt_config.get("dims", []),
+        ]
+        X = df[xcols].copy()
+        X[date_col] = pd.to_datetime(X[date_col])
+        y = pd.to_numeric(df[target], errors="raise").rename(target)
+
+        alt_model = self.MMM(
+            date_column=date_col,
+            channel_columns=alt_config["channel_columns"],
+            control_columns=alt_config.get("control_columns") or None,
+            target_column=target,
+            adstock=self.GeometricAdstock(l_max=alt_config["adstock"]["l_max"]),
+            saturation=self.LogisticSaturation(),
+            yearly_seasonality=alt_config.get("yearly_seasonality"),
+            dims=tuple(alt_config.get("dims", [])),
+        )
+        alt_model.build_model(X, y)
+        alt_model.add_original_scale_contribution_variable(var=["channel_contribution", "y"])
+        alt_model.fit(
+            X,
+            y,
+            draws=alt_sampler["draws"],
+            tune=alt_sampler["tune"],
+            chains=alt_sampler["chains"],
+            target_accept=alt_sampler.get("target_accept", 0.9),
+            random_seed=alt_sampler.get("random_seed", 42),
+        )
+        alt_contrib = self.channel_contributions(alt_model)
+        alt_ranks = {
+            c["channel"]: i
+            for i, c in enumerate(
+                sorted(
+                    alt_contrib["channels"], key=lambda x: x["contribution_median"], reverse=True
+                )
+            )
+        }
+
+        rank_shifts = {ch: abs(base_ranks.get(ch, 0) - alt_ranks.get(ch, 0)) for ch in base_ranks}
+        max_shift = max(rank_shifts.values()) if rank_shifts else 0
+
+        findings = []
+        if max_shift >= 2:
+            findings.append(
+                {
+                    "code": "HIGH_PRIOR_SENSITIVITY",
+                    "severity": "warning",
+                    "message": f"Channel contribution ranking shifted by {max_shift} positions under alternative adstock prior.",
+                    "evidence": {"baseline_ranks": base_ranks, "alternative_ranks": alt_ranks},
+                    "suggested_action": "Calibrate with incrementality experiments or collect additional historical periods.",
+                }
+            )
+
+        return {
+            "baseline_ranks": base_ranks,
+            "alternative_ranks": alt_ranks,
+            "max_rank_shift": max_shift,
+            "findings": findings,
+            "prior_stability": "sensitive" if max_shift >= 2 else "robust",
+        }
 
     def load(self, artifact: Path):
         return self.MMM.load(artifact)
@@ -145,9 +378,7 @@ class PyMCMarketingAdapter:
         try:
             incrementality = model.incrementality
             total = incrementality.contribution_over_spend(frequency="all_time")
-            marginal = incrementality.marginal_contribution_over_spend(
-                frequency="all_time"
-            )
+            marginal = incrementality.marginal_contribution_over_spend(frequency="all_time")
         except Exception as e:
             raise DomainError(
                 "INCREMENTALITY_FAILED",
@@ -160,12 +391,8 @@ class PyMCMarketingAdapter:
             ) from e
 
         total_records = self._summarize_coordinate_distribution(total, "total_iroas")
-        marginal_records = self._summarize_coordinate_distribution(
-            marginal, "marginal_iroas"
-        )
-        marginal_by_key = {
-            self._coord_key(row): row["marginal_iroas"] for row in marginal_records
-        }
+        marginal_records = self._summarize_coordinate_distribution(marginal, "marginal_iroas")
+        marginal_by_key = {self._coord_key(row): row["marginal_iroas"] for row in marginal_records}
         channels = []
         for row in total_records:
             key = self._coord_key(row)
@@ -306,17 +533,28 @@ class PyMCMarketingAdapter:
     @staticmethod
     def _response_values(idata) -> np.ndarray:
         variable = "total_media_contribution_original_scale"
-        try:
-            group = idata["posterior_predictive"]
-        except Exception:
-            group = getattr(idata, "posterior_predictive", None)
-        if group is None or variable not in group:
+        da = None
+        if (
+            hasattr(idata, "data_vars")
+            and variable in idata.data_vars
+            or isinstance(idata, dict)
+            and variable in idata
+        ):
+            da = idata[variable]
+        else:
+            try:
+                group = idata["posterior_predictive"]
+            except (KeyError, TypeError, IndexError):
+                group = getattr(idata, "posterior_predictive", None)
+            if group is not None and variable in group:
+                da = group[variable]
+        if da is None:
             raise DomainError(
                 "SCENARIO_RESPONSE_UNAVAILABLE",
                 "PyMC-Marketing did not return the expected posterior response variable",
                 evidence={"variable": variable},
             )
-        values = np.asarray(group[variable], dtype=float).reshape(-1)
+        values = np.asarray(da, dtype=float).reshape(-1)
         values = values[np.isfinite(values)]
         if not len(values):
             raise DomainError(
@@ -380,8 +618,7 @@ class PyMCMarketingAdapter:
         shape = [da.sizes[d] for d in entity_dims]
         for index in np.ndindex(*shape):
             selectors = {
-                dim: da.coords[dim].values[pos]
-                for dim, pos in zip(entity_dims, index, strict=True)
+                dim: da.coords[dim].values[pos] for dim, pos in zip(entity_dims, index, strict=True)
             }
             values = np.asarray(da.sel(selectors), dtype=float).reshape(-1)
             values = values[np.isfinite(values)]
@@ -389,9 +626,7 @@ class PyMCMarketingAdapter:
                 continue
             summary = cls._distribution_summary(values)
             summary["probability_gt_1"] = float(np.mean(values > 1.0))
-            record = {
-                dim: cls._json_scalar(value) for dim, value in selectors.items()
-            }
+            record = {dim: cls._json_scalar(value) for dim, value in selectors.items()}
             record[value_key] = summary
             records.append(record)
         return records

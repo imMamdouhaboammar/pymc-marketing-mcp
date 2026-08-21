@@ -96,6 +96,6 @@ def test_simulation_surfaces_posterior_comparison_for_agent_consumption():
     assert scenario_call["meta"] == pytest.approx(40.0)
     assert scenario_call["google"] == pytest.approx(103.5)
     assert periods_call == 2
-    assert metadata.scenarios[0]["result"]["comparison"][
-        "probability_scenario_beats_baseline"
-    ] == 0.82
+    assert (
+        metadata.scenarios[0]["result"]["comparison"]["probability_scenario_beats_baseline"] == 0.82
+    )

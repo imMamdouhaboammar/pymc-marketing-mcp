@@ -12,7 +12,7 @@ from marketing_mcp.schemas.models import DiagnosticResult, Finding
 def _get_group(idata: Any, name: str):
     try:
         return idata[name]
-    except Exception:
+    except (KeyError, TypeError, IndexError):
         return getattr(idata, name, None)
 
 
@@ -89,9 +89,7 @@ def _posterior_predictive_metrics(idata: Any) -> tuple[dict[str, Any], list[Find
     mean_values = mean_values[finite]
     lower_values = lower_values[finite]
     upper_values = upper_values[finite]
-    coverage = float(
-        np.mean((obs_values >= lower_values) & (obs_values <= upper_values))
-    )
+    coverage = float(np.mean((obs_values >= lower_values) & (obs_values <= upper_values)))
     rmse = float(np.sqrt(np.mean((obs_values - mean_values) ** 2)))
     scale = float(np.std(obs_values))
     nrmse = float(rmse / scale) if scale > 0 else None
@@ -165,8 +163,10 @@ def diagnose_inferencedata(
     metrics: dict[str, Any] = {}
     try:
         ss = _get_group(idata, "sample_stats")
-        divergences = int(ss["diverging"].sum().item()) if "diverging" in ss else 0
-    except Exception:
+        divergences = (
+            int(ss["diverging"].sum().item()) if ss is not None and "diverging" in ss else 0
+        )
+    except (KeyError, TypeError, ValueError, AttributeError):
         divergences = 0
         warnings.append(
             Finding(
@@ -189,7 +189,7 @@ def diagnose_inferencedata(
             summary = az.summary(posterior, kind="diagnostics")
             max_rhat = float(summary["r_hat"].replace([np.inf, -np.inf], np.nan).max())
             min_ess = float(summary["ess_bulk"].replace([np.inf, -np.inf], np.nan).min())
-        except Exception:
+        except (KeyError, TypeError, ValueError, AttributeError):
             max_rhat = float("nan")
             min_ess = float("nan")
             warnings.append(
@@ -202,20 +202,41 @@ def diagnose_inferencedata(
             )
     metrics["max_rhat"] = None if np.isnan(max_rhat) else round(max_rhat, 4)
     metrics["minimum_ess_bulk"] = None if np.isnan(min_ess) else round(min_ess, 1)
-    if not np.isnan(max_rhat) and max_rhat > 1.01:
-        failures.append(
-            {"metric": "r_hat", "observed": round(max_rhat, 4), "required": "<= 1.01"}
-        )
-    if not np.isnan(min_ess) and min_ess < 400:
-        warnings.append(
-            Finding(
-                severity="warning",
-                code="LOW_EFFECTIVE_SAMPLE_SIZE",
-                message="Some parameters have low bulk ESS",
-                evidence={"minimum_ess_bulk": round(min_ess, 1)},
-                suggested_action="Increase draws/tune or revise parameterization",
+    if not np.isnan(max_rhat):
+        if max_rhat > 1.05:
+            failures.append(
+                {"metric": "r_hat", "observed": round(max_rhat, 4), "required": "<= 1.05"}
             )
-        )
+        elif max_rhat > 1.01:
+            warnings.append(
+                Finding(
+                    severity="warning",
+                    code="ELEVATED_RHAT",
+                    message="Some parameters have elevated R-hat between 1.01 and 1.05",
+                    evidence={"max_rhat": round(max_rhat, 4)},
+                    suggested_action="Consider increasing draws/tune or checking parameterization",
+                )
+            )
+
+    if not np.isnan(min_ess):
+        if min_ess < 50:
+            failures.append(
+                {
+                    "metric": "minimum_ess_bulk",
+                    "observed": round(min_ess, 1),
+                    "required": ">= 50",
+                }
+            )
+        elif min_ess < 400:
+            warnings.append(
+                Finding(
+                    severity="warning",
+                    code="LOW_EFFECTIVE_SAMPLE_SIZE",
+                    message="Some parameters have low bulk ESS (< 400)",
+                    evidence={"minimum_ess_bulk": round(min_ess, 1)},
+                    suggested_action="Increase draws/tune or revise parameterization",
+                )
+            )
 
     predictive_metrics, predictive_warnings, predictive_failures = _posterior_predictive_metrics(
         idata

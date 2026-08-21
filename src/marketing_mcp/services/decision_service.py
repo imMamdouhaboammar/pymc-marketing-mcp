@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from marketing_mcp.domain.decisions.allocation import (
     apply_changes,
+    check_extrapolation_risk,
     historical_allocation,
 )
 from marketing_mcp.domain.diagnostics.gate import DecisionGate
@@ -12,7 +13,7 @@ from marketing_mcp.errors import DomainError
 
 
 def _utc() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class DecisionService:
@@ -39,6 +40,8 @@ class DecisionService:
         return {
             "model_id": model_id,
             "dataset_id": record.dataset_id,
+            "lineage_stage": getattr(record, "lineage_stage", "initial_fit"),
+            "parent_model_id": getattr(record, "parent_model_id", None),
             "versions": record.config.get("provenance", {}),
         }
 
@@ -81,10 +84,19 @@ class DecisionService:
                 channel: constraint.model_dump(exclude_none=True)
                 for channel, constraint in input.constraints.items()
             },
-            [
-                constraint.model_dump(exclude_none=True)
-                for constraint in input.cell_constraints
-            ],
+            [constraint.model_dump(exclude_none=True) for constraint in input.cell_constraints],
+        )
+        allocation = result.get("recommended_allocation")
+        if allocation is None:
+            raise DomainError(
+                "OPTIMIZATION_RESULT_INCOMPLETE",
+                "Optimizer did not return a recommended allocation",
+                evidence={"keys": sorted(result)},
+            )
+        extrap_warnings = check_extrapolation_risk(
+            model,
+            allocation,
+            input.planning_periods,
         )
         scenario_id = f"scenario_{uuid.uuid4().hex[:12]}"
         payload = {
@@ -93,6 +105,7 @@ class DecisionService:
             "kind": "optimization",
             "input": input.model_dump(),
             "result": result,
+            "extrapolation_warnings": extrap_warnings,
             "created_at": _utc(),
         }
         self.metadata.put_scenario(payload)
@@ -100,6 +113,7 @@ class DecisionService:
             {
                 "scenario_id": scenario_id,
                 "model_id": input.model_id,
+                "warnings": extrap_warnings,
                 "provenance": self._provenance(input.model_id, record),
             }
         )
@@ -121,6 +135,11 @@ class DecisionService:
             scenario,
             input.planning_periods,
         )
+        extrap_warnings = check_extrapolation_risk(
+            model,
+            scenario,
+            input.planning_periods,
+        )
         scenario_id = f"scenario_{uuid.uuid4().hex[:12]}"
         payload = {
             "scenario_id": scenario_id,
@@ -130,6 +149,7 @@ class DecisionService:
             "baseline_allocation": baseline,
             "scenario_allocation": scenario,
             "result": posterior_result,
+            "extrapolation_warnings": extrap_warnings,
             "created_at": _utc(),
         }
         self.metadata.put_scenario(payload)
@@ -140,9 +160,9 @@ class DecisionService:
             "baseline_allocation": baseline,
             "scenario_allocation": scenario,
             **posterior_result,
+            "warnings": extrap_warnings,
             "caveats": [
-                "Scenario evaluation is conditional on the fitted MMM and its "
-                "posterior uncertainty."
+                "Scenario evaluation is conditional on the fitted MMM and its posterior uncertainty."
             ],
             "provenance": self._provenance(input.model_id, record),
         }

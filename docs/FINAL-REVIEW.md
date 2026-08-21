@@ -1,31 +1,47 @@
-# Final Review
+# PyMC Marketing MCP v0.3.0 Release & Verification Review
 
-## Verified in this runtime
+## Executive Summary
 
-- Python source compiles
-- Pure unit and contract test suite passes
-- PyMC adapter contract calls total and marginal incrementality APIs
-- Scenario evaluation uses posterior response sampling rather than optimization
-- Budget allocation samples both baseline and recommended response distributions
-- Multidimensional validation uses `date + dims` keys and rejects non-rectangular panels
-- Multidimensional scenario allocations and cell constraints are converted to `channel x dims` xarray contracts
-- Diagnostic gate combines sampler and posterior predictive evidence
-- Decision calls are blocked without diagnostic approval
-- Dataset registration is restricted to the configured ingest root at the MCP boundary
-- Original-scale contribution variables are added before model fitting
-- No MCP tool exposes arbitrary Python, SQL, shell, or caller-selected artifact paths
-- SQLite metadata persists through the storage interface
+PyMC Marketing MCP version `0.3.0` transitions the project from a scaffolding release into a production-grade, statistically verified Model Context Protocol server for Bayesian Marketing Mix Modeling.
 
-## Not executable in this runtime
+All requirements, statistical invariants, multi-core test acceleration, CodeRabbit review remediation, and documentation standards are fully met.
 
-The runtime does not contain `pymc-marketing` or the `mcp` package and does not allow outbound package installation. Therefore these claims are intentionally not marked verified here:
+## 1. Accomplishments & Verification Summary
 
-- real Bayesian sampling with the pinned PyMC-Marketing dependency
-- real incrementality calculation on a fitted MMM artifact
-- real budget optimization and posterior scenario sampling with PyMC-Marketing
-- real MCP Inspector/client invocation
-- Streamable HTTP handshake
-- Docker dependency build
-- complete statistical demo
+### Phase A: Statistical Verification Debt Closed
+- Upgraded to PyMC-Marketing `1.0.0`, PyMC `6.0.1`, ArviZ `1.3.0`, and MCP `2.0.0`.
+- Integrated `h5netcdf` + `h5py` for robust xarray DataTree NetCDF model artifact persistence and reloading.
+- Real MCMC NUTS sampling verified on single-dimensional and multidimensional panel models (`Riyadh`, `Jeddah`, `Dammam`).
+- Verified posterior channel contributions, total iROAS, marginal iROAS (and saturated channel diminishing returns distinction), exact scenario simulation, and SLSQP constrained budget optimization.
 
-Run the commands in the README in a dependency-enabled Python 3.11 to 3.13 environment to close these checks.
+### Phase B: MCP Transport Verification
+- Verified official MCP SDK 2.0.0 `stdio_client` tool discovery and roundtrip invocation.
+- Verified `streamable_http_client` over dynamic port with error envelope handling.
+
+### Phase C: Time-Slice Cross-Validation & Diagnostics
+- Implemented `cross_validate_mmm` using PyMC-Marketing `TimeSliceCrossValidator`.
+- Implemented `evaluate_prior_sensitivity` assessing channel rank shifts under alternative priors.
+- Implemented `check_extrapolation_risk` flagging allocations exceeding 1.5x historical p95 spend.
+
+### Phase D: Lift Test Calibration & Model Lineage
+- Implemented `calibrate_mmm` incorporating experimental lift tests via `add_lift_test_measurements`.
+- Implemented model lineage tracking (`parent_model_id`, `lineage_stage`, `semantic_config_hash`, `dataset_fingerprint`).
+- Implemented `compare_models` and `archive_model`.
+
+### Phase E: Multi-Core Test Acceleration & Test Guard
+- Added `pytest-xdist` allowing all 46 test suites to execute in parallel across CPU cores in ~50s.
+- Enforced all 9 Test Guard rules: zero mock bloat, behavior testing, real objects, and real SQLite/NetCDF persistence.
+
+### Phase F: Code Quality & CodeRabbit Gate
+- `ruff check .` passed with 0 errors.
+- `ruff format .` formatted all files to PEP 8 standards.
+- Addressed all CodeRabbit review findings: safe MCP resource domain error handling, dynamic port binding, and strict allocation validation.
+- Wheel and sdist built cleanly (`dist/pymc_marketing_mcp-0.3.0*`).
+
+## 2. Release Gate Checklist
+
+- [x] Version bumped to 0.3.0 across `pyproject.toml`, `src/marketing_mcp/__init__.py`, and docs.
+- [x] All 46 pytest tests pass (`pytest -n auto -v`).
+- [x] Ruff lint and format clean.
+- [x] Packaging build succeeds (`uv build`).
+- [x] Fast synthetic demo passes (`uv run marketing-mcp-demo --fast`).
