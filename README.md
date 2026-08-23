@@ -18,9 +18,21 @@ User question
   -> AI explanation
 ```
 
-## Version 0.3.0 Release
+## Production readiness
 
-Version `0.3.0` delivers comprehensive Bayesian statistical verification, model lineage, lift test calibration, cross-validation, and multi-core accelerated testing:
+This project is currently an **advanced beta**, not a production-grade service. A production
+stabilization program is in progress and new capability work is frozen until its release gates pass.
+
+- Gates and current status: `docs/PRODUCTION-READINESS.md`
+- Program spec: `docs/superpowers/specs/2026-08-23-production-grade-stabilization.md`
+- Execution order: `docs/superpowers/plans/README.md`
+
+Treat capability claims in this README and in `docs/` as verified only where a linked executable
+test exists. Sections describing earlier releases are historical records, not current evidence.
+
+## Version 0.3.0 highlights (historical)
+
+Version `0.3.0` delivered comprehensive Bayesian statistical verification, model lineage, lift test calibration, cross-validation, and multi-core accelerated testing:
 
 - **Time-Slice Cross-Validation**: `cross_validate_mmm` evaluates out-of-sample predictive accuracy across temporal folds with PyMC-Marketing's `TimeSliceCrossValidator`.
 - **Prior Sensitivity Analysis**: `evaluate_prior_sensitivity` quantifies channel rank shifts under alternative adstock and saturation priors.

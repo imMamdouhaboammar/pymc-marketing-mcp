@@ -2,6 +2,14 @@
 
 All notable changes to `pymc-marketing-mcp` are documented in this file.
 
+## [Unreleased] - Stabilization Program
+
+Production stabilization is in progress. Capability work is frozen until gates G0 through G5 and
+the Agent Quality Gate are green from current-head evidence. See `docs/PRODUCTION-READINESS.md`.
+
+### Changed
+- Declared the stabilization freeze and downgraded the release description to advanced beta.
+
 ## [0.4.0] - 2026-08-22
 
 ### Added
