@@ -21,6 +21,7 @@ Status vocabulary:
 
 from __future__ import annotations
 
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
 
 CAPABILITY_KINDS: tuple[str, ...] = ("tool", "resource")
@@ -251,6 +252,40 @@ def get_capability_inventory() -> list[Capability]:
     return sorted(_INVENTORY, key=lambda c: (c.kind, c.name))
 
 
+def validate_inventory(
+    inventory: Iterable[Capability],
+    known_test_ids: Collection[str] | None = None,
+) -> list[str]:
+    """Return human-readable violations of the registry rules; empty means valid.
+
+    Rules:
+      1. ``kind``, ``status``, and ``domain`` come from the declared vocabularies.
+      2. Names are unique.
+      3. A ``stable`` capability references at least one evidence test.
+      4. When ``known_test_ids`` is supplied, every referenced evidence test exists.
+    """
+    violations: list[str] = []
+    seen: set[str] = set()
+    for capability in inventory:
+        label = f"{capability.kind} {capability.name}"
+        if capability.name in seen:
+            violations.append(f"{label}: duplicate capability name")
+        seen.add(capability.name)
+        if capability.kind not in CAPABILITY_KINDS:
+            violations.append(f"{label}: unknown kind {capability.kind!r}")
+        if capability.status not in CAPABILITY_STATUSES:
+            violations.append(f"{label}: unknown status {capability.status!r}")
+        if capability.domain not in CAPABILITY_DOMAINS:
+            violations.append(f"{label}: unknown domain {capability.domain!r}")
+        if capability.status == "stable" and not capability.evidence_test_ids:
+            violations.append(f"{label}: status 'stable' requires at least one evidence test")
+        if known_test_ids is not None:
+            for test_id in capability.evidence_test_ids:
+                if test_id not in known_test_ids:
+                    violations.append(f"{label}: evidence test {test_id!r} does not exist")
+    return violations
+
+
 def get_capability(name: str) -> Capability:
     for capability in _INVENTORY:
         if capability.name == name:
@@ -265,4 +300,5 @@ __all__ = [
     "Capability",
     "get_capability",
     "get_capability_inventory",
+    "validate_inventory",
 ]
