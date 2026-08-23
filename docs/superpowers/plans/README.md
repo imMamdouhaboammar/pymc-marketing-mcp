@@ -1,6 +1,6 @@
 # Production Stabilization Plan Index
 
-This directory contains the execution program for moving PyMC Marketing MCP from the current v0.4.x advanced-beta state to a production-grade release candidate.
+This directory contains the execution program for moving PyMC Marketing MCP from the current v0.4.x advanced-beta state to a production-grade release candidate, then to a decision-grade v1.0 release.
 
 ## Authoritative Execution Order
 
@@ -36,7 +36,11 @@ This directory contains the execution program for moving PyMC Marketing MCP from
    - exit gate: Agent Quality Gate
 
 9. Return to `2026-08-23-production-grade-master-program.md`
-   - execute the release-candidate evidence pack and final production readiness review
+   - execute the v0.5 release-candidate evidence pack and production readiness review
+
+10. `2026-08-23-decision-governance-audit.md`
+   - append-only audit, decision records, model lifecycle, champion/challenger, freshness, sensitivity, retention
+   - target: M5 Decision-Grade gate for v1.0
 
 ## Dependency Rule
 
@@ -47,6 +51,7 @@ Examples:
 - CI scaffolding can begin before Postgres is complete, but G5 cannot be green until the Postgres/recovery suites are part of CI.
 - Skill text cleanup can begin early, but stable capability claims cannot be finalized until G1 is green.
 - Observability wrappers can begin after MCP/job interfaces stabilize, but production SLO evidence depends on resilience/capacity tests.
+- Decision-governance schema design can start before v0.5, but M5 implementation should consume the stable production persistence, security, and audit interfaces rather than invent parallel ones.
 
 ## Review Rule
 
@@ -70,8 +75,10 @@ For security changes, independent review must include authorization bypass and s
 
 For persistence changes, independent review must include crash/restart and partial-write cases.
 
+For decision-governance changes, independent review must verify provenance immutability and historical reproducibility.
+
 ## Release Rule
 
 No `0.5.0` release until G0 through G5 plus the Agent Quality Gate are green from current-head CI evidence.
 
-No `1.0.0` release until the project also demonstrates repeated restart recovery, backup/restore, fault-injection recovery, compatibility canary stability, and decision-grade agent evals.
+No `1.0.0` release until the project also demonstrates repeated restart recovery, backup/restore, fault-injection recovery, compatibility canary stability, decision-grade agent evals, append-only audit evidence, immutable decision records, and the M5 Decision-Grade gate.
