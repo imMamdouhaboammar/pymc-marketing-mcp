@@ -46,6 +46,9 @@ class Capability:
     status: str
     decision_gate_required: bool
     summary: str
+    delegates_to: str = ""
+    """Dotted ``Application`` attribute path the MCP handler calls, e.g. ``decisions.simulate``."""
+
     evidence_test_ids: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -54,6 +57,7 @@ def _tool(
     domain: str,
     summary: str,
     *,
+    delegates_to: str,
     status: str = "experimental",
     decision_gate_required: bool = False,
     evidence_test_ids: tuple[str, ...] = (),
@@ -65,6 +69,7 @@ def _tool(
         status=status,
         decision_gate_required=decision_gate_required,
         summary=summary,
+        delegates_to=delegates_to,
         evidence_test_ids=evidence_test_ids,
     )
 
@@ -74,6 +79,7 @@ def _resource(
     domain: str,
     summary: str,
     *,
+    delegates_to: str = "",
     status: str = "experimental",
     evidence_test_ids: tuple[str, ...] = (),
 ) -> Capability:
@@ -84,6 +90,7 @@ def _resource(
         status=status,
         decision_gate_required=False,
         summary=summary,
+        delegates_to=delegates_to,
         evidence_test_ids=evidence_test_ids,
     )
 
@@ -94,124 +101,218 @@ _INVENTORY: tuple[Capability, ...] = (
         "register_dataset",
         "datasets",
         "Register a CSV/Parquet file from the allowed ingest directory and fingerprint it.",
+        delegates_to="datasets.register_file",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
+            "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
+            "tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists",
+        ),
     ),
     _tool(
         "inspect_dataset",
         "datasets",
         "Report columns, dtypes, ranges, and candidate role assignments for a registered dataset.",
+        delegates_to="datasets.inspect",
+        status="stable",
+        evidence_test_ids=(
+            "tests/unit/test_dataset_service.py::test_register_and_inspect_dataset",
+            "tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists",
+        ),
     ),
     _tool(
         "validate_dataset",
         "datasets",
         "Check a dataset against MMM modeling requirements and report blocking issues.",
+        delegates_to="datasets.validate",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
+            "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
+            "tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists",
+        ),
     ),
     # --- modeling ---------------------------------------------------------------------------
     _tool(
         "fit_mmm",
         "modeling",
         "Fit a PyMC-Marketing MMM with the requested adstock/saturation configuration.",
+        delegates_to="models.fit",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
+            "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
+            "tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts",
+        ),
     ),
     _tool(
         "get_model_status",
         "modeling",
         "Report stored state, configuration, and diagnostics summary for a model.",
+        delegates_to="models.status",
+        status="stable",
+        evidence_test_ids=(
+            "tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts",
+        ),
     ),
     _tool(
         "cross_validate_mmm",
         "modeling",
         "Evaluate out-of-sample accuracy with PyMC-Marketing time-slice cross-validation.",
+        delegates_to="diagnostics.cross_validate",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_time_slice_cross_validation_and_prior_sensitivity",
+        ),
     ),
     _tool(
         "evaluate_prior_sensitivity",
         "modeling",
         "Compare channel rankings under alternative adstock/saturation priors.",
+        delegates_to="diagnostics.prior_sensitivity",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_time_slice_cross_validation_and_prior_sensitivity",
+        ),
     ),
     _tool(
         "calibrate_mmm",
         "modeling",
         "Refit a model with experimental lift-test measurements added to the likelihood.",
+        delegates_to="models.calibrate",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_lift_test_calibration_and_lineage",
+        ),
     ),
     _tool(
         "compare_models",
         "modeling",
         "Compare stored models on configuration, diagnostics, and iROAS ordering.",
+        delegates_to="models.compare_models",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_lift_test_calibration_and_lineage",
+        ),
     ),
     _tool(
         "select_best_model",
         "modeling",
         "Rank models by information criterion and Bayesian model-averaging weights.",
+        delegates_to="models.select_best_model",
     ),
     _tool(
         "archive_model",
         "modeling",
         "Mark a stored model as archived while preserving its artifact and lineage.",
+        delegates_to="models.archive_model",
     ),
     # --- diagnostics ------------------------------------------------------------------------
     _tool(
         "diagnose_mmm",
         "diagnostics",
         "Run the mandatory sampler and posterior-predictive gate and set the decision status.",
+        delegates_to="diagnostics.diagnose",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
+            "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
+            "tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts",
+        ),
     ),
     # --- decisions --------------------------------------------------------------------------
     _tool(
         "get_channel_contributions",
         "decisions",
         "Report posterior channel contributions with uncertainty intervals.",
+        delegates_to="decisions.contributions",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
+            "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
+        ),
     ),
     _tool(
         "get_incremental_roas",
         "decisions",
         "Report total and marginal incremental ROAS per channel with uncertainty.",
+        delegates_to="decisions.iroas",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
+            "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
+        ),
     ),
     _tool(
         "get_response_curves",
         "decisions",
         "Report saturation response curves per channel.",
+        delegates_to="decisions.response_curves",
     ),
     _tool(
         "simulate_budget",
         "decisions",
         "Evaluate a counterfactual spend scenario against the fitted baseline.",
         decision_gate_required=True,
+        delegates_to="decisions.simulate",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
+            "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
+            "tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts",
+        ),
     ),
     _tool(
         "optimize_budget",
         "decisions",
         "Allocate a fixed budget under channel constraints using the PyMC-Marketing optimizer.",
         decision_gate_required=True,
+        delegates_to="decisions.optimize",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
+            "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
+            "tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts",
+        ),
     ),
     _tool(
         "optimize_flighting",
         "decisions",
         "Build a multi-period weekly spend schedule and evaluate it against the model.",
         decision_gate_required=True,
+        delegates_to="decisions.optimize_flighting",
     ),
     _tool(
         "recommend_next_measurement",
         "decisions",
         "Suggest the next experiment or lift test that would most reduce decision uncertainty.",
+        delegates_to="decisions.recommend_measurement",
     ),
     # --- plots ------------------------------------------------------------------------------
     _tool(
         "get_posterior_plots",
         "plots",
         "Render headless posterior plot artifacts (PNG/SVG) for a fitted model.",
+        delegates_to="plots.generate_all",
     ),
     # --- clv --------------------------------------------------------------------------------
     _tool(
         "fit_clv_model",
         "clv",
         "Fit a PyMC-Marketing CLV model (BG/NBD, Gamma-Gamma, or shifted beta-geometric).",
+        delegates_to="clv.fit_clv",
     ),
     _tool(
         "predict_customer_clv",
         "clv",
         "Produce customer-level predictions from a fitted CLV model.",
+        delegates_to="clv.predict_clv",
     ),
     _tool(
         "get_churn_risk_cohorts",
         "clv",
         "Group customers into churn-risk cohorts from a fitted CLV model.",
+        delegates_to="clv.get_churn_risk_cohorts",
     ),
     # --- resources --------------------------------------------------------------------------
     _resource(
@@ -238,6 +339,7 @@ _INVENTORY: tuple[Capability, ...] = (
         "marketing://models/{model_id}/plots/{plot_type}",
         "plots",
         "Rendered posterior plot artifact for a model.",
+        delegates_to="plots.get_cached_plot",
     ),
     _resource(
         "marketing://clv/{model_id}",
@@ -344,13 +446,16 @@ def render_capability_markdown(inventory: Iterable[Capability]) -> str:
         if not in_kind:
             continue
         lines.append(f"\n## {kind.capitalize()}s\n")
-        lines.append("| Name | Domain | Status | Decision gate | Summary | Evidence tests |")
-        lines.append("|---|---|---|---|---|---|")
+        lines.append(
+            "| Name | Domain | Status | Decision gate | Delegates to | Summary | Evidence tests |"
+        )
+        lines.append("|---|---|---|---|---|---|---|")
         for capability in in_kind:
             gate = "required" if capability.decision_gate_required else "not enforced"
             lines.append(
                 f"| `{capability.name}` | {capability.domain} | {capability.status} | {gate} "
-                f"| {capability.summary} | {_evidence_cell(capability)} |"
+                f"| `{capability.delegates_to}` | {capability.summary} "
+                f"| {_evidence_cell(capability)} |"
             )
         lines.append("")
 
