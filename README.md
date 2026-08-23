@@ -32,13 +32,13 @@ test exists. Sections describing earlier releases are historical records, not cu
 
 ## Version 0.3.0 highlights (historical)
 
-Version `0.3.0` delivered comprehensive Bayesian statistical verification, model lineage, lift test calibration, cross-validation, and multi-core accelerated testing:
+The historical `0.3.0` release delivered comprehensive Bayesian statistical verification, model lineage, lift test calibration, cross-validation, and multi-core accelerated testing:
 
 - **Time-Slice Cross-Validation**: `cross_validate_mmm` evaluates out-of-sample predictive accuracy across temporal folds with PyMC-Marketing's `TimeSliceCrossValidator`.
 - **Prior Sensitivity Analysis**: `evaluate_prior_sensitivity` quantifies channel rank shifts under alternative adstock and saturation priors.
 - **Lift Test Calibration**: `calibrate_mmm` incorporates real or synthetic experimental incrementality lift tests directly into model likelihood with full lineage tracking.
 - **Extrapolation Risk Guard**: Spend scenarios or optimization allocations exceeding 1.5x historical 95th percentile spend automatically trigger actionable warnings.
-- **Multi-Core Accelerated Testing**: Pytest suite runs concurrently via `pytest-xdist`, completing 46 unit, integration, and full Bayesian sampling tests in ~50 seconds.
+- **Multi-Core Accelerated Testing**: Pytest suite runs concurrently via `pytest-xdist`; it contained 46 tests at that time. For the current suite, see `docs/release-evidence/`.
 - **Official MCP 2.0.0 Transports**: Fully tested stdio and Streamable HTTP clients with dynamic port discovery and structured error envelopes.
 
 See `docs/DECISION-INTEGRITY.md` and `docs/VERIFICATION-MATRIX.md` for details.

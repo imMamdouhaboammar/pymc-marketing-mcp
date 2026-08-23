@@ -100,7 +100,18 @@ warnings but no failures  -> approved_with_caution
 no findings               -> approved
 ```
 
-`simulate_budget` and `optimize_budget` require either `approved` or `approved_with_caution`. `rejected` models fail with `MODEL_NOT_VALIDATED`.
+`simulate_budget`, `optimize_budget`, and `optimize_flighting` require either `approved` or `approved_with_caution`. `rejected` models fail with `MODEL_NOT_VALIDATED`.
+
+<!-- drift-check: decision-gated-tools = optimize_budget, optimize_flighting, simulate_budget -->
+
+The marker above is machine-checked by `scripts/check_docs_drift.py` against
+`decision_gate_required` in the capability registry, which is itself checked against
+`DecisionService` enforcement by `tests/integration/test_capability_inventory.py`.
+
+`get_channel_contributions`, `get_incremental_roas`, `get_response_curves`, and
+`recommend_next_measurement` are **not** gated today: they read the posterior of a fitted model
+without requiring diagnostics approval. Closing that gap belongs to the scientific-contract
+hardening workstream and is not documented here as if it were already true.
 
 ## Not yet treated as hard gates
 

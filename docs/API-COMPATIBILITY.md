@@ -1,6 +1,6 @@
 # API & Ecosystem Compatibility Matrix
 
-This document outlines the version requirements and API compatibility guarantees for PyMC Marketing MCP v0.3.0.
+This document outlines the version requirements and API compatibility guarantees for PyMC Marketing MCP v0.4.0. The canonical runtime version is reported by `marketing_mcp.version_info()`; `scripts/check_docs_drift.py` fails when this heading drifts from it.
 
 ## Core Dependencies
 
