@@ -76,10 +76,12 @@ def test_stable_capability_evidence_exercises_its_delegate():
 
 
 def test_experimental_capabilities_are_the_only_unproven_ones():
-    """Anything without evidence must be published as experimental, never stable."""
+    """Anything without evidence must be published as experimental — or as
+    deprecated, since compatibility wrappers are intentionally unevidenced.
+    Stable claims always require evidence."""
     for capability in get_capability_inventory():
         if not capability.evidence_test_ids:
-            assert capability.status == "experimental", (
+            assert capability.status in ("experimental", "deprecated"), (
                 f"{capability.name} claims status {capability.status!r} with no evidence tests"
             )
 

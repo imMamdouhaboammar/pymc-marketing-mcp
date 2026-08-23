@@ -24,7 +24,7 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 35 capabilities (14 experimental, 21 stable).
+**Totals:** 35 capabilities (12 experimental, 21 stable, 2 deprecated).
 
 
 ## Tools
@@ -32,11 +32,11 @@ approved the model.
 | Name | Domain | Status | Decision gate | Delegates to | Summary | Evidence tests |
 |---|---|---|---|---|---|---|
 | `estimate_customer_lifetime_value` | clv | stable | not enforced | `clv.estimate_customer_lifetime_value` | Estimate discounted lifetime value by combining a purchase model and monetary value model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
-| `fit_clv_model` | clv | experimental | not enforced | `clv.fit_clv` | Fit a PyMC-Marketing CLV model (legacy compatibility wrapper). | none |
+| `fit_clv_model` | clv | deprecated | not enforced | `clv.fit_clv` | Fit a PyMC-Marketing CLV model (legacy compatibility wrapper). | none |
 | `fit_purchase_model` | clv | stable | not enforced | `clv.fit_purchase_model` | Fit a PyMC-Marketing purchase or churn frequency model (BG/NBD or Shifted Beta-Geometric). | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow`<br>`tests/statistical/test_clv_real_models.py::test_real_shifted_beta_geo_workflow` |
 | `fit_value_model` | clv | stable | not enforced | `clv.fit_value_model` | Fit a PyMC-Marketing monetary transaction value model (Gamma-Gamma). | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
 | `get_churn_risk_cohorts` | clv | experimental | not enforced | `clv.get_churn_risk_cohorts` | Group customers into churn-risk cohorts from a fitted CLV model. | none |
-| `predict_customer_clv` | clv | experimental | not enforced | `clv.predict_clv` | Produce customer-level predictions from a fitted CLV model (legacy compatibility wrapper). | none |
+| `predict_customer_clv` | clv | deprecated | not enforced | `clv.predict_clv` | Produce customer-level predictions from a fitted CLV model (legacy compatibility wrapper). | none |
 | `predict_expected_purchases` | clv | stable | not enforced | `clv.predict_expected_purchases` | Predict future purchase frequency per customer from a fitted purchase model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
 | `predict_expected_spend` | clv | stable | not enforced | `clv.predict_expected_spend` | Predict average transaction monetary spend per customer from a fitted value model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
 | `predict_probability_alive` | clv | stable | not enforced | `clv.predict_probability_alive` | Estimate probability of customer retention/alive from a fitted purchase or churn model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow`<br>`tests/statistical/test_clv_real_models.py::test_real_shifted_beta_geo_workflow` |

@@ -367,14 +367,14 @@ _INVENTORY: tuple[Capability, ...] = (
         "clv",
         "Fit a PyMC-Marketing CLV model (legacy compatibility wrapper).",
         delegates_to="clv.fit_clv",
-        status="experimental",
+        status="deprecated",
     ),
     _tool(
         "predict_customer_clv",
         "clv",
         "Produce customer-level predictions from a fitted CLV model (legacy compatibility wrapper).",
         delegates_to="clv.predict_clv",
-        status="experimental",
+        status="deprecated",
     ),
     _tool(
         "get_churn_risk_cohorts",

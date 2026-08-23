@@ -239,10 +239,10 @@ Objectives:
 - Modify: `docs/PRODUCTION-READINESS.md`
 - Modify: `docs/CAPABILITIES.md` through its generator
 
-- [ ] Assert no stable capability is missing statistical evidence when the capability makes a statistical claim.
-- [ ] Assert deprecated compatibility tools are marked deprecated in inventory and docs.
-- [ ] Run full fast and statistical suites.
-- [ ] Mark G1 green only when current-head evidence passes.
+- [x] Assert no stable capability is missing statistical evidence when the capability makes a statistical claim.
+- [x] Assert deprecated compatibility tools are marked deprecated in inventory and docs.
+- [x] Run full fast and statistical suites.
+- [x] Mark G1 green only when current-head evidence passes.
 
 ## Acceptance Criteria
 
