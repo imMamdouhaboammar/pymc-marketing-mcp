@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import importlib.metadata as importlib_metadata
 import re
+import sys
 import tomllib
 from pathlib import Path
+
+import pytest
 
 import marketing_mcp
 
@@ -76,3 +79,13 @@ def test_version_info_is_json_serializable_and_stable():
     assert first == second
     assert all(isinstance(k, str) for k in first)
     assert all(v is None or isinstance(v, str) for v in first.values())
+
+
+def test_cli_version_flag_reports_canonical_version(monkeypatch, capsys):
+    from marketing_mcp.cli import main
+
+    monkeypatch.setattr(sys, "argv", ["marketing-mcp", "--version"])
+    with pytest.raises(SystemExit) as exit_info:
+        main()
+    assert exit_info.value.code == 0
+    assert marketing_mcp.__version__ in capsys.readouterr().out
