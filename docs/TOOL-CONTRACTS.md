@@ -96,16 +96,37 @@ Every MCP tool returns structured, agent-oriented data wrapped in a standard `To
 
 ## 6. Customer Lifetime Value (CLV) Tools
 
-### `fit_clv_model(config: FitCLVInput)`
-- Fits Bayesian CLV models on customer RFM data.
-- Supported architectures: `bg_nbd` (BG/NBD repeat purchase), `gamma_gamma` (monetary spend per transaction), `shifted_beta_geo` (discrete subscription churn).
+### `fit_purchase_model(config: FitPurchaseModelInput)`
+- Fits a Bayesian repeat purchase or contractual churn frequency model (`bg_nbd` or `shifted_beta_geo`).
+- Normalizes user column names (`customer_id_col`, `frequency_col`, `recency_col`, `T_col`, `cohort_col`) into canonical RFM schemas.
 
-### `predict_customer_clv(config: PredictCLVInput)`
-- Generates individual-level predictions: $P(\text{alive})$, expected future transactions, and expected customer value.
-- Supports forecast horizon `future_t` and `top_n_customers` filtering.
+### `fit_value_model(config: FitValueModelInput)`
+- Fits a Bayesian monetary value transaction model (`gamma_gamma`) on repeat transactions (`frequency > 0`).
+- Estimates expected average order value / spend per customer.
+
+### `predict_expected_purchases(config: PredictExpectedPurchasesInput)`
+- Evaluates expected future transaction counts per customer over horizon `future_t`.
+- Returns `total_customers` for full population sizing alongside `top_n` truncation.
+
+### `predict_probability_alive(config: PredictProbabilityAliveInput)`
+- Evaluates posterior retention / active probability $P(\text{alive})$ per customer from purchase or churn models.
+- Returns summary metrics (`customers_likely_alive`, `customers_at_churn_risk`).
+
+### `predict_expected_spend(config: PredictExpectedSpendInput)`
+- Predicts expected monetary spend per transaction for repeat customers using a fitted `gamma_gamma` model.
+
+### `estimate_customer_lifetime_value(config: EstimateCLVInput)`
+- Integrates a fitted purchase model (`bg_nbd` or `shifted_beta_geo`) with a monetary value model (`gamma_gamma`).
+- Computes discounted net present Customer Lifetime Value (CLV) over forecast horizon `future_t` with discount rate `discount_rate`.
 
 ### `get_churn_risk_cohorts(model_id: str, threshold_p_alive: float = 0.3)`
 - Segments at-risk customer cohorts with $P(\text{alive}) < \text{threshold}$.
+
+### `fit_clv_model(config: FitCLVInput)`
+- (Deprecated compatibility wrapper): Fits Bayesian CLV models on customer RFM data.
+
+### `predict_customer_clv(config: PredictCLVInput)`
+- (Deprecated compatibility wrapper): Generates individual-level predictions: $P(\text{alive})$, expected future transactions, and expected customer value.
 
 ## 7. MCP Resources
 

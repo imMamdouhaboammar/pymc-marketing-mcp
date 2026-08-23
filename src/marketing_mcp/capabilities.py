@@ -297,16 +297,80 @@ _INVENTORY: tuple[Capability, ...] = (
     ),
     # --- clv --------------------------------------------------------------------------------
     _tool(
+        "fit_purchase_model",
+        "clv",
+        "Fit a PyMC-Marketing purchase or churn frequency model (BG/NBD or Shifted Beta-Geometric).",
+        delegates_to="clv.fit_purchase_model",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow",
+            "tests/statistical/test_clv_real_models.py::test_real_shifted_beta_geo_workflow",
+        ),
+    ),
+    _tool(
+        "fit_value_model",
+        "clv",
+        "Fit a PyMC-Marketing monetary transaction value model (Gamma-Gamma).",
+        delegates_to="clv.fit_value_model",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow",
+        ),
+    ),
+    _tool(
+        "predict_expected_purchases",
+        "clv",
+        "Predict future purchase frequency per customer from a fitted purchase model.",
+        delegates_to="clv.predict_expected_purchases",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow",
+        ),
+    ),
+    _tool(
+        "predict_probability_alive",
+        "clv",
+        "Estimate probability of customer retention/alive from a fitted purchase or churn model.",
+        delegates_to="clv.predict_probability_alive",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow",
+            "tests/statistical/test_clv_real_models.py::test_real_shifted_beta_geo_workflow",
+        ),
+    ),
+    _tool(
+        "predict_expected_spend",
+        "clv",
+        "Predict average transaction monetary spend per customer from a fitted value model.",
+        delegates_to="clv.predict_expected_spend",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow",
+        ),
+    ),
+    _tool(
+        "estimate_customer_lifetime_value",
+        "clv",
+        "Estimate discounted lifetime value by combining a purchase model and monetary value model.",
+        delegates_to="clv.estimate_customer_lifetime_value",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow",
+        ),
+    ),
+    _tool(
         "fit_clv_model",
         "clv",
-        "Fit a PyMC-Marketing CLV model (BG/NBD, Gamma-Gamma, or shifted beta-geometric).",
+        "Fit a PyMC-Marketing CLV model (legacy compatibility wrapper).",
         delegates_to="clv.fit_clv",
+        status="experimental",
     ),
     _tool(
         "predict_customer_clv",
         "clv",
-        "Produce customer-level predictions from a fitted CLV model.",
+        "Produce customer-level predictions from a fitted CLV model (legacy compatibility wrapper).",
         delegates_to="clv.predict_clv",
+        status="experimental",
     ),
     _tool(
         "get_churn_risk_cohorts",

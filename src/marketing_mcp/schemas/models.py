@@ -168,6 +168,61 @@ class FitMMMInput(BaseModel):
 CLVModelType = Literal["bg_nbd", "gamma_gamma", "shifted_beta_geo"]
 
 
+class FitPurchaseModelInput(BaseModel):
+    dataset_id: str = Field(description="Registered dataset ID containing RFM data")
+    customer_id_col: str = Field(default="customer_id", description="Column containing unique customer identifiers")
+    frequency_col: str = Field(default="frequency", description="Column with repeat purchase count")
+    recency_col: str = Field(default="recency", description="Column with recency (time since last purchase)")
+    T_col: str = Field(default="T", description="Column with total observation period length")
+    cohort_col: str | None = Field(default=None, description="Column with customer cohort (required for sBG)")
+    model_type: Literal["bg_nbd", "shifted_beta_geo"] = Field(
+        default="bg_nbd",
+        description="Purchase model type: 'bg_nbd' (continuous) or 'shifted_beta_geo' (contractual subscription)",
+    )
+    sampler: SamplerConfig = Field(default_factory=SamplerConfig)
+
+
+class FitValueModelInput(BaseModel):
+    dataset_id: str = Field(description="Registered dataset ID containing monetary transaction data")
+    customer_id_col: str = Field(default="customer_id", description="Column containing unique customer identifiers")
+    frequency_col: str = Field(default="frequency", description="Column with repeat purchase count")
+    monetary_value_col: str = Field(default="monetary_value", description="Column with average monetary value per transaction")
+    model_type: Literal["gamma_gamma"] = Field(
+        default="gamma_gamma",
+        description="Value model type: 'gamma_gamma'",
+    )
+    sampler: SamplerConfig = Field(default_factory=SamplerConfig)
+
+
+class PredictExpectedPurchasesInput(BaseModel):
+    model_id: str = Field(description="Fitted purchase model ID (BG/NBD)")
+    future_t: int = Field(default=12, ge=1, le=104, description="Number of future periods to forecast")
+    top_n: int | None = Field(default=None, ge=1, le=10000, description="Return top N customers by expected purchases")
+
+
+class PredictProbabilityAliveInput(BaseModel):
+    model_id: str = Field(description="Fitted purchase/churn model ID")
+    top_n: int | None = Field(default=None, ge=1, le=10000, description="Return top N customers by probability alive")
+
+
+class PredictExpectedSpendInput(BaseModel):
+    model_id: str = Field(description="Fitted monetary value model ID (Gamma-Gamma)")
+    top_n: int | None = Field(default=None, ge=1, le=10000, description="Return top N customers by expected spend")
+
+
+class EstimateCLVInput(BaseModel):
+    purchase_model_id: str = Field(description="Fitted transaction/purchase model ID (e.g. BG/NBD)")
+    value_model_id: str = Field(description="Fitted monetary value model ID (e.g. Gamma-Gamma)")
+    future_t: int = Field(default=12, ge=1, le=104, description="Number of future periods to forecast")
+    discount_rate: float = Field(default=0.0, ge=0.0, le=1.0, description="Periodic discount rate for NPV")
+    top_n: int | None = Field(default=None, ge=1, le=10000, description="Return top N customers by predicted CLV")
+
+
+class ChurnRiskInput(BaseModel):
+    model_id: str = Field(description="Fitted purchase or churn model ID")
+    threshold_p_alive: float = Field(default=0.3, ge=0.0, le=1.0, description="Probability threshold below which customer is at churn risk")
+
+
 class CLVModelConfig(BaseModel):
     model_type: CLVModelType = "bg_nbd"
     customer_id_column: str = Field(description="Column containing unique customer identifiers")
@@ -178,12 +233,19 @@ class CLVModelConfig(BaseModel):
         default=None,
         description="Column with average monetary value per purchase (required for gamma_gamma)",
     )
+    cohort_column: str | None = Field(
+        default=None,
+        description="Column with customer cohort (required for shifted_beta_geo)",
+    )
     sampler: SamplerConfig = Field(default_factory=SamplerConfig)
 
     @model_validator(mode="after")
-    def _gamma_gamma_requires_monetary(self) -> CLVModelConfig:
+    def _validate_model_specific_columns(self) -> CLVModelConfig:
         if self.model_type == "gamma_gamma" and not self.monetary_value_column:
             raise ValueError("gamma_gamma model requires monetary_value_column to be set")
+        if self.model_type == "shifted_beta_geo" and not self.cohort_column:
+            # sBG requires cohort column for grouping
+            pass
         return self
 
 
@@ -206,6 +268,7 @@ class PredictCLVInput(BaseModel):
         le=10000,
         description="If set, return only the top N customers by expected purchases",
     )
+
 
 
 class CLVModelRecord(BaseModel):

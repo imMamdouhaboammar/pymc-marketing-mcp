@@ -13,12 +13,18 @@ from marketing_mcp.schemas.models import (
     CalibrateMMMInput,
     CompareModelsInput,
     CrossValidateMMMInput,
+    EstimateCLVInput,
     FitCLVInput,
     FitMMMInput,
+    FitPurchaseModelInput,
+    FitValueModelInput,
     FlightingOptimizationInput,
     GetPosteriorPlotsInput,
     ModelComparisonInput,
     PredictCLVInput,
+    PredictExpectedPurchasesInput,
+    PredictExpectedSpendInput,
+    PredictProbabilityAliveInput,
     PriorSensitivityInput,
     ToolEnvelope,
 )
@@ -474,14 +480,133 @@ def create_server(app: Application | None = None):
     # -----------------------------------------------------------------------
 
     @mcp.tool(
+        name="fit_purchase_model",
+        description=(
+            "Fit a Bayesian purchase/transaction frequency model (BG/NBD or Shifted Beta-Geometric). "
+            "Normalizes user column names to canonical RFM attributes."
+        ),
+    )
+    async def fit_purchase_model(config: FitPurchaseModelInput):
+        try:
+            r = app.clv.fit_purchase_model(config)
+            return _env(
+                summary=r.model_dump(),
+                provenance=r.package_provenance,
+                next_actions=["predict_expected_purchases", "predict_probability_alive"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="fit_value_model",
+        description=(
+            "Fit a Bayesian monetary value transaction model (Gamma-Gamma) on repeat customer spending. "
+            "Requires frequency and average monetary value columns."
+        ),
+    )
+    async def fit_value_model(config: FitValueModelInput):
+        try:
+            r = app.clv.fit_value_model(config)
+            return _env(
+                summary=r.model_dump(),
+                provenance=r.package_provenance,
+                next_actions=["predict_expected_spend", "estimate_customer_lifetime_value"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="predict_expected_purchases",
+        description="Predict expected future purchase counts per customer from a fitted purchase model (BG/NBD).",
+    )
+    async def predict_expected_purchases(config: PredictExpectedPurchasesInput):
+        try:
+            r = app.clv.predict_expected_purchases(config)
+            return _env(
+                summary={
+                    "model_id": config.model_id,
+                    "future_t": config.future_t,
+                    "total_customers": r.get("total_customers"),
+                    "returned_customers": r.get("returned_customers"),
+                    "summary_stats": r.get("summary"),
+                },
+                evidence=r,
+                next_actions=["predict_probability_alive", "estimate_customer_lifetime_value"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="predict_probability_alive",
+        description="Estimate probability of customer retention/alive from a fitted purchase or churn model.",
+    )
+    async def predict_probability_alive(config: PredictProbabilityAliveInput):
+        try:
+            r = app.clv.predict_probability_alive(config)
+            return _env(
+                summary={
+                    "model_id": config.model_id,
+                    "total_customers": r.get("total_customers"),
+                    "returned_customers": r.get("returned_customers"),
+                    "summary_stats": r.get("summary"),
+                },
+                evidence=r,
+                next_actions=["get_churn_risk_cohorts", "estimate_customer_lifetime_value"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="predict_expected_spend",
+        description="Predict average transaction monetary spend per customer from a fitted Gamma-Gamma value model.",
+    )
+    async def predict_expected_spend(config: PredictExpectedSpendInput):
+        try:
+            r = app.clv.predict_expected_spend(config)
+            return _env(
+                summary={
+                    "model_id": config.model_id,
+                    "total_customers": r.get("total_customers"),
+                    "returned_customers": r.get("returned_customers"),
+                    "summary_stats": r.get("summary"),
+                },
+                evidence=r,
+                next_actions=["estimate_customer_lifetime_value"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="estimate_customer_lifetime_value",
+        description=(
+            "Estimate discounted net present Customer Lifetime Value (CLV) by combining a fitted "
+            "purchase model (e.g. BG/NBD) and monetary value model (e.g. Gamma-Gamma)."
+        ),
+    )
+    async def estimate_customer_lifetime_value(config: EstimateCLVInput):
+        try:
+            r = app.clv.estimate_customer_lifetime_value(config)
+            return _env(
+                summary={
+                    "purchase_model_id": config.purchase_model_id,
+                    "value_model_id": config.value_model_id,
+                    "future_t": config.future_t,
+                    "discount_rate": config.discount_rate,
+                    "total_customers": r.get("total_customers"),
+                    "returned_customers": r.get("returned_customers"),
+                    "summary_stats": r.get("summary"),
+                },
+                evidence=r,
+                next_actions=["get_churn_risk_cohorts"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
         name="fit_clv_model",
         description=(
             "Fit a Bayesian Customer Lifetime Value (CLV) model on RFM transaction data. "
-            "Supported model types: bg_nbd (BG/NBD repeat purchase model), "
-            "gamma_gamma (monetary value model — requires monetary_value_column), "
-            "shifted_beta_geo (subscription churn model). "
-            "Input must be a dataset with one row per customer containing "
-            "frequency, recency, T, and optionally monetary_value columns."
+            "(Deprecated: prefer fit_purchase_model or fit_value_model)."
         ),
     )
     async def fit_clv_model(config: FitCLVInput):
@@ -490,6 +615,7 @@ def create_server(app: Application | None = None):
             return _env(
                 summary=r.model_dump(),
                 provenance=r.package_provenance,
+                warnings=["fit_clv_model is deprecated; use fit_purchase_model or fit_value_model"],
                 next_actions=["predict_customer_clv", "get_churn_risk_cohorts"],
             )
         except DomainError as e:
@@ -498,10 +624,8 @@ def create_server(app: Application | None = None):
     @mcp.tool(
         name="predict_customer_clv",
         description=(
-            "Generate per-customer CLV predictions from a fitted BG/NBD or GammaGamma model. "
-            "Returns P(alive), expected future purchases, and a ranked customer table. "
-            "Use future_t to set the forecast horizon (default: 12 periods). "
-            "Use top_n_customers to cap the returned table size."
+            "Generate per-customer CLV predictions from a fitted BG/NBD model. "
+            "(Deprecated: prefer predict_expected_purchases or estimate_customer_lifetime_value)."
         ),
     )
     async def predict_customer_clv(config: PredictCLVInput):
@@ -514,6 +638,7 @@ def create_server(app: Application | None = None):
                     "total_customers": r.get("total_customers"),
                 },
                 evidence=r,
+                warnings=["predict_customer_clv is deprecated; use predict_expected_purchases"],
                 next_actions=["get_churn_risk_cohorts"],
             )
         except DomainError as e:

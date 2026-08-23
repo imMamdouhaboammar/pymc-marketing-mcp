@@ -120,13 +120,13 @@ Keep temporary backward-compatible translation for legacy `method` values with a
 
 A compatibility wrapper may keep `fit_clv_model` temporarily, but it must return a deprecation warning and route to the model-specific implementation.
 
-- [ ] Normalize arbitrary user column names into the canonical data frame expected by the selected PyMC-Marketing CLV model.
-- [ ] Keep BG/NBD frequency and survival outputs separate from Gamma-Gamma monetary outputs.
-- [ ] Require a compatible purchase model plus value model for combined CLV.
-- [ ] Add real fit/save/load/predict statistical tests for BG/NBD and Gamma-Gamma with small deterministic RFM fixtures.
-- [ ] Add a capability-specific test for shifted-beta-geometric only if the pinned PyMC-Marketing class is stable and supports the required API.
-- [ ] Verify returned `total_customers` represents the complete population even when `top_n` truncates evidence rows.
-- [ ] Commit.
+- [x] Normalize arbitrary user column names into the canonical data frame expected by the selected PyMC-Marketing CLV model.
+- [x] Keep BG/NBD frequency and survival outputs separate from Gamma-Gamma monetary outputs.
+- [x] Require a compatible purchase model plus value model for combined CLV.
+- [x] Add real fit/save/load/predict statistical tests for BG/NBD and Gamma-Gamma with small deterministic RFM fixtures.
+- [x] Add a capability-specific test for shifted-beta-geometric only if the pinned PyMC-Marketing class is stable and supports the required API.
+- [x] Verify returned `total_customers` represents the complete population even when `top_n` truncates evidence rows.
+- [x] Commit.
 
 ### Task 5: Decide and repair dynamic flighting contract
 

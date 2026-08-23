@@ -24,16 +24,22 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 29 capabilities (15 experimental, 14 stable).
+**Totals:** 35 capabilities (15 experimental, 20 stable).
 
 
 ## Tools
 
 | Name | Domain | Status | Decision gate | Delegates to | Summary | Evidence tests |
 |---|---|---|---|---|---|---|
-| `fit_clv_model` | clv | experimental | not enforced | `clv.fit_clv` | Fit a PyMC-Marketing CLV model (BG/NBD, Gamma-Gamma, or shifted beta-geometric). | none |
+| `estimate_customer_lifetime_value` | clv | stable | not enforced | `clv.estimate_customer_lifetime_value` | Estimate discounted lifetime value by combining a purchase model and monetary value model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
+| `fit_clv_model` | clv | experimental | not enforced | `clv.fit_clv` | Fit a PyMC-Marketing CLV model (legacy compatibility wrapper). | none |
+| `fit_purchase_model` | clv | stable | not enforced | `clv.fit_purchase_model` | Fit a PyMC-Marketing purchase or churn frequency model (BG/NBD or Shifted Beta-Geometric). | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow`<br>`tests/statistical/test_clv_real_models.py::test_real_shifted_beta_geo_workflow` |
+| `fit_value_model` | clv | stable | not enforced | `clv.fit_value_model` | Fit a PyMC-Marketing monetary transaction value model (Gamma-Gamma). | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
 | `get_churn_risk_cohorts` | clv | experimental | not enforced | `clv.get_churn_risk_cohorts` | Group customers into churn-risk cohorts from a fitted CLV model. | none |
-| `predict_customer_clv` | clv | experimental | not enforced | `clv.predict_clv` | Produce customer-level predictions from a fitted CLV model. | none |
+| `predict_customer_clv` | clv | experimental | not enforced | `clv.predict_clv` | Produce customer-level predictions from a fitted CLV model (legacy compatibility wrapper). | none |
+| `predict_expected_purchases` | clv | stable | not enforced | `clv.predict_expected_purchases` | Predict future purchase frequency per customer from a fitted purchase model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
+| `predict_expected_spend` | clv | stable | not enforced | `clv.predict_expected_spend` | Predict average transaction monetary spend per customer from a fitted value model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
+| `predict_probability_alive` | clv | stable | not enforced | `clv.predict_probability_alive` | Estimate probability of customer retention/alive from a fitted purchase or churn model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow`<br>`tests/statistical/test_clv_real_models.py::test_real_shifted_beta_geo_workflow` |
 | `inspect_dataset` | datasets | stable | not enforced | `datasets.inspect` | Report columns, dtypes, ranges, and candidate role assignments for a registered dataset. | `tests/unit/test_dataset_service.py::test_register_and_inspect_dataset`<br>`tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists` |
 | `register_dataset` | datasets | stable | not enforced | `datasets.register_file` | Register a CSV/Parquet file from the allowed ingest directory and fingerprint it. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists` |
 | `validate_dataset` | datasets | stable | not enforced | `datasets.validate` | Check a dataset against MMM modeling requirements and report blocking issues. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists` |

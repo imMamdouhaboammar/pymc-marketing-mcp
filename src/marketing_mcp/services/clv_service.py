@@ -1,9 +1,7 @@
-"""
-CLV Service — orchestrates CLV model lifecycle and predictions.
+"""CLV Service — orchestrates CLV model lifecycle and predictions.
 
-Mirrors ModelingService patterns: fit → persist → predict → churn.
-
-Phase 3 — v0.5.0
+Provides model-specific endpoints for purchase models (BG/NBD, sBG),
+value models (Gamma-Gamma), combined CLV estimation, and churn analysis.
 """
 
 from __future__ import annotations
@@ -20,16 +18,23 @@ from marketing_mcp.errors import DomainError
 from marketing_mcp.schemas.models import (
     CLVModelConfig,
     CLVModelRecord,
+    EstimateCLVInput,
     FitCLVInput,
+    FitPurchaseModelInput,
+    FitValueModelInput,
     PredictCLVInput,
+    PredictExpectedPurchasesInput,
+    PredictExpectedSpendInput,
+    PredictProbabilityAliveInput,
 )
+from marketing_mcp.security import safe_identifier
 
 if TYPE_CHECKING:
     from marketing_mcp.storage.metadata import SQLiteMetadataStore
 
 
 class CLVService:
-    """Orchestrates CLV model fitting, persistence, prediction, and churn analysis."""
+    """Orchestrates CLV model fitting, persistence, prediction, and lifetime value estimation."""
 
     def __init__(
         self,
@@ -41,78 +46,16 @@ class CLVService:
         self.artifact_dir = Path(artifact_dir)
         self.adapter = adapter_cls()
 
-    def _validate_rfm_data(self, df: pd.DataFrame, config: CLVModelConfig) -> None:
-        """Validate RFM DataFrame against CLV model requirements."""
-        required_cols = [
-            config.customer_id_column,
-            config.frequency_column,
-            config.recency_column,
-            config.T_column,
-        ]
-        if config.model_type == "gamma_gamma":
-            if not config.monetary_value_column:
-                raise DomainError(
-                    "INVALID_CLV_CONFIG",
-                    "gamma_gamma model requires monetary_value_column",
-                    evidence={"model_type": config.model_type},
-                    next_action="Set monetary_value_column in CLVModelConfig",
-                )
-            required_cols.append(config.monetary_value_column)
-
-        missing = [c for c in required_cols if c not in df.columns]
-        if missing:
-            raise DomainError(
-                "MISSING_RFM_COLUMNS",
-                f"Required RFM columns missing from dataset: {missing}",
-                evidence={"missing": missing, "available": list(df.columns)},
-                next_action="Ensure the dataset contains all required RFM columns",
-            )
-
-        # Validate non-negative numeric
-        for col in [config.frequency_column, config.recency_column, config.T_column]:
-            if (df[col] < 0).any():
-                raise DomainError(
-                    "INVALID_RFM_DATA",
-                    f"Column '{col}' contains negative values — RFM values must be non-negative",
-                    evidence={"column": col, "min_value": float(df[col].min())},
-                    next_action="Fix negative values in the RFM dataset before fitting",
-                )
-
-        # Validate no duplicate customer IDs
-        if df[config.customer_id_column].duplicated().any():
-            n_dup = int(df[config.customer_id_column].duplicated().sum())
-            raise DomainError(
-                "DUPLICATE_CUSTOMER_IDS",
-                f"customer_id_column '{config.customer_id_column}' has {n_dup} duplicate entries",
-                evidence={"column": config.customer_id_column, "duplicate_count": n_dup},
-                next_action="Aggregate to one row per customer before fitting CLV",
-            )
-
-        # Monetary non-negative
-        if (
-            config.monetary_value_column
-            and config.monetary_value_column in df.columns
-            and (df[config.monetary_value_column] < 0).any()
-        ):
-            raise DomainError(
-                "INVALID_RFM_DATA",
-                f"Column '{config.monetary_value_column}' contains negative values",
-                evidence={"column": config.monetary_value_column},
-                next_action="Fix negative monetary values in the RFM dataset",
-            )
-
-    def fit_clv(self, input: FitCLVInput) -> CLVModelRecord:
-        """Fit a CLV model and persist metadata + artifact.
-
-        Returns a CLVModelRecord with status 'completed'.
-        """
-        # Load and validate dataset
+    def _load_dataset(self, dataset_id: str) -> pd.DataFrame:
+        """Load dataset from registered metadata and file storage."""
+        if self.metadata is None:
+            raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' not found")
         try:
-            ds_record = self.metadata.get_dataset(input.dataset_id)
+            ds_record = self.metadata.get_dataset(dataset_id)
         except DomainError:
             raise DomainError(
                 "DATASET_NOT_FOUND",
-                f"Dataset '{input.dataset_id}' not found",
+                f"Dataset '{dataset_id}' not found",
                 next_action="Register the dataset first with register_dataset",
             )
 
@@ -120,19 +63,76 @@ class CLVService:
         if not df_path.exists():
             raise DomainError("DATASET_FILE_MISSING", f"Dataset file not found: {df_path}")
 
-        df = pd.read_parquet(df_path) if df_path.suffix == ".parquet" else pd.read_csv(df_path)
-        self._validate_rfm_data(df, input.config)
+        return pd.read_parquet(df_path) if df_path.suffix == ".parquet" else pd.read_csv(df_path)
 
+    def _validate_rfm_data(self, df: pd.DataFrame, config: CLVModelConfig) -> None:
+        """Validate RFM DataFrame against CLV model requirements."""
+        self.adapter.normalize_data(df, config.model_type, config.model_dump())
+
+    def fit_purchase_model(self, input: FitPurchaseModelInput) -> CLVModelRecord:
+        """Fit a repeat purchase model (BG/NBD or ShiftedBetaGeo) and persist artifact."""
+        df = self._load_dataset(input.dataset_id)
+        model_id = f"clv_p_{uuid.uuid4().hex[:10]}"
+        artifact_path = self.artifact_dir / "clv" / f"{model_id}.nc"
+        now = datetime.now(UTC).isoformat()
+
+        config_dict = input.model_dump()
+        self.adapter.fit(df, config_dict, artifact_path)
+
+        record = CLVModelRecord(
+            model_id=model_id,
+            model_type=input.model_type,
+            dataset_id=input.dataset_id,
+            status="completed",
+            artifact_path=str(artifact_path),
+            config=config_dict,
+            package_provenance=self._get_provenance(),
+            created_at=now,
+            updated_at=now,
+        )
+
+        if self.metadata is not None:
+            self.metadata.put_clv_model(record.model_dump())
+
+        return record
+
+    def fit_value_model(self, input: FitValueModelInput) -> CLVModelRecord:
+        """Fit a monetary value transaction model (Gamma-Gamma) and persist artifact."""
+        df = self._load_dataset(input.dataset_id)
+        model_id = f"clv_v_{uuid.uuid4().hex[:10]}"
+        artifact_path = self.artifact_dir / "clv" / f"{model_id}.nc"
+        now = datetime.now(UTC).isoformat()
+
+        config_dict = input.model_dump()
+        self.adapter.fit(df, config_dict, artifact_path)
+
+        record = CLVModelRecord(
+            model_id=model_id,
+            model_type=input.model_type,
+            dataset_id=input.dataset_id,
+            status="completed",
+            artifact_path=str(artifact_path),
+            config=config_dict,
+            package_provenance=self._get_provenance(),
+            created_at=now,
+            updated_at=now,
+        )
+
+        if self.metadata is not None:
+            self.metadata.put_clv_model(record.model_dump())
+
+        return record
+
+    def fit_clv(self, input: FitCLVInput) -> CLVModelRecord:
+        """Legacy compatibility method to fit any CLV model."""
+        df = self._load_dataset(input.dataset_id)
         model_id = f"clv_{uuid.uuid4().hex[:12]}"
         artifact_path = self.artifact_dir / "clv" / f"{model_id}.nc"
         now = datetime.now(UTC).isoformat()
 
-        # Build config dict for adapter
         config_dict = input.config.model_dump()
-
         self.adapter.fit(df, config_dict, artifact_path)
 
-        # Build and persist record
         record = CLVModelRecord(
             model_id=model_id,
             model_type=input.config.model_type,
@@ -150,23 +150,78 @@ class CLVService:
 
         return record
 
-    def predict_clv(self, input: PredictCLVInput) -> dict[str, Any]:
-        """Load a fitted CLV model and return per-customer predictions."""
-        from marketing_mcp.security import safe_identifier
-
+    def predict_expected_purchases(self, input: PredictExpectedPurchasesInput) -> dict[str, Any]:
+        """Predict expected future purchases for customers using a purchase model."""
         safe_identifier(input.model_id, "model")
-        if self.metadata is None:
-            raise DomainError("CLV_MODEL_NOT_FOUND", f"CLV model '{input.model_id}' not found")
-        record = self.metadata.get_clv_model(input.model_id)
+        record = self._require_clv_model_record(input.model_id)
+        if record["model_type"] not in ("bg_nbd", "shifted_beta_geo"):
+            raise DomainError(
+                "INVALID_MODEL_TYPE",
+                f"Model '{input.model_id}' is of type '{record['model_type']}', expected purchase model ('bg_nbd')",
+                evidence={"model_id": input.model_id, "model_type": record["model_type"]},
+            )
+        model = self._load_clv_model(record["model_type"], Path(record["artifact_path"]))
+        return self.adapter.predict_expected_purchases(model, future_t=input.future_t, top_n=input.top_n)
 
-        artifact_path = Path(record["artifact_path"])
-        model = self._load_clv_model(record["model_type"], artifact_path)
+    def predict_probability_alive(self, input: PredictProbabilityAliveInput) -> dict[str, Any]:
+        """Predict probability of customer alive using a purchase or churn model."""
+        safe_identifier(input.model_id, "model")
+        record = self._require_clv_model_record(input.model_id)
+        model = self._load_clv_model(record["model_type"], Path(record["artifact_path"]))
+        return self.adapter.predict_probability_alive(model, top_n=input.top_n)
+
+    def predict_expected_spend(self, input: PredictExpectedSpendInput) -> dict[str, Any]:
+        """Predict expected transaction spend for customers using a Gamma-Gamma value model."""
+        safe_identifier(input.model_id, "model")
+        record = self._require_clv_model_record(input.model_id)
+        if record["model_type"] != "gamma_gamma":
+            raise DomainError(
+                "INVALID_MODEL_TYPE",
+                f"Model '{input.model_id}' is of type '{record['model_type']}', expected value model ('gamma_gamma')",
+                evidence={"model_id": input.model_id, "model_type": record["model_type"]},
+            )
+        model = self._load_clv_model(record["model_type"], Path(record["artifact_path"]))
+        return self.adapter.predict_expected_spend(model, top_n=input.top_n)
+
+    def estimate_customer_lifetime_value(self, input: EstimateCLVInput) -> dict[str, Any]:
+        """Estimate combined discounted CLV using a purchase model and a value model."""
+        safe_identifier(input.purchase_model_id, "model")
+        safe_identifier(input.value_model_id, "model")
+
+        p_rec = self._require_clv_model_record(input.purchase_model_id)
+        v_rec = self._require_clv_model_record(input.value_model_id)
+
+        if p_rec["model_type"] not in ("bg_nbd", "shifted_beta_geo"):
+            raise DomainError(
+                "INCOMPATIBLE_MODELS",
+                f"purchase_model_id '{input.purchase_model_id}' must be a purchase model (got '{p_rec['model_type']}')",
+            )
+        if v_rec["model_type"] != "gamma_gamma":
+            raise DomainError(
+                "INCOMPATIBLE_MODELS",
+                f"value_model_id '{input.value_model_id}' must be a Gamma-Gamma value model (got '{v_rec['model_type']}')",
+            )
+
+        p_model = self._load_clv_model(p_rec["model_type"], Path(p_rec["artifact_path"]))
+        v_model = self._load_clv_model(v_rec["model_type"], Path(v_rec["artifact_path"]))
+
+        return self.adapter.estimate_customer_lifetime_value(
+            purchase_model=p_model,
+            value_model=v_model,
+            future_t=input.future_t,
+            discount_rate=input.discount_rate,
+            top_n=input.top_n,
+        )
+
+    def predict_clv(self, input: PredictCLVInput) -> dict[str, Any]:
+        """Legacy prediction method."""
+        safe_identifier(input.model_id, "model")
+        record = self._require_clv_model_record(input.model_id)
+        model = self._load_clv_model(record["model_type"], Path(record["artifact_path"]))
         return self.adapter.predict_clv(model, input.future_t, input.top_n_customers)
 
     def get_churn_risk_cohorts(self, model_id: str, threshold: float = 0.3) -> dict[str, Any]:
         """Return customers below P(alive) threshold for a fitted CLV model."""
-        from marketing_mcp.security import safe_identifier
-
         safe_identifier(model_id, "model")
         if not (0.0 <= threshold <= 1.0):
             raise DomainError(
@@ -175,13 +230,17 @@ class CLVService:
                 evidence={"threshold": threshold},
                 next_action="Provide a probability threshold between 0.0 and 1.0",
             )
+        record = self._require_clv_model_record(model_id)
+        model = self._load_clv_model(record["model_type"], Path(record["artifact_path"]))
+        return self.adapter.churn_risk_cohorts(model, threshold_p_alive=threshold)
+
+    def _require_clv_model_record(self, model_id: str) -> dict[str, Any]:
         if self.metadata is None:
             raise DomainError("CLV_MODEL_NOT_FOUND", f"CLV model '{model_id}' not found")
-        record = self.metadata.get_clv_model(model_id)
-
-        artifact_path = Path(record["artifact_path"])
-        model = self._load_clv_model(record["model_type"], artifact_path)
-        return self.adapter.churn_risk_cohorts(model, threshold_p_alive=threshold)
+        try:
+            return self.metadata.get_clv_model(model_id)
+        except DomainError:
+            raise DomainError("CLV_MODEL_NOT_FOUND", f"CLV model '{model_id}' not found")
 
     def _load_clv_model(self, model_type: str, artifact_path: Path):
         """Load a CLV model artifact from disk."""
