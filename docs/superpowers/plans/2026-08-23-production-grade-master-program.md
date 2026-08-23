@@ -59,11 +59,11 @@ Save the exact command outputs or CI links in `docs/release-evidence/` during ex
 
 **Produces:** A visible statement that new capability work is paused until scientific and production gates pass.
 
-- [ ] Add `Production readiness` wording to README that describes the current release as advanced beta or release candidate rather than production-grade.
-- [ ] Add an unreleased changelog section named `Stabilization Program`.
-- [ ] Create `docs/PRODUCTION-READINESS.md` with the G0 through G5 gates copied from the stabilization spec.
+- [x] Add `Production readiness` wording to README that describes the current release as advanced beta or release candidate rather than production-grade.
+- [x] Add an unreleased changelog section named `Stabilization Program`.
+- [x] Create `docs/PRODUCTION-READINESS.md` with the G0 through G5 gates copied from the stabilization spec.
 - [ ] Run markdown link checks used by the repository, or add a link-check task under the CI plan if none exists yet.
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add README.md CHANGELOG.md docs/PRODUCTION-READINESS.md
@@ -77,14 +77,14 @@ git commit -m "docs: declare production stabilization gates"
 
 **Produces:** A non-handwritten baseline record derived from command output.
 
-- [ ] Run the full fast suite and record pass/fail count.
-- [ ] Run the current statistical suite separately.
-- [ ] Run Ruff and build.
-- [ ] Run MCP stdio and HTTP integration tests.
-- [ ] Record current Python, PyMC-Marketing, PyMC, ArviZ, MCP, xarray, and h5netcdf versions from the active lock.
-- [ ] Record the commit SHA used for all commands.
-- [ ] Do not label unexecuted v0.4 phases as verified.
-- [ ] Commit the evidence file.
+- [x] Run the full fast suite and record pass/fail count.
+- [x] Run the current statistical suite separately.
+- [x] Run Ruff and build.
+- [x] Run MCP stdio and HTTP integration tests.
+- [x] Record current Python, PyMC-Marketing, PyMC, ArviZ, MCP, xarray, and h5netcdf versions from the active lock.
+- [x] Record the commit SHA used for all commands.
+- [x] Do not label unexecuted v0.4 phases as verified.
+- [x] Commit the evidence file.
 
 ---
 

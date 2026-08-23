@@ -30,17 +30,18 @@
 - Produces: `marketing_mcp.__version__: str`
 - Produces: `marketing_mcp.version_info() -> dict[str, str | None]`
 
-- [ ] Write a failing test asserting the health endpoint uses `marketing_mcp.__version__` rather than a literal.
-- [ ] Write a failing test asserting `version_info()` includes the application version and installed PyMC-Marketing version.
-- [ ] Implement `version_info()` using `importlib.metadata` and safe missing-package handling.
-- [ ] Replace the `"0.4.0"` literal in the health response with `__version__`.
-- [ ] Run:
+- [x] Write a failing test asserting the health endpoint uses `marketing_mcp.__version__` rather than a literal.
+- [x] Write a failing test asserting `version_info()` includes the application version and installed PyMC-Marketing version.
+- [x] Implement `version_info()` using `importlib.metadata` and safe missing-package handling.
+- [x] Replace the `"0.4.0"` literal in the health response with `__version__`.
+- [x] Run:
 
 ```bash
 uv run pytest tests/unit/test_version_contract.py -v
+uv run pytest tests/integration/test_http_health.py -v
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add src/marketing_mcp/__init__.py src/marketing_mcp/cli.py tests/unit/test_version_contract.py
