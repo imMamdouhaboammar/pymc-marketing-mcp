@@ -60,19 +60,21 @@ git commit -m "fix: centralize runtime version reporting"
 - Produces: `Capability` Pydantic/dataclass record with `name`, `kind`, `domain`, `status`, `decision_gate_required`, `evidence_test_ids`.
 - Produces: `get_capability_inventory() -> list[Capability]`.
 
-- [ ] Define an explicit capability record for every MCP tool and resource.
-- [ ] Mark unverified capabilities as `experimental` rather than `stable`.
-- [ ] Generate `docs/CAPABILITIES.md` from this registry.
-- [ ] Add an integration test that starts the MCP server and compares discovered tool/resource names with the inventory.
-- [ ] Fail if a discovered tool has no capability record or a stable capability has no evidence-test reference.
-- [ ] Run:
+- [x] Define an explicit capability record for every MCP tool and resource.
+- [x] Mark unverified capabilities as `experimental` rather than `stable`.
+- [x] Generate `docs/CAPABILITIES.md` from this registry.
+- [x] Add an integration test that starts the MCP server and compares discovered tool/resource names with the inventory.
+- [x] Fail if a discovered tool has no capability record or a stable capability has no evidence-test reference.
+- [x] Run:
 
 ```bash
 uv run pytest tests/integration/test_capability_inventory.py -v
-python scripts/generate_capability_inventory.py --check
+uv run pytest tests/unit/test_capability_rules.py tests/unit/test_capability_evidence.py tests/unit/test_capabilities_doc.py -v
+uv run python scripts/generate_capability_inventory.py --check
+uv run pytest -m statistical -q  # evidence cited by stable capabilities
 ```
 
-- [ ] Commit the registry, generator, generated document, and tests.
+- [x] Commit the registry, generator, generated document, and tests.
 
 ### Task 3: Separate historical review from current release evidence
 
