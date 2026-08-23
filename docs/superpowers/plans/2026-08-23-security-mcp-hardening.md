@@ -44,13 +44,13 @@
 - `register_model_selection_tools(...) -> None`
 - `register_resources(...) -> None`
 
-- [ ] Add a discovery snapshot test for current tool and resource names before refactoring.
-- [ ] Move `_env()` into `mcp/envelope.py` unchanged first.
-- [ ] Move resource handlers into `mcp/resources.py`.
-- [ ] Move tool registrations one domain at a time with no behavior change.
-- [ ] Keep `create_server()` responsible only for server creation, instructions, and module registration.
-- [ ] Run MCP stdio and HTTP discovery tests after each move.
-- [ ] Commit the refactor before auth behavior changes.
+- [x] Add a discovery snapshot test for current tool and resource names before refactoring.
+- [x] Move `_env()` into `mcp/envelope.py` unchanged first.
+- [x] Move resource handlers into `mcp/resources.py`.
+- [x] Move tool registrations one domain at a time with no behavior change.
+- [x] Keep `create_server()` responsible only for server creation, instructions, and module registration.
+- [x] Run MCP stdio and HTTP discovery tests after each move.
+- [x] Commit the refactor before auth behavior changes.
 
 ### Task 2: Introduce execution principals and scope policy
 
