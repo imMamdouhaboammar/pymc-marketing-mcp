@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .errors import DomainError
+from marketing_mcp.errors import DomainError
 
 _ID = re.compile(r"^[a-zA-Z0-9_-]{1,96}$")
 
