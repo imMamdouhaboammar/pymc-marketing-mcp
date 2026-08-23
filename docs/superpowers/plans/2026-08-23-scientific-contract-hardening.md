@@ -62,11 +62,11 @@ uv run pytest tests/statistical/test_channel_specific_config.py -v
 - transform-specific constructor arguments must be validated
 - unsupported combinations fail before sampling
 
-- [ ] Replace a one-size `l_max` schema with discriminated or model-validated fields where transforms require different parameters.
-- [ ] Test each supported transform factory using real classes.
-- [ ] Add a small sampling smoke matrix for at least one representative from geometric/delayed/weibull/no-adstock and logistic/hill/michaelis/no-saturation families.
-- [ ] Record unsupported transforms in capability inventory as unsupported rather than silently falling back.
-- [ ] Commit.
+- [x] Replace a one-size `l_max` schema with discriminated or model-validated fields where transforms require different parameters.
+- [x] Test each supported transform factory using real classes.
+- [x] Add a small sampling smoke matrix for at least one representative from geometric/delayed/weibull/no-adstock and logistic/hill/michaelis/no-saturation families.
+- [x] Record unsupported transforms in capability inventory as unsupported rather than silently falling back.
+- [x] Commit.
 
 ### Task 3: Correct model comparison semantics
 

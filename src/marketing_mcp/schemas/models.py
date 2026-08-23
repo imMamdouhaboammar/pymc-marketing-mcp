@@ -71,6 +71,7 @@ SaturationType = Literal[
 class AdstockConfig(BaseModel):
     type: AdstockType = "geometric"
     l_max: int = Field(default=8, ge=1, le=52, description="Maximum lag periods for adstock")
+    normalize: bool = Field(default=True, description="Whether to normalize adstock weights to sum to 1")
 
 
 class SaturationConfig(BaseModel):

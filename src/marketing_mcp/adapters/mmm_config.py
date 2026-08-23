@@ -84,9 +84,11 @@ def build_adstock(cfg: AdstockConfig | dict[str, Any] | None) -> Any:
     if isinstance(cfg, dict):
         adstock_type = cfg.get("type", "geometric")
         l_max = cfg.get("l_max", 8)
+        normalize = cfg.get("normalize", True)
     else:
         adstock_type = cfg.type
         l_max = cfg.l_max
+        normalize = getattr(cfg, "normalize", True)
 
     cls = ADSTOCK_MAP.get(adstock_type)
     if cls is None:
@@ -95,9 +97,7 @@ def build_adstock(cfg: AdstockConfig | dict[str, Any] | None) -> Any:
             f"Adstock type '{adstock_type}' is not supported",
             evidence={"requested": adstock_type, "available": list(ADSTOCK_MAP.keys())},
         )
-    if adstock_type == "none":
-        return cls()
-    return cls(l_max=l_max)
+    return cls(l_max=l_max, normalize=normalize)
 
 
 def build_saturation(cfg: SaturationConfig | dict[str, Any] | None) -> Any:
