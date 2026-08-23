@@ -13,19 +13,24 @@ from pathlib import Path
 from marketing_mcp.capabilities import get_capability_inventory
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SERVER_SOURCE = REPO_ROOT / "src" / "marketing_mcp" / "mcp" / "server.py"
 
 
 def _tool_handler_sources() -> dict[str, str]:
-    """Map each MCP tool handler name to its source text."""
-    source = SERVER_SOURCE.read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    """Map each MCP tool handler name to its source text.
+
+    Handlers may live in server.py or any mcp/tools module after the
+    boundary refactor, so scan the whole package.
+    """
+    package_dir = REPO_ROOT / "src" / "marketing_mcp" / "mcp"
     handlers: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
-            segment = ast.get_source_segment(source, node)
-            if segment:
-                handlers[node.name] = segment
+    for path in sorted(package_dir.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
+                segment = ast.get_source_segment(source, node)
+                if segment:
+                    handlers[node.name] = segment
     return handlers
 
 
