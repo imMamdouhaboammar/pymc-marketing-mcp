@@ -139,12 +139,12 @@ uv run pytest tests/unit/test_docs_drift.py tests/unit/test_agents_commands.py -
 - wheel metadata version matches runtime version
 - deployment scripts do not invent an independent default tag
 
-- [ ] Add OCI labels to Docker image for source revision and application version using build args.
-- [ ] Remove fixed `v0.5.0` default image tag from deployment script.
-- [ ] Require image tag or derive it from canonical package version and commit.
-- [ ] Add tests for tag derivation and invalid version mismatch.
-- [ ] Add a verification script that inspects built wheel metadata and supplied image metadata inputs.
-- [ ] Commit.
+- [x] Add OCI labels to Docker image for source revision and application version using build args.
+- [x] Remove fixed `v0.5.0` default image tag from deployment script.
+- [x] Require image tag or derive it from canonical package version and commit.
+- [x] Add tests for tag derivation and invalid version mismatch.
+- [x] Add a verification script that inspects built wheel metadata and supplied image metadata inputs.
+- [x] Commit.
 
 ### Task 6: Establish Gate G0
 

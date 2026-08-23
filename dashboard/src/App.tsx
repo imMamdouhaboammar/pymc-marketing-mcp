@@ -23,7 +23,7 @@ const DashboardContent: React.FC = () => {
           <AuthModal />
         </main>
         <footer className="border-t border-zinc-900 py-4 text-center text-xs text-zinc-600 font-mono">
-          PyMC Marketing MCP Server • v0.5.0
+          PyMC Marketing MCP Server • v0.4.0
         </footer>
       </div>
     );

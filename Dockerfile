@@ -28,6 +28,17 @@ ENV MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data \
 RUN mkdir -p /var/lib/marketing-mcp-local /var/lib/marketing-mcp/data /var/lib/marketing-mcp/artifacts /var/lib/marketing-mcp/inbox
 
 
+# Release identity, supplied by the build pipeline (deploy_cloud_run.sh / cloudbuild.yaml).
+# Declared late so a version/commit change does not invalidate the dependency layers above.
+ARG APP_VERSION=0.0.0
+ARG GIT_COMMIT=unknown
+LABEL org.opencontainers.image.title="pymc-marketing-mcp" \
+      org.opencontainers.image.description="Decision-safe MCP server for Bayesian marketing science" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.source="https://github.com/imMamdouhaboammar/pymc-marketing-mcp" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
 EXPOSE 8080 8000
 
 CMD ["marketing-mcp", "--transport", "streamable-http"]

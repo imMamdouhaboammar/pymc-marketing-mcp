@@ -38,6 +38,21 @@ marketing-mcp-auth = "marketing_mcp.auth_cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/marketing_mcp"]
 
+[tool.hatch.build.targets.sdist]
+# Ship the Python project only. The dashboard (including its vendored node_modules and
+# dashboard/.env.local secrets) and other build detritus must never enter the source distribution.
+include = [
+  "/src/marketing_mcp",
+  "/tests",
+  "/scripts",
+  "/docs",
+  "/pyproject.toml",
+  "/README.md",
+  "/LICENSE",
+  "/CHANGELOG.md",
+  "/AGENTS.md",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

@@ -3,6 +3,10 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '--build-arg'
+      - 'APP_VERSION=0.4.0'
+      - '--build-arg'
+      - 'GIT_COMMIT=$COMMIT_SHA'
       - '-t'
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
       - '-t'
