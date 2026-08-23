@@ -293,6 +293,70 @@ def get_capability(name: str) -> Capability:
     raise KeyError(f"no capability record for {name!r}")
 
 
+_DOC_HEADER = """# MCP Capability Inventory
+
+<!-- GENERATED FILE - do not edit by hand. -->
+
+This document is generated from `src/marketing_mcp/capabilities.py` by
+`scripts/generate_capability_inventory.py`. Regenerate it with:
+
+```bash
+uv run python scripts/generate_capability_inventory.py
+```
+
+`tests/unit/test_capabilities_doc.py` fails when this file drifts from the registry, and
+`tests/integration/test_capability_inventory.py` fails when the registry drifts from real MCP
+discovery.
+
+Status meanings:
+
+- `experimental` — exposed, but behavior is not yet proven by a referenced executable test. Do not
+  present it as verified.
+- `stable` — behavior is covered by at least one referenced executable evidence test.
+- `deprecated` — still exposed for compatibility, scheduled for removal.
+
+`Decision gate` marks capabilities that the code refuses to execute until `diagnose_mmm` has
+approved the model.
+"""
+
+
+def _evidence_cell(capability: Capability) -> str:
+    if not capability.evidence_test_ids:
+        return "none"
+    return "<br>".join(f"`{test_id}`" for test_id in capability.evidence_test_ids)
+
+
+def render_capability_markdown(inventory: Iterable[Capability]) -> str:
+    """Render the capability registry as the canonical ``docs/CAPABILITIES.md`` content."""
+    capabilities = sorted(inventory, key=lambda c: (c.kind, c.domain, c.name))
+    lines = [_DOC_HEADER]
+
+    counts: dict[str, int] = {}
+    for capability in capabilities:
+        counts[capability.status] = counts.get(capability.status, 0) + 1
+    summary = ", ".join(
+        f"{counts[status]} {status}" for status in CAPABILITY_STATUSES if status in counts
+    )
+    lines.append(f"\n**Totals:** {len(capabilities)} capabilities ({summary}).\n")
+
+    for kind in CAPABILITY_KINDS:
+        in_kind = [c for c in capabilities if c.kind == kind]
+        if not in_kind:
+            continue
+        lines.append(f"\n## {kind.capitalize()}s\n")
+        lines.append("| Name | Domain | Status | Decision gate | Summary | Evidence tests |")
+        lines.append("|---|---|---|---|---|---|")
+        for capability in in_kind:
+            gate = "required" if capability.decision_gate_required else "not enforced"
+            lines.append(
+                f"| `{capability.name}` | {capability.domain} | {capability.status} | {gate} "
+                f"| {capability.summary} | {_evidence_cell(capability)} |"
+            )
+        lines.append("")
+
+    return "\n".join(lines).rstrip("\n") + "\n"
+
+
 __all__ = [
     "CAPABILITY_DOMAINS",
     "CAPABILITY_KINDS",
@@ -300,5 +364,6 @@ __all__ = [
     "Capability",
     "get_capability",
     "get_capability_inventory",
+    "render_capability_markdown",
     "validate_inventory",
 ]
