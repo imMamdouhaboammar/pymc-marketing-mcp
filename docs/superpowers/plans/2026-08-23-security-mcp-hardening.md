@@ -125,12 +125,12 @@ http-production-oauth
 - token verifier configuration
 - required base scope
 
-- [ ] Add a Pydantic security profile enum and startup validation.
-- [ ] Make `0.0.0.0` production HTTP with no auth fail before Uvicorn starts.
-- [ ] Configure MCP SDK resource-server auth using the pinned SDK's supported verifier/auth settings.
-- [ ] Add integration fixtures issuing signed test tokens from a local test verifier or test authorization fixture.
-- [ ] Verify expired, wrong-audience, wrong-issuer, missing-scope, and malformed tokens.
-- [ ] Keep private API-key mode explicit rather than inferred silently from environment accidents.
+- [x] Add a Pydantic security profile enum and startup validation.
+- [x] Make `0.0.0.0` production HTTP with no auth fail before Uvicorn starts.
+- [x] Configure MCP SDK resource-server auth using the pinned SDK's supported verifier/auth settings.
+- [x] Add integration fixtures issuing signed test tokens from a local test verifier or test authorization fixture.
+- [x] Verify expired, wrong-audience, wrong-issuer, missing-scope, and malformed tokens.
+- [x] Keep private API-key mode explicit rather than inferred silently from environment accidents.
 - [ ] Commit.
 
 ### Task 5: Enforce scope at tool registration/execution

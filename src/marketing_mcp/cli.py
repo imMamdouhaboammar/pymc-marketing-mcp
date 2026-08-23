@@ -104,9 +104,26 @@ def main():
         create_server().run("stdio")
         return
 
+    # Fail closed BEFORE Uvicorn starts: validate the security posture of the
+    # HTTP deployment against its profile.
+    from marketing_mcp.config import Settings
+    from marketing_mcp.errors import DomainError
+
+    try:
+        settings = Settings.from_env()
+        settings.security_profile.validate_http_posture(
+            host=args.host,
+            auth_enabled=bool(args.api_key) or settings.auth_enabled,
+        )
+        app = create_http_app(host=args.host, api_key=args.api_key)
+    except DomainError as exc:
+        import sys
+
+        print(f"refusing to start: {exc.message}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
     import uvicorn
 
-    app = create_http_app(host=args.host, api_key=args.api_key)
     uvicorn.run(app, host=args.host, port=args.port)
 
 
