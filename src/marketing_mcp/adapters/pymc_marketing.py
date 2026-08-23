@@ -9,6 +9,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from marketing_mcp.adapters.mmm_config import (
+    build_adstock,
+    build_mmm_init_kwargs,
+    build_saturation,
+)
 from marketing_mcp.domain.decisions.allocation import (
     allocation_from_xarray,
     allocation_to_xarray,
@@ -104,30 +109,11 @@ class PyMCMarketingAdapter:
 
     def _build_adstock(self, cfg: dict):
         """Instantiate the correct adstock transform from a config dict."""
-        adstock_type = cfg.get("type", "geometric")
-        l_max = cfg.get("l_max", 8)
-        cls = self._adstock_map.get(adstock_type)
-        if cls is None:
-            raise DomainError(
-                "INVALID_ADSTOCK_TYPE",
-                f"Adstock type '{adstock_type}' is not supported in this PyMC-Marketing version",
-                evidence={"requested": adstock_type, "available": list(self._adstock_map.keys())},
-                next_action="Use a supported adstock type or upgrade pymc-marketing",
-            )
-        return cls(l_max=l_max)
+        return build_adstock(cfg)
 
     def _build_saturation(self, cfg: dict):
         """Instantiate the correct saturation transform from a config dict."""
-        sat_type = cfg.get("type", "logistic")
-        cls = self._saturation_map.get(sat_type)
-        if cls is None:
-            raise DomainError(
-                "INVALID_SATURATION_TYPE",
-                f"Saturation type '{sat_type}' is not supported in this PyMC-Marketing version",
-                evidence={"requested": sat_type, "available": list(self._saturation_map.keys())},
-                next_action="Use a supported saturation type or upgrade pymc-marketing",
-            )
-        return cls()
+        return build_saturation(cfg)
 
     @staticmethod
     def versions():
@@ -143,31 +129,32 @@ class PyMCMarketingAdapter:
     def fit(
         self,
         df: pd.DataFrame,
-        config: dict,
-        artifact: Path,
+        config: dict | Any,
+        artifact: Path | None = None,
         lift_df: pd.DataFrame | None = None,
     ):
-        target = config["target_column"]
+        if isinstance(config, dict):
+            cfg_dict = config
+        else:
+            cfg_dict = config.model_dump()
+
+        target = cfg_dict["target_column"]
         xcols = [
-            config["date_column"],
-            *config["channel_columns"],
-            *config.get("control_columns", []),
-            *config.get("dims", []),
+            cfg_dict["date_column"],
+            *cfg_dict["channel_columns"],
+            *(cfg_dict.get("control_columns") or []),
+            *(cfg_dict.get("dims") or []),
         ]
         X = df[xcols].copy()
-        X[config["date_column"]] = pd.to_datetime(X[config["date_column"]])
+        X[cfg_dict["date_column"]] = pd.to_datetime(X[cfg_dict["date_column"]])
         y = pd.to_numeric(df[target], errors="raise").rename(target)
-        model = self.MMM(
-            date_column=config["date_column"],
-            channel_columns=config["channel_columns"],
-            control_columns=config.get("control_columns") or None,
-            target_column=target,
-            adstock=self._build_adstock(config.get("adstock", {})),
-            saturation=self._build_saturation(config.get("saturation", {})),
-            yearly_seasonality=config.get("yearly_seasonality"),
-            dims=tuple(config.get("dims", [])),
-        )
-        sampler = config["sampler"]
+
+        init_kwargs = build_mmm_init_kwargs(config)
+        model = self.MMM(**init_kwargs)
+        sampler = cfg_dict.get("sampler", {})
+        if not isinstance(sampler, dict):
+            sampler = sampler.model_dump()
+
         model.build_model(X, y)
         model.add_original_scale_contribution_variable(var=["channel_contribution", "y"])
         if lift_df is not None and not lift_df.empty:
@@ -175,21 +162,23 @@ class PyMCMarketingAdapter:
         model.fit(
             X,
             y,
-            draws=sampler["draws"],
-            tune=sampler["tune"],
-            chains=sampler["chains"],
-            target_accept=sampler["target_accept"],
-            random_seed=sampler["random_seed"],
+            draws=sampler.get("draws", 1000),
+            tune=sampler.get("tune", 1000),
+            chains=sampler.get("chains", 4),
+            target_accept=sampler.get("target_accept", 0.9),
+            random_seed=sampler.get("random_seed", 42),
         )
-        model.sample_posterior_predictive(X, random_seed=sampler["random_seed"])
-        artifact.parent.mkdir(parents=True, exist_ok=True)
-        model.save(artifact)
+        model.sample_posterior_predictive(X, random_seed=sampler.get("random_seed", 42))
+        if artifact is not None:
+            artifact = Path(artifact)
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            model.save(artifact)
         return model
 
     def time_slice_cross_validate(
         self,
         df: pd.DataFrame,
-        config: dict,
+        config: dict | Any,
         n_init: int = 40,
         forecast_horizon: int = 10,
         step_size: int = 10,
@@ -204,28 +193,25 @@ class PyMCMarketingAdapter:
                 "TimeSliceCrossValidator is unavailable in this runtime",
             ) from e
 
-        target = config["target_column"]
-        date_col = config["date_column"]
+        if isinstance(config, dict):
+            cfg_dict = config
+        else:
+            cfg_dict = config.model_dump()
+
+        target = cfg_dict["target_column"]
+        date_col = cfg_dict["date_column"]
         xcols = [
             date_col,
-            *config["channel_columns"],
-            *config.get("control_columns", []),
-            *config.get("dims", []),
+            *cfg_dict["channel_columns"],
+            *(cfg_dict.get("control_columns") or []),
+            *(cfg_dict.get("dims") or []),
         ]
         X = df[xcols].copy()
         X[date_col] = pd.to_datetime(X[date_col])
         y = pd.to_numeric(df[target], errors="raise").rename(target)
 
-        model = self.MMM(
-            date_column=date_col,
-            channel_columns=config["channel_columns"],
-            control_columns=config.get("control_columns") or None,
-            target_column=target,
-            adstock=self._build_adstock(config.get("adstock", {})),
-            saturation=self._build_saturation(config.get("saturation", {})),
-            yearly_seasonality=config.get("yearly_seasonality"),
-            dims=tuple(config.get("dims", [])),
-        )
+        init_kwargs = build_mmm_init_kwargs(config)
+        model = self.MMM(**init_kwargs)
 
         s_cfg = sampler_config or config.get("sampler", {})
         cv = TimeSliceCrossValidator(
@@ -379,16 +365,8 @@ class PyMCMarketingAdapter:
             y = pd.to_numeric(df[target], errors="raise").rename(target)
 
             try:
-                alt_model = self.MMM(
-                    date_column=date_col,
-                    channel_columns=alt_config["channel_columns"],
-                    control_columns=alt_config.get("control_columns") or None,
-                    target_column=target,
-                    adstock=self._build_adstock(alt_adstock_cfg),
-                    saturation=self._build_saturation(alt_config.get("saturation", {})),
-                    yearly_seasonality=alt_config.get("yearly_seasonality"),
-                    dims=tuple(alt_config.get("dims", [])),
-                )
+                alt_init_kwargs = build_mmm_init_kwargs(alt_config)
+                alt_model = self.MMM(**alt_init_kwargs)
                 alt_model.build_model(X, y)
                 alt_model.add_original_scale_contribution_variable(
                     var=["channel_contribution", "y"]

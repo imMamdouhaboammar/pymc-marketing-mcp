@@ -77,11 +77,20 @@ class SaturationConfig(BaseModel):
     type: SaturationType = "logistic"
 
 
+class PriorDistributionConfig(BaseModel):
+    dist: str = Field(default="Beta", description="Prior distribution family (e.g. Beta, Gamma, HalfNormal, Normal)")
+    kwargs: dict[str, float] = Field(default_factory=dict, description="Distribution parameters (e.g. alpha, beta, sigma, mu)")
+
+
 class ChannelPriorConfig(BaseModel):
-    """Per-channel adstock and/or saturation override. Channels not listed use global config."""
+    """Per-channel prior parameters and/or transform class selection."""
 
     adstock: AdstockConfig | None = None
     saturation: SaturationConfig | None = None
+    priors: dict[str, PriorDistributionConfig] = Field(
+        default_factory=dict,
+        description="Per-parameter prior overrides (e.g. {'adstock_alpha': PriorDistributionConfig(...)})",
+    )
 
 
 class SamplerConfig(BaseModel):

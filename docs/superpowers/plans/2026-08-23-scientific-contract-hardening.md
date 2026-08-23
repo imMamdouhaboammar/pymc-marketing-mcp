@@ -34,20 +34,20 @@
 - Produces: `build_model_config(config: FitMMMInput | dict) -> dict[str, Any]`
 - Consumes: global adstock/saturation configuration and per-channel overrides.
 
-- [ ] Write failing tests proving that two channels can receive different prior parameters in the resulting model configuration.
-- [ ] Extend `ChannelPriorConfig` so it represents actual PyMC-Marketing prior/model configuration values rather than only transform class selection.
-- [ ] Keep transform selection global unless the upstream API supports per-channel transform families directly and that behavior is verified by a real test.
-- [ ] Map per-channel prior arrays/dimensions using the official channel coordinate rather than constructing separate unsupported transform objects per channel.
-- [ ] Add validation for shape, channel-name coverage, positive-only parameters, and unknown prior names.
-- [ ] Refactor `PyMCMarketingAdapter.fit()`, cross-validation, and prior-sensitivity model construction to use the same builder.
-- [ ] Run:
+- [x] Write failing tests proving that two channels can receive different prior parameters in the resulting model configuration.
+- [x] Extend `ChannelPriorConfig` so it represents actual PyMC-Marketing prior/model configuration values rather than only transform class selection.
+- [x] Keep transform selection global unless the upstream API supports per-channel transform families directly and that behavior is verified by a real test.
+- [x] Map per-channel prior arrays/dimensions using the official channel coordinate rather than constructing separate unsupported transform objects per channel.
+- [x] Add validation for shape, channel-name coverage, positive-only parameters, and unknown prior names.
+- [x] Refactor `PyMCMarketingAdapter.fit()`, cross-validation, and prior-sensitivity model construction to use the same builder.
+- [x] Run:
 
 ```bash
 uv run pytest tests/unit/test_mmm_config_builder.py -v
 uv run pytest tests/statistical/test_channel_specific_config.py -v
 ```
 
-- [ ] Commit.
+- [x] Commit.
 
 ### Task 2: Expand transform configuration only where parameters are real and supported
 
