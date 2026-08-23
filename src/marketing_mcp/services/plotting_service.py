@@ -205,7 +205,6 @@ class PlottingService:
         import numpy as np
 
         idata = model.idata
-        posterior = idata.get("posterior", {})
 
         # Try PyMC-Marketing native waterfall if available
         if hasattr(model, "plot") and model.plot is not None:
@@ -219,22 +218,26 @@ class PlottingService:
 
         # Manual waterfall from channel contributions
         fig, ax = plt.subplots(figsize=(10, 5))
-        channels_var = next(
-            (
-                v
-                for v in ["channel_contribution_original_scale", "channel_contribution"]
-                if v in posterior
-            ),
-            None,
-        )
-        if channels_var is not None:
-            da = posterior[channels_var]
-            # Sum over non-channel dims (time, chain, draw), get median per channel
+
+        try:
+            # Numerical aggregation lives in the tested domain layer: per-draw
+            # time aggregation before cross-draw median.
+            from marketing_mcp.domain.posterior_summaries import (
+                summarize_channel_contributions,
+            )
+
+            summary = summarize_channel_contributions(idata)
+            channel_names = [
+                str(c) for c in np.asarray(summary["median"].coords["channel"]).tolist()
+            ]
+            medians = [
+                float(summary["median"].sel(channel=ch).values) for ch in channel_names
+            ]
+        except DomainError:
+            channel_names = []
             medians = []
-            channel_names = da.coords["channel"].values.tolist()
-            for ch in channel_names:
-                vals = np.asarray(da.sel(channel=ch)).flatten()
-                medians.append(float(np.median(vals)))
+
+        if channel_names:
             colors = plt.cm.tab10(range(len(channel_names)))  # type: ignore[call-overload]
             bars = ax.bar(channel_names, medians, color=colors)
             ax.bar_label(bars, fmt="%.0f", padding=3)
@@ -266,23 +269,40 @@ class PlottingService:
         idata = model.idata
         fig, ax = plt.subplots(figsize=(12, 4))
 
-        # Posterior predictive
-        pp = idata.get("posterior_predictive")
-        obs = idata.get("observed_data")
-        if pp is not None and obs is not None:
-            y_var = next((v for v in pp.data_vars if "y" in v.lower()), None)
-            obs_var = next((v for v in obs.data_vars), None)
-            if y_var and obs_var:
-                pp_vals = np.asarray(pp[y_var]).reshape(-1, pp[y_var].shape[-1])
-                lower = np.quantile(pp_vals, 0.03, axis=0)
-                upper = np.quantile(pp_vals, 0.97, axis=0)
-                median = np.quantile(pp_vals, 0.5, axis=0)
-                t = np.arange(len(median))
+        try:
+            # Time dimension identified by name/coordinate in the domain layer.
+            from marketing_mcp.domain.posterior_summaries import summarize_predictions
+
+            summary = summarize_predictions(idata)
+            time_coord = next(
+                (d for d in summary.dims if d in ("date", "date_week", "week", "time", "period")),
+                None,
+            )
+            if time_coord is None:
+                raise DomainError("DATA_INVALID", "No time dimension in prediction summary")
+
+            median = np.asarray(summary["median"].values)
+            lower = np.asarray(summary["lower"].values)
+            upper = np.asarray(summary["upper"].values)
+            t = (
+                np.asarray(summary[time_coord].values)
+                if time_coord in summary.coords
+                else np.arange(median.shape[0])
+            )
+
+            obs_group = idata.get("observed_data")
+            obs_ds = getattr(obs_group, "dataset", None) or obs_group
+            obs_var = (
+                next((v for v in obs_ds.data_vars), None)
+                if obs_ds is not None and hasattr(obs_ds, "data_vars")
+                else None
+            )
+            if obs_var is not None:
                 ax.fill_between(t, lower, upper, alpha=0.3, label="94% HDI")
                 ax.plot(t, median, label="Predicted median", linewidth=1.5)
                 ax.plot(
                     t,
-                    np.asarray(obs[obs_var]).flatten(),
+                    np.asarray(obs_ds[obs_var].values).reshape(-1),
                     "k.",
                     alpha=0.7,
                     markersize=3,
@@ -295,16 +315,16 @@ class PlottingService:
                 ax.text(
                     0.5,
                     0.5,
-                    "Posterior predictive variable not found",
+                    "Observed data variable not found",
                     ha="center",
                     va="center",
                     transform=ax.transAxes,
                 )
-        else:
+        except DomainError as exc:
             ax.text(
                 0.5,
                 0.5,
-                "No posterior predictive samples found.\nRe-run diagnose_mmm to generate them.",
+                f"No posterior predictive samples found.\n{exc.message}",
                 ha="center",
                 va="center",
                 transform=ax.transAxes,
@@ -323,29 +343,34 @@ class PlottingService:
         import numpy as np
 
         idata = model.idata
-        posterior = idata.get("posterior", {})
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-        channels_var = next(
-            (
-                v
-                for v in ["channel_contribution_original_scale", "channel_contribution"]
-                if v in posterior
-            ),
-            None,
-        )
-        if channels_var is not None:
-            da = posterior[channels_var]
-            channel_names = da.coords["channel"].values.tolist()
+        try:
+            # Per-draw aggregation before cross-draw summary (domain layer).
+            from marketing_mcp.domain.posterior_summaries import (
+                summarize_channel_contributions,
+            )
+
+            summary = summarize_channel_contributions(idata)
+            channel_names = [
+                str(c) for c in np.asarray(summary["median"].coords["channel"]).tolist()
+            ]
+            medians = [
+                float(summary["median"].sel(channel=ch).values) for ch in channel_names
+            ]
+            lower_95s = [
+                float(summary["lower"].sel(channel=ch).values) for ch in channel_names
+            ]
+            upper_95s = [
+                float(summary["upper"].sel(channel=ch).values) for ch in channel_names
+            ]
+            has_data = bool(channel_names)
+        except DomainError:
+            channel_names = []
             medians = []
-            lower_95s = []
-            upper_95s = []
-            for ch in channel_names:
-                vals = np.asarray(da.sel(channel=ch)).flatten()
-                vals = vals[np.isfinite(vals)]
-                medians.append(float(np.median(vals)))
-                lower_95s.append(float(np.quantile(vals, 0.03)))
-                upper_95s.append(float(np.quantile(vals, 0.97)))
+            has_data = False
+
+        if has_data:
 
             total = sum(medians) if sum(medians) > 0 else 1.0
             shares = [m / total * 100 for m in medians]
@@ -353,7 +378,19 @@ class PlottingService:
             # Bar chart with error bars
             colors = plt.cm.tab10(range(len(channel_names)))  # type: ignore[call-overload]
             y_pos = np.arange(len(channel_names))
-            axes[0].barh(y_pos, shares, color=colors)
+            # Error bars from the same per-draw summary (94% interval), scaled
+            # into share space so the chart carries its own uncertainty.
+            denom = total
+            yerr_lower = [(m - lo) / denom * 100 for m, lo in zip(medians, lower_95s)]
+            yerr_upper = [(up - m) / denom * 100 for m, up in zip(medians, upper_95s)]
+            axes[0].barh(
+                y_pos,
+                shares,
+                color=colors,
+                xerr=[yerr_lower, yerr_upper],
+                ecolor="gray",
+                capsize=3,
+            )
             axes[0].set_yticks(y_pos)
             axes[0].set_yticklabels(channel_names)
             axes[0].set_xlabel("Contribution share (%)")
