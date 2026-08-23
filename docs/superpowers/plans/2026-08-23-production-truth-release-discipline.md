@@ -110,17 +110,17 @@ uv run pytest -m statistical -q  # evidence cited by stable capabilities
 - documented transport names exist in CLI choices
 - documented decision-gated tools match code policy
 
-- [ ] Write one failing fixture per drift type.
-- [ ] Implement the checker as a pure Python script returning non-zero on drift.
-- [ ] Update current docs to pass the checker while downgrading unverified claims.
-- [ ] Run:
+- [x] Write one failing fixture per drift type.
+- [x] Implement the checker as a pure Python script returning non-zero on drift.
+- [x] Update current docs to pass the checker while downgrading unverified claims.
+- [x] Run:
 
 ```bash
 uv run python scripts/check_docs_drift.py
-uv run pytest tests/unit/test_docs_drift.py -v
+uv run pytest tests/unit/test_docs_drift.py tests/unit/test_agents_commands.py -v
 ```
 
-- [ ] Commit.
+- [x] Commit.
 
 ### Task 5: Pin the release packaging contract
 
