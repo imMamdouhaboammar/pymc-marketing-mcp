@@ -226,11 +226,11 @@ Objectives:
 - calibration creates a new lineage node without mutating the parent model
 - comparison rejects different dataset fingerprints even if dataset IDs are manually forged equal
 
-- [ ] Implement fixtures with fixed random seeds.
-- [ ] Add explicit statistical tolerances with rationale comments.
-- [ ] Mark tests `statistical`.
-- [ ] Run the full statistical suite twice to detect flakiness.
-- [ ] Commit.
+- [x] Implement fixtures with fixed random seeds.
+- [x] Add explicit statistical tolerances with rationale comments.
+- [x] Mark tests `statistical`.
+- [x] Run the full statistical suite twice to detect flakiness.
+- [x] Commit.
 
 ### Task 9: Establish Gate G1
 

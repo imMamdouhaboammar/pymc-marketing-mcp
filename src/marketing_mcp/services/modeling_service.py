@@ -262,6 +262,19 @@ class ModelingService:
                 next_action="Compare models fitted on the same dataset",
             )
 
+        # Content identity wins over identifiers: forged-equal IDs must not
+        # smuggle models fitted on different data into a comparison.
+        dataset_fingerprints = {rec.model_id: rec.dataset_fingerprint for rec in records}
+        unique_fingerprints = set(dataset_fingerprints.values())
+        if len(unique_fingerprints) > 1:
+            raise DomainError(
+                "INCOMPATIBLE_MODELS",
+                "Model comparison refused: dataset fingerprints differ even though "
+                "dataset IDs match (dataset IDs may have been reassigned)",
+                evidence={"dataset_fingerprints": dataset_fingerprints},
+                next_action="Compare only models fitted on identical dataset contents",
+            )
+
         loaded_models = {}
         for rec in records:
             model_obj, _ = self.load_model(rec.model_id)
