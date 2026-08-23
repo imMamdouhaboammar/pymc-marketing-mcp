@@ -8,6 +8,7 @@ from typing import Any
 
 import pandas as pd
 
+from marketing_mcp.domain.model_selection import compare_information_criteria
 from marketing_mcp.errors import DomainError
 from marketing_mcp.schemas.models import (
     CalibrateMMMInput,
@@ -266,74 +267,10 @@ class ModelingService:
             model_obj, _ = self.load_model(rec.model_id)
             loaded_models[rec.model_id] = model_obj
 
-        import arviz as az
-
-        compare_dict = {mid: m.idata for mid, m in loaded_models.items()}
-        method = input.method
-        stacking_method = "BB-pseudo-BMA" if method == "waic" else "stacking"
-
-        try:
-            comp_df = az.compare(compare_dict, method=stacking_method)
-        except Exception as e:
-            raise DomainError(
-                "MODEL_COMPARISON_FAILED",
-                f"Information-theoretic model comparison failed: {e}",
-                evidence={"error": str(e)[:500], "method": method},
-            ) from e
-
-        ranked_models = []
-        best_model_id = str(comp_df.index[0])
-        stacking_weights = {}
-
-        for mid in comp_df.index:
-            row = comp_df.loc[mid]
-            w = float(row.get("weight", 0.0))
-            stacking_weights[str(mid)] = round(w, 4)
-            ranked_models.append(
-                {
-                    "model_id": str(mid),
-                    "rank": int(row.get("rank", 0)),
-                    "elpd_diff": float(round(float(row.get("elpd_diff", 0.0)), 4)),
-                    "dse": float(round(float(row.get("dse", 0.0)), 4)),
-                    "elpd": float(round(float(row.get("elpd", 0.0)), 4)),
-                    "se": float(round(float(row.get("se", 0.0)), 4)),
-                    "weight": round(w, 4),
-                }
-            )
-
-        pareto_k_warnings = []
-        for mid, m in loaded_models.items():
-            try:
-                loo_res = az.loo(m.idata)
-                if hasattr(loo_res, "pareto_k"):
-                    import numpy as np
-
-                    pk_vals = np.asarray(loo_res.pareto_k).flatten()
-                    high_k = pk_vals[pk_vals > 0.7]
-                    if len(high_k) > 0:
-                        pareto_k_warnings.append(
-                            {
-                                "code": "HIGH_PARETO_K",
-                                "model_id": mid,
-                                "severity": "warning",
-                                "high_k_count": len(high_k),
-                                "max_k": float(round(float(np.max(pk_vals)), 4)),
-                                "message": f"Model {mid} has {len(high_k)} observations with Pareto-k > 0.7.",
-                            }
-                        )
-            except (KeyError, ValueError, AttributeError, TypeError):
-                pass
-
-        interpretation = (
-            f"Best model based on expected log pointwise predictive density (ELPD) is '{best_model_id}'. "
-            "Bayesian stacking distributes predictive weight across specifications according to out-of-sample capability."
+        idatas = {mid: m.idata for mid, m in loaded_models.items()}
+        result = compare_information_criteria(
+            idatas=idatas,
+            criterion=input.criterion,
+            weighting=input.weighting,
         )
-
-        return {
-            "method": method,
-            "best_model_id": best_model_id,
-            "ranked_models": ranked_models,
-            "stacking_weights": stacking_weights,
-            "pareto_k_warnings": pareto_k_warnings,
-            "interpretation": interpretation,
-        }
+        return result.model_dump()

@@ -427,6 +427,8 @@ class FlightingOptimizationInput(BaseModel):
 # Phase 5 — Model Selection Schemas
 # ---------------------------------------------------------------------------
 
+CriterionType = Literal["loo", "waic", "both"]
+WeightingType = Literal["stacking", "bb-pseudo-bma", "pseudo-bma"]
 ComparisonMethod = Literal["loo", "waic", "stacking", "all"]
 
 
@@ -436,18 +438,48 @@ class ModelComparisonInput(BaseModel):
         max_length=10,
         description="List of 2–10 model IDs to compare. All must be fitted on the same dataset.",
     )
-    method: ComparisonMethod = Field(
+    criterion: CriterionType = Field(
         default="loo",
-        description="Comparison method: loo (PSIS-LOO), waic (WAIC), stacking (BMA weights), all",
+        description="Information criterion: 'loo' (PSIS-LOO), 'waic', or 'both'",
     )
+    weighting: WeightingType = Field(
+        default="stacking",
+        description="Model weighting method: 'stacking', 'bb-pseudo-bma', or 'pseudo-bma'",
+    )
+    method: str | None = Field(
+        default=None,
+        description="Deprecated: use `criterion` and `weighting` instead",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_method(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "method" in data and data["method"]:
+            legacy = data["method"]
+            if "criterion" not in data:
+                if legacy in ("loo", "waic", "both"):
+                    data["criterion"] = legacy
+                elif legacy == "stacking":
+                    data["criterion"] = "loo"
+                    data["weighting"] = "stacking"
+                elif legacy == "all":
+                    data["criterion"] = "both"
+            if "weighting" not in data and legacy in ("stacking", "bb-pseudo-bma", "pseudo-bma"):
+                data["weighting"] = legacy
+        return data
 
 
 class ModelComparisonResult(BaseModel):
-    method: str
+    criterion: str = "loo"
+    weighting: str = "stacking"
+    method: str = "loo"
     ranked_models: list[dict[str, Any]] = Field(default_factory=list)
-    best_model_id: str
+    best_model_id: str | None = None
+    recommended_model_id: str | None = None
+    recommendation_reason: str | None = None
     stacking_weights: dict[str, float] | None = None
     pareto_k_warnings: list[dict[str, Any]] = Field(default_factory=list)
+    comparisons: dict[str, Any] | None = None
     interpretation: str = ""
 
 

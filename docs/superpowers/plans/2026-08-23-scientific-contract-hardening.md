@@ -91,14 +91,14 @@ weighting: Literal["stacking", "bb-pseudo-bma", "pseudo-bma"] = "stacking"
 
 Keep temporary backward-compatible translation for legacy `method` values with a deprecation warning.
 
-- [ ] Write failing test that `criterion="waic"` reaches `az.compare(..., ic="waic")`.
-- [ ] Write failing test that `criterion="loo"` reaches `ic="loo"`.
-- [ ] Write failing test that `criterion="both"` returns two separately labeled comparisons.
-- [ ] Do not infer criterion from weighting method.
-- [ ] Calculate Pareto-k diagnostics only for LOO and expose warning severity.
-- [ ] Refuse automatic `best_model_id` when reliability diagnostics make ranking unsafe; return `recommended_model_id=None` plus reason.
-- [ ] Add real ArviZ idata test with deterministic generated log likelihood arrays.
-- [ ] Commit.
+- [x] Write failing test that `criterion="waic"` reaches `az.compare(..., ic="waic")`.
+- [x] Write failing test that `criterion="loo"` reaches `ic="loo"`.
+- [x] Write failing test that `criterion="both"` returns two separately labeled comparisons.
+- [x] Do not infer criterion from weighting method.
+- [x] Calculate Pareto-k diagnostics only for LOO and expose warning severity.
+- [x] Refuse automatic `best_model_id` when reliability diagnostics make ranking unsafe; return `recommended_model_id=None` plus reason.
+- [x] Add real ArviZ idata test with deterministic generated log likelihood arrays.
+- [x] Commit.
 
 ### Task 4: Make CLV contracts model-specific
 
