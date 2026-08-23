@@ -10,7 +10,7 @@ Manually asserted pass/fail claims are not evidence.
 
 | Gate | Name | Status | Evidence |
 |---|---|---|---|
-| G0 | Baseline Truth | in progress | `docs/release-evidence/` |
+| G0 | Baseline Truth | green | `tests/release/test_g0_production_truth.py` |
 | G1 | Scientific Correctness | not started | — |
 | G2 | Service Recovery | not started | — |
 | G3 | Remote Security | not started | — |

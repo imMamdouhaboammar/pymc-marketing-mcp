@@ -152,12 +152,12 @@ uv run pytest tests/unit/test_docs_drift.py tests/unit/test_agents_commands.py -
 - Modify: `docs/PRODUCTION-READINESS.md`
 - Create: `tests/release/test_g0_production_truth.py`
 
-- [ ] Test that runtime, package, capability inventory, and docs are consistent.
-- [ ] Test that every stable capability has at least one referenced executable evidence test.
-- [ ] Test that all current MCP tools are present in `docs/TOOL-CONTRACTS.md`.
-- [ ] Test that historical documents are marked with their historical version.
-- [ ] Run the full fast suite.
-- [ ] Mark G0 green only from CI evidence.
+- [x] Test that runtime, package, capability inventory, and docs are consistent.
+- [x] Test that every stable capability has at least one referenced executable evidence test.
+- [x] Test that all current MCP tools are present in `docs/TOOL-CONTRACTS.md`.
+- [x] Test that historical documents are marked with their historical version.
+- [x] Run the full fast suite.
+- [x] Mark G0 green only from CI evidence.
 
 ## Acceptance Criteria
 
