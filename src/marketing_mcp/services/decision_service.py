@@ -36,6 +36,25 @@ class DecisionService:
         return model, record
 
     @staticmethod
+    def _gate_payload(record) -> dict:
+        """Explicit gate context attached to every model-consuming tool result.
+
+        Descriptive tools run on rejected models so users can inspect the
+        evidence behind a rejection; the payload labels those numbers as
+        coming from a rejected model so they cannot be treated as
+        decision-grade.
+        """
+        diagnostics = record.diagnostics or {}
+        status = record.validation_state or "not_diagnosed"
+        payload: dict = {
+            "decision_status": status,
+            "diagnostic_warnings": list(diagnostics.get("warnings") or []),
+        }
+        if status == "rejected":
+            payload["diagnostic_failures"] = list(diagnostics.get("failures") or [])
+        return payload
+
+    @staticmethod
     def _provenance(model_id, record) -> dict:
         return {
             "model_id": model_id,
@@ -49,15 +68,19 @@ class DecisionService:
         model, record = self.modeling.load_model(model_id)
         result = self.modeling.adapter_factory().channel_contributions(model)
         result["model_id"] = model_id
+        result["decision_gate"] = self._gate_payload(record)
         result["provenance"] = self._provenance(model_id, record)
         return result
 
     def iroas(self, model_id):
-        model, record = self.modeling.load_model(model_id)
+        # iROAS drives budget reallocation, so it is decision-grade and must
+        # pass the full diagnostics gate like simulate/optimize/flighting.
+        model, record = self._approved(model_id)
         result = self.modeling.adapter_factory().incremental_roas(model)
         result.update(
             {
                 "model_id": model_id,
+                "decision_gate": self._gate_payload(record),
                 "provenance": self._provenance(model_id, record),
             }
         )
@@ -69,6 +92,7 @@ class DecisionService:
         result.update(
             {
                 "model_id": model_id,
+                "decision_gate": self._gate_payload(record),
                 "provenance": self._provenance(model_id, record),
             }
         )
@@ -114,6 +138,7 @@ class DecisionService:
                 "scenario_id": scenario_id,
                 "model_id": input.model_id,
                 "warnings": extrap_warnings,
+                "decision_gate": self._gate_payload(record),
                 "provenance": self._provenance(input.model_id, record),
             }
         )
@@ -161,6 +186,7 @@ class DecisionService:
             "scenario_allocation": scenario,
             **posterior_result,
             "warnings": extrap_warnings,
+            "decision_gate": self._gate_payload(record),
             "caveats": [
                 "Scenario evaluation is conditional on the fitted MMM and its posterior uncertainty."
             ],
@@ -362,5 +388,6 @@ class DecisionService:
             "posterior_response": sim_res["scenario_response"],
             "comparison_to_historical": sim_res["comparison"],
             "warnings": flighting_res["warnings"],
+            "decision_gate": self._gate_payload(record),
             "provenance": self._provenance(input.model_id, record),
         }

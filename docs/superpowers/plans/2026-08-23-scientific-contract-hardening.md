@@ -190,13 +190,13 @@ Objectives:
 - `summarize_channel_contributions(idata) -> xarray.Dataset`
 - `summarize_predictions(idata) -> xarray.Dataset`
 
-- [ ] Move numerical aggregation out of matplotlib code.
-- [ ] Aggregate contribution over time/dimensions per posterior draw before computing median/HDI across chain/draw.
-- [ ] Preserve panel dimensions explicitly and require the caller to choose aggregate or per-dimension output.
-- [ ] For actual-vs-predicted, identify the time dimension by coordinate/name rather than `shape[-1]`.
-- [ ] Plot only summaries returned by tested domain functions.
-- [ ] Add consistency test comparing plot summary inputs to analytical contribution tool summaries.
-- [ ] Commit.
+- [x] Move numerical aggregation out of matplotlib code.
+- [x] Aggregate contribution over time/dimensions per posterior draw before computing median/HDI across chain/draw.
+- [x] Preserve panel dimensions explicitly and require the caller to choose aggregate or per-dimension output.
+- [x] For actual-vs-predicted, identify the time dimension by coordinate/name rather than `shape[-1]`.
+- [x] Plot only summaries returned by tested domain functions.
+- [x] Add consistency test comparing plot summary inputs to analytical contribution tool summaries.
+- [x] Commit.
 
 ### Task 7: Strengthen decision gate coverage
 
@@ -205,12 +205,12 @@ Objectives:
 - Modify: `src/marketing_mcp/domain/diagnostics/gate.py`
 - Create: `tests/contract/test_decision_gate_contract.py`
 
-- [ ] Enumerate all tools that require an approved model.
-- [ ] Ensure contributions, iROAS, response curves, plots, simulation, optimization, flighting, and model-dependent recommendations have an explicit policy rather than accidental differences.
-- [ ] Decide which descriptive tools may run on a diagnosed-but-rejected model and document why.
-- [ ] Add parameterized contract tests for approved, approved-with-caution, rejected, and not-diagnosed states.
-- [ ] Ensure `approved_with_caution` always returns warnings from the diagnostic state.
-- [ ] Commit.
+- [x] Enumerate all tools that require an approved model.
+- [x] Ensure contributions, iROAS, response curves, plots, simulation, optimization, flighting, and model-dependent recommendations have an explicit policy rather than accidental differences.
+- [x] Decide which descriptive tools may run on a diagnosed-but-rejected model and document why.
+- [x] Add parameterized contract tests for approved, approved-with-caution, rejected, and not-diagnosed states.
+- [x] Ensure `approved_with_caution` always returns warnings from the diagnostic state.
+- [x] Commit.
 
 ### Task 8: Add statistical invariants test pack
 
