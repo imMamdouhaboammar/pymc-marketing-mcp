@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 from marketing_mcp.app import Application
 from marketing_mcp.errors import DomainError
+from marketing_mcp.mcp.envelope import env
 from marketing_mcp.schemas.models import (
     ArchiveModelInput,
     BudgetOptimizationInput,
@@ -26,25 +26,8 @@ from marketing_mcp.schemas.models import (
     PredictExpectedSpendInput,
     PredictProbabilityAliveInput,
     PriorSensitivityInput,
-    ToolEnvelope,
 )
 from marketing_mcp.security import safe_ingest_path
-
-
-def _env(
-    summary: dict[str, Any] | None = None,
-    evidence: dict[str, Any] | None = None,
-    warnings: list[Any] | None = None,
-    provenance: dict[str, Any] | None = None,
-    next_actions: list[str] | None = None,
-) -> dict[str, Any]:
-    return ToolEnvelope(
-        summary=summary or {},
-        evidence=evidence or {},
-        warnings=warnings or [],
-        provenance=provenance or {},
-        next_actions=next_actions or [],
-    ).model_dump()
 
 
 def create_server(app: Application | None = None):
@@ -73,7 +56,7 @@ def create_server(app: Application | None = None):
                 Path(path), app.settings.ingest_dir, app.settings.max_dataset_mb * 1024 * 1024
             )
             r = app.datasets.register_file(source)
-            return _env(
+            return env(
                 summary=r.model_dump(),
                 provenance={"fingerprint": r.fingerprint},
                 next_actions=["inspect_dataset", "validate_dataset"],
@@ -91,7 +74,7 @@ def create_server(app: Application | None = None):
     async def inspect_dataset(dataset_id: str):
         try:
             r = app.datasets.inspect(dataset_id)
-            return _env(
+            return env(
                 summary=r.model_dump(),
                 warnings=[x.model_dump() for x in r.issues],
                 next_actions=["validate_dataset"] if r.mmm_candidate else ["repair_dataset"],
@@ -123,7 +106,7 @@ def create_server(app: Application | None = None):
                 control_columns or [],
                 dims or [],
             )
-            return _env(
+            return env(
                 summary={"dataset_id": dataset_id, "valid_for_modeling": r.valid_for_modeling},
                 evidence={"findings": [f.model_dump() for f in r.findings]},
                 next_actions=["fit_mmm"] if r.valid_for_modeling else ["repair_dataset"],
@@ -145,7 +128,7 @@ def create_server(app: Application | None = None):
     async def fit_mmm(config: FitMMMInput):
         try:
             r = app.models.fit(config)
-            return _env(
+            return env(
                 summary=r.model_dump(),
                 provenance=r.config.get("provenance", {}),
                 next_actions=["diagnose_mmm"],
@@ -159,7 +142,7 @@ def create_server(app: Application | None = None):
     )
     async def get_model_status(model_id: str):
         try:
-            return _env(summary=app.models.status(model_id).model_dump())
+            return env(summary=app.models.status(model_id).model_dump())
         except DomainError as e:
             return e.to_dict()
 
@@ -178,7 +161,7 @@ def create_server(app: Application | None = None):
                 next_acts.extend(["simulate_budget", "optimize_budget", "cross_validate_mmm"])
             else:
                 next_acts.append("refit_model")
-            return _env(
+            return env(
                 summary={
                     "model_id": model_id,
                     "decision_status": r.decision_status,
@@ -201,7 +184,7 @@ def create_server(app: Application | None = None):
     async def get_channel_contributions(model_id: str):
         try:
             r = app.decisions.contributions(model_id)
-            return _env(
+            return env(
                 summary={"model_id": model_id, "channels": r["channels"]},
                 evidence={"variable": r["variable"]},
                 provenance=r["provenance"],
@@ -220,7 +203,7 @@ def create_server(app: Application | None = None):
     async def get_incremental_roas(model_id: str):
         try:
             r = app.decisions.iroas(model_id)
-            return _env(
+            return env(
                 summary=r,
                 provenance=r.get("provenance", {}),
                 next_actions=["simulate_budget", "optimize_budget"],
@@ -235,7 +218,7 @@ def create_server(app: Application | None = None):
     async def get_response_curves(model_id: str):
         try:
             r = app.decisions.response_curves(model_id)
-            return _env(summary=r, provenance=r.get("provenance", {}))
+            return env(summary=r, provenance=r.get("provenance", {}))
         except DomainError as e:
             return e.to_dict()
 
@@ -249,7 +232,7 @@ def create_server(app: Application | None = None):
     async def simulate_budget(config: BudgetSimulationInput):
         try:
             r = app.decisions.simulate(config)
-            return _env(
+            return env(
                 summary=r,
                 warnings=r.get("warnings", []),
                 evidence={"caveats": r.get("caveats", [])},
@@ -268,7 +251,7 @@ def create_server(app: Application | None = None):
     async def optimize_budget(config: BudgetOptimizationInput):
         try:
             r = app.decisions.optimize(config)
-            return _env(
+            return env(
                 summary=r,
                 warnings=r.get("warnings", []),
                 provenance=r.get("provenance", {}),
@@ -285,7 +268,7 @@ def create_server(app: Application | None = None):
     )
     async def recommend_next_measurement(model_id: str):
         try:
-            return _env(summary=app.decisions.recommend_measurement(model_id))
+            return env(summary=app.decisions.recommend_measurement(model_id))
         except DomainError as e:
             return e.to_dict()
 
@@ -299,7 +282,7 @@ def create_server(app: Application | None = None):
     async def cross_validate_mmm(input: CrossValidateMMMInput):
         try:
             r = app.diagnostics.cross_validate(input)
-            return _env(
+            return env(
                 summary=r,
                 warnings=r.get("stability_findings", []),
                 next_actions=["diagnose_mmm", "optimize_budget"],
@@ -317,7 +300,7 @@ def create_server(app: Application | None = None):
     async def evaluate_prior_sensitivity(input: PriorSensitivityInput):
         try:
             r = app.diagnostics.prior_sensitivity(input)
-            return _env(
+            return env(
                 summary=r,
                 warnings=r.get("findings", []),
                 next_actions=["calibrate_mmm", "recommend_next_measurement"],
@@ -335,7 +318,7 @@ def create_server(app: Application | None = None):
     async def calibrate_mmm(input: CalibrateMMMInput):
         try:
             r = app.models.calibrate(input)
-            return _env(
+            return env(
                 summary=r.model_dump(),
                 provenance={"parent_model_id": input.model_id, **r.package_provenance},
                 next_actions=["diagnose_mmm", "compare_models"],
@@ -350,7 +333,7 @@ def create_server(app: Application | None = None):
     async def compare_models(input: CompareModelsInput):
         try:
             r = app.models.compare_models(input.model_ids)
-            return _env(summary=r)
+            return env(summary=r)
         except DomainError as e:
             return e.to_dict()
 
@@ -361,7 +344,7 @@ def create_server(app: Application | None = None):
     async def archive_model(input: ArchiveModelInput):
         try:
             r = app.models.archive_model(input.model_id)
-            return _env(summary=r)
+            return env(summary=r)
         except DomainError as e:
             return e.to_dict()
 
@@ -398,7 +381,7 @@ def create_server(app: Application | None = None):
                 {"code": "PLOT_FAILED", "plot_type": pt, "detail": plots[pt].get("error")}
                 for pt in failed
             ]
-            return _env(
+            return env(
                 summary={"model_id": config.model_id, "generated": generated, "failed": failed},
                 evidence={"plots": plots},
                 warnings=warnings,
@@ -489,7 +472,7 @@ def create_server(app: Application | None = None):
     async def fit_purchase_model(config: FitPurchaseModelInput):
         try:
             r = app.clv.fit_purchase_model(config)
-            return _env(
+            return env(
                 summary=r.model_dump(),
                 provenance=r.package_provenance,
                 next_actions=["predict_expected_purchases", "predict_probability_alive"],
@@ -507,7 +490,7 @@ def create_server(app: Application | None = None):
     async def fit_value_model(config: FitValueModelInput):
         try:
             r = app.clv.fit_value_model(config)
-            return _env(
+            return env(
                 summary=r.model_dump(),
                 provenance=r.package_provenance,
                 next_actions=["predict_expected_spend", "estimate_customer_lifetime_value"],
@@ -522,7 +505,7 @@ def create_server(app: Application | None = None):
     async def predict_expected_purchases(config: PredictExpectedPurchasesInput):
         try:
             r = app.clv.predict_expected_purchases(config)
-            return _env(
+            return env(
                 summary={
                     "model_id": config.model_id,
                     "future_t": config.future_t,
@@ -543,7 +526,7 @@ def create_server(app: Application | None = None):
     async def predict_probability_alive(config: PredictProbabilityAliveInput):
         try:
             r = app.clv.predict_probability_alive(config)
-            return _env(
+            return env(
                 summary={
                     "model_id": config.model_id,
                     "total_customers": r.get("total_customers"),
@@ -563,7 +546,7 @@ def create_server(app: Application | None = None):
     async def predict_expected_spend(config: PredictExpectedSpendInput):
         try:
             r = app.clv.predict_expected_spend(config)
-            return _env(
+            return env(
                 summary={
                     "model_id": config.model_id,
                     "total_customers": r.get("total_customers"),
@@ -586,7 +569,7 @@ def create_server(app: Application | None = None):
     async def estimate_customer_lifetime_value(config: EstimateCLVInput):
         try:
             r = app.clv.estimate_customer_lifetime_value(config)
-            return _env(
+            return env(
                 summary={
                     "purchase_model_id": config.purchase_model_id,
                     "value_model_id": config.value_model_id,
@@ -612,7 +595,7 @@ def create_server(app: Application | None = None):
     async def fit_clv_model(config: FitCLVInput):
         try:
             r = app.clv.fit_clv(config)
-            return _env(
+            return env(
                 summary=r.model_dump(),
                 provenance=r.package_provenance,
                 warnings=["fit_clv_model is deprecated; use fit_purchase_model or fit_value_model"],
@@ -631,7 +614,7 @@ def create_server(app: Application | None = None):
     async def predict_customer_clv(config: PredictCLVInput):
         try:
             r = app.clv.predict_clv(config)
-            return _env(
+            return env(
                 summary={
                     "model_id": config.model_id,
                     "future_t": config.future_t,
@@ -655,7 +638,7 @@ def create_server(app: Application | None = None):
     async def get_churn_risk_cohorts(model_id: str, threshold_p_alive: float = 0.3):
         try:
             r = app.clv.get_churn_risk_cohorts(model_id, threshold=threshold_p_alive)
-            return _env(
+            return env(
                 summary={
                     "model_id": model_id,
                     "threshold": threshold_p_alive,
@@ -693,7 +676,7 @@ def create_server(app: Application | None = None):
     async def optimize_flighting(config: FlightingOptimizationInput):
         try:
             r = app.decisions.optimize_flighting(config)
-            return _env(
+            return env(
                 summary={
                     "model_id": config.model_id,
                     "total_budget": config.total_budget,
@@ -722,7 +705,7 @@ def create_server(app: Application | None = None):
     async def select_best_model(config: ModelComparisonInput):
         try:
             r = app.models.select_best_model(config)
-            return _env(
+            return env(
                 summary={
                     "method": config.method,
                     "model_ids": config.model_ids,
