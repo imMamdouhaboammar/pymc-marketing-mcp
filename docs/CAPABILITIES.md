@@ -24,7 +24,7 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 35 capabilities (15 experimental, 20 stable).
+**Totals:** 35 capabilities (14 experimental, 21 stable).
 
 
 ## Tools
@@ -47,7 +47,7 @@ approved the model.
 | `get_incremental_roas` | decisions | stable | not enforced | `decisions.iroas` | Report total and marginal incremental ROAS per channel with uncertainty. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling` |
 | `get_response_curves` | decisions | experimental | not enforced | `decisions.response_curves` | Report saturation response curves per channel. | none |
 | `optimize_budget` | decisions | stable | required | `decisions.optimize` | Allocate a fixed budget under channel constraints using the PyMC-Marketing optimizer. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts` |
-| `optimize_flighting` | decisions | experimental | required | `decisions.optimize_flighting` | Build a multi-period weekly spend schedule and evaluate it against the model. | none |
+| `optimize_flighting` | decisions | stable | required | `decisions.optimize_flighting` | Build a multi-period weekly spend schedule and evaluate it against the model. | `tests/statistical/test_flighting_optimization.py::test_real_dynamic_flighting_optimization` |
 | `recommend_next_measurement` | decisions | experimental | not enforced | `decisions.recommend_measurement` | Suggest the next experiment or lift test that would most reduce decision uncertainty. | none |
 | `simulate_budget` | decisions | stable | required | `decisions.simulate` | Evaluate a counterfactual spend scenario against the fitted baseline. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts` |
 | `diagnose_mmm` | diagnostics | stable | not enforced | `diagnostics.diagnose` | Run the mandatory sampler and posterior-predictive gate and set the decision status. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts` |

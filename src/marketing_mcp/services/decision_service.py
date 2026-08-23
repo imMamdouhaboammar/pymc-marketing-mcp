@@ -219,22 +219,53 @@ class DecisionService:
         import numpy as np
 
         from marketing_mcp.domain.decisions.flighting import (
-            build_weekly_schedule,
-            compute_net_profit,
+            optimize_flighting_schedule,
         )
-        from marketing_mcp.domain.decisions.flighting import (
-            check_extrapolation_risk as check_flighting_extrapolation_risk,
-        )
+
+        p95_map = {}
+        if hasattr(model, "X") and hasattr(model.X, "columns"):
+            for ch in model.channel_columns:
+                if ch in model.X:
+                    p95_map[ch] = float(np.percentile(model.X[ch], 95))
+
+        channel_params = {}
+        if hasattr(model, "fit_result") and hasattr(model.fit_result, "data_vars"):
+            post = model.fit_result
+            channels = getattr(model, "channel_columns", [])
+            for ch in channels:
+                p = {}
+                if "adstock_alpha" in post:
+                    try:
+                        p["alpha"] = float(post["adstock_alpha"].sel(channel=ch).mean())
+                    except (KeyError, ValueError, TypeError, AttributeError):
+                        pass
+                if "saturation_beta" in post:
+                    try:
+                        p["beta"] = float(post["saturation_beta"].sel(channel=ch).mean())
+                    except (KeyError, ValueError, TypeError, AttributeError):
+                        pass
+                if "saturation_lam" in post:
+                    try:
+                        p["lam"] = float(post["saturation_lam"].sel(channel=ch).mean())
+                    except (KeyError, ValueError, TypeError, AttributeError):
+                        pass
+                if p:
+                    channel_params[ch] = p
 
         constraints_dicts = [c.model_dump() for c in input.channel_constraints]
-        weekly_schedule = build_weekly_schedule(
-            model.channel_columns,
-            input.total_budget,
-            input.planning_weeks,
-            constraints_dicts,
+        flighting_res = optimize_flighting_schedule(
+            channel_columns=model.channel_columns,
+            total_budget=input.total_budget,
+            planning_weeks=input.planning_weeks,
+            channel_constraints=constraints_dicts,
+            objective=input.objective,
+            target_iroas_min=input.target_iroas_min,
+            margin_pct=input.margin_pct,
+            channel_parameters=channel_params if channel_params else None,
+            historical_channel_p95=p95_map,
         )
 
-        total_channel_spend = {ch: sum(spends) for ch, spends in weekly_schedule.items()}
+        total_channel_spend = flighting_res["total_channel_spend"]
         baseline_channel_spend = historical_allocation(
             model,
             input.planning_weeks,
@@ -248,42 +279,15 @@ class DecisionService:
             planning_periods=input.planning_weeks,
         )
 
-        scenario_resp_median = sim_res["scenario_response"]["median"]
-        net_profit_info = compute_net_profit(
-            total_response=scenario_resp_median,
-            total_spend=input.total_budget,
-            margin_pct=input.margin_pct,
-        )
-
-        p95_map = {}
-        if hasattr(model, "X") and hasattr(model.X, "columns"):
-            for ch in model.channel_columns:
-                if ch in model.X:
-                    p95_map[ch] = float(np.percentile(model.X[ch], 95))
-        extrap_warnings = check_flighting_extrapolation_risk(weekly_schedule, p95_map)
-
-        if input.target_iroas_min is not None:
-            achieved_roas = net_profit_info["roas"]
-            if achieved_roas < input.target_iroas_min:
-                extrap_warnings.append(
-                    {
-                        "code": "TARGET_ROAS_UNMET",
-                        "severity": "warning",
-                        "target_iroas_min": input.target_iroas_min,
-                        "achieved_roas": achieved_roas,
-                        "message": f"Achieved ROAS ({achieved_roas}) is below the required target ({input.target_iroas_min}).",
-                    }
-                )
-
         scenario_id = f"flighting_{uuid.uuid4().hex[:12]}"
         payload = {
             "scenario_id": scenario_id,
             "model_id": input.model_id,
             "kind": "flighting",
             "input": input.model_dump(),
-            "weekly_schedule": weekly_schedule,
-            "total_spend": input.total_budget,
-            "net_profit": net_profit_info,
+            "weekly_schedule": flighting_res["weekly_schedule"],
+            "total_spend": flighting_res["allocated_budget"],
+            "net_profit": flighting_res["net_profit"],
             "sim_result": sim_res,
             "created_at": _utc(),
         }
@@ -292,13 +296,16 @@ class DecisionService:
         return {
             "scenario_id": scenario_id,
             "model_id": input.model_id,
+            "solver_status": flighting_res["solver_status"],
             "planning_weeks": input.planning_weeks,
-            "weekly_schedule": weekly_schedule,
+            "weekly_schedule": flighting_res["weekly_schedule"],
             "total_budget": input.total_budget,
+            "allocated_budget": flighting_res["allocated_budget"],
+            "budget_residual": flighting_res["budget_residual"],
             "total_channel_spend": total_channel_spend,
-            "net_profit": net_profit_info,
+            "net_profit": flighting_res["net_profit"],
             "posterior_response": sim_res["scenario_response"],
             "comparison_to_historical": sim_res["comparison"],
-            "warnings": extrap_warnings,
+            "warnings": flighting_res["warnings"],
             "provenance": self._provenance(input.model_id, record),
         }

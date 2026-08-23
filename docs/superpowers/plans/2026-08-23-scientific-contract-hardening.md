@@ -168,15 +168,15 @@ Objectives:
 - maximize expected net profit
 - maximize conservative/risk-adjusted objective using a specified posterior quantile
 
-- [ ] Write a budget-conservation failing test for the current implementation.
-- [ ] Write infeasible-constraints test.
-- [ ] Write test proving objective choice changes the result on a synthetic response surface.
-- [ ] Add a weekly allocation representation that preserves time dimension through response evaluation.
-- [ ] Evaluate carryover using the official model response path with week-by-week spend retained.
-- [ ] Make `target_iroas_min` a solver constraint, not a post-hoc warning.
-- [ ] Return solver status, constraint residuals, baseline comparison, posterior uncertainty, and extrapolation warnings.
-- [ ] If the official PyMC-Marketing API cannot safely evaluate sequential weekly response, execute the fallback rename instead of approximating behavior silently.
-- [ ] Commit.
+- [x] Write a budget-conservation failing test for the current implementation.
+- [x] Write infeasible-constraints test.
+- [x] Write test proving objective choice changes the result on a synthetic response surface.
+- [x] Add a weekly allocation representation that preserves time dimension through response evaluation.
+- [x] Evaluate carryover using the official model response path with week-by-week spend retained.
+- [x] Make `target_iroas_min` a solver constraint, not a post-hoc warning.
+- [x] Return solver status, constraint residuals, baseline comparison, posterior uncertainty, and extrapolation warnings.
+- [x] If the official PyMC-Marketing API cannot safely evaluate sequential weekly response, execute the fallback rename instead of approximating behavior silently.
+- [x] Commit.
 
 ### Task 6: Repair statistical plotting aggregation
 

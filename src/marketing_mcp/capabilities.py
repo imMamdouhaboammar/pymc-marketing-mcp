@@ -281,6 +281,10 @@ _INVENTORY: tuple[Capability, ...] = (
         "Build a multi-period weekly spend schedule and evaluate it against the model.",
         decision_gate_required=True,
         delegates_to="decisions.optimize_flighting",
+        status="stable",
+        evidence_test_ids=(
+            "tests/statistical/test_flighting_optimization.py::test_real_dynamic_flighting_optimization",
+        ),
     ),
     _tool(
         "recommend_next_measurement",
