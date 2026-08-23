@@ -83,7 +83,7 @@ def require_scope(principal: Principal, scope: str) -> None
 
 - [ ] Write tests for wildcard/private mode and explicit OAuth scopes.
 - [ ] Write tests that `marketing:read` cannot call decision tools.
-- [ ] Write tests that no principal or anonymous HTTP caller is rejected in protected production mode.
+- [ ] Write tests that a missing principal or anonymous HTTP caller is rejected in protected production mode.
 - [ ] Do not derive tenant identity from user-controlled tool arguments.
 - [ ] Commit.
 
