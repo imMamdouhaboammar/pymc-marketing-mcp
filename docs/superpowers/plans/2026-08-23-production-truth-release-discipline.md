@@ -87,12 +87,12 @@ uv run pytest -m statistical -q  # evidence cited by stable capabilities
 **Interfaces:**
 - Produces: `collect_release_evidence(commit_sha: str) -> dict`.
 
-- [ ] Define the evidence schema: commit SHA, timestamp, platform, Python version, dependency versions, commands, exit codes, test counts, artifact hashes.
-- [ ] Write tests for deterministic JSON serialization and secret redaction.
-- [ ] Implement command-result ingestion from CI environment variables and machine-readable pytest/build output where available.
-- [ ] Generate a Markdown summary from the JSON evidence object.
-- [ ] Document that manually edited pass/fail claims are not release evidence.
-- [ ] Commit.
+- [x] Define the evidence schema: commit SHA, timestamp, platform, Python version, dependency versions, commands, exit codes, test counts, artifact hashes.
+- [x] Write tests for deterministic JSON serialization and secret redaction.
+- [x] Implement command-result ingestion from CI environment variables and machine-readable pytest/build output where available.
+- [x] Generate a Markdown summary from the JSON evidence object.
+- [x] Document that manually edited pass/fail claims are not release evidence.
+- [x] Commit.
 
 ### Task 4: Add documentation drift checks
 
