@@ -93,12 +93,29 @@ class TestAuthManager:
         assert ctx.authenticated is True
         assert ctx.auth_type == "api_key"
 
-    def test_auth_via_query_param(self):
+    def test_query_param_credentials_are_ignored(self):
+        """Query-string credentials are never accepted (Wave 3 Task 3)."""
         mgr = AuthManager(api_keys=["test-key-abc"], enabled=True)
-        query = QueryParams("token=test-key-abc")
-        ctx = mgr.authenticate(Headers(), query)
-        assert ctx.authenticated is True
-        assert ctx.auth_type == "api_key"
+        for qp in ("token=test-key-abc", "api_key=test-key-abc"):
+            ctx = mgr.authenticate(Headers(), QueryParams(qp))
+            assert ctx.authenticated is False
+
+    def test_error_messages_never_echo_supplied_token(self):
+        mgr = AuthManager(api_keys=["test-key-abc"], enabled=True)
+        secret = "super-secret-token-value"
+        ctx = mgr.authenticate(Headers(), QueryParams(f"token={secret}"))
+        assert secret not in (ctx.error_message or "")
+        ctx2 = mgr.authenticate(
+            Headers({"authorization": f"Bearer {secret}"}), QueryParams()
+        )
+        assert "invalid" in (ctx2.error_message or "").lower()
+        assert secret not in (ctx2.error_message or "")
+
+    def test_error_messages_do_not_advertise_query_credentials(self):
+        mgr = AuthManager(api_keys=["test-key-abc"], enabled=True)
+        ctx = mgr.authenticate(Headers(), QueryParams())
+        msg = (ctx.error_message or "").lower()
+        assert "?token" not in msg and "query param" not in msg
 
     def test_auth_missing_credentials(self):
         mgr = AuthManager(api_keys=["test-key-abc"], enabled=True)

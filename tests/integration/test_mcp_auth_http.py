@@ -5,6 +5,7 @@ import httpx2
 import uvicorn
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp.shared.exceptions import MCPError
 
 from marketing_mcp.app import Application
 from marketing_mcp.auth import AuthManager, MCPAuthMiddleware, create_jwt_token, generate_api_key
@@ -93,12 +94,12 @@ def test_auth_middleware_e2e(tmp_path):
                 )
                 assert r.status_code in (200, 400)
 
-                # 6. Valid key via Query Parameter ?token=
+                # 6. Query-string credentials are REJECTED (never accepted)
                 r = await http_client.post(
                     f"{base_url}/mcp?token={valid_api_key}",
                     json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
                 )
-                assert r.status_code in (200, 400)
+                assert r.status_code == 401
 
             # 7. Full MCP Client Session with Authorization header
             mcp_url = f"{base_url}/mcp"
@@ -129,14 +130,22 @@ def test_auth_middleware_e2e(tmp_path):
                 tools = await session.list_tools()
                 assert len(tools.tools) >= 15
 
-            # 9. Full MCP Client Session with Query Parameter
-            async with (
-                streamable_http_client(f"{mcp_url}?token={valid_api_key}") as (read, write),
-                ClientSession(read, write) as session,
-            ):
-                await session.initialize()
-                tools = await session.list_tools()
-                assert len(tools.tools) >= 15
+            # 9. Full MCP Client Session via query parameter must fail: the
+            # server answers 401; anyio may surface it directly or wrapped in
+            # an ExceptionGroup during context teardown.
+            rejected = False
+            try:
+                async with (
+                    streamable_http_client(f"{mcp_url}?token={valid_api_key}") as (
+                        read,
+                        write,
+                    ),
+                    ClientSession(read, write) as session,
+                ):
+                    await session.initialize()
+            except* (httpx2.HTTPStatusError, RuntimeError, MCPError):
+                rejected = True
+            assert rejected, "session authenticated via query-string token"
 
         finally:
             server.should_exit = True

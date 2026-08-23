@@ -81,11 +81,11 @@ def require_scope(principal: Principal, scope: str) -> None
 - `marketing:clv` for CLV fit/predict
 - `marketing:admin` for archive and future administrative actions
 
-- [ ] Write tests for wildcard/private mode and explicit OAuth scopes.
-- [ ] Write tests that `marketing:read` cannot call decision tools.
-- [ ] Write tests that a missing principal or anonymous HTTP caller is rejected in protected production mode.
-- [ ] Do not derive tenant identity from user-controlled tool arguments.
-- [ ] Commit.
+- [x] Write tests for wildcard/private mode and explicit OAuth scopes.
+- [x] Write tests that `marketing:read` cannot call decision tools.
+- [x] Write tests that a missing principal or anonymous HTTP caller is rejected in protected production mode.
+- [x] Do not derive tenant identity from user-controlled tool arguments.
+- [x] Commit.
 
 ### Task 3: Remove query-string credential support
 
@@ -96,11 +96,11 @@ def require_scope(principal: Principal, scope: str) -> None
 - Modify: `.env.example`
 - Modify: docs referencing query-token access
 
-- [ ] Add failing tests for `?token=` and `?api_key=` being ignored/rejected.
-- [ ] Support `Authorization: Bearer` for OAuth and optional `X-API-Key` only in private API-key mode.
-- [ ] Ensure error responses do not echo the supplied token.
-- [ ] Search the repository for `?token`, `api_key=`, and credential examples and remove unsafe guidance.
-- [ ] Commit.
+- [x] Add failing tests for `?token=` and `?api_key=` being ignored/rejected.
+- [x] Support `Authorization: Bearer` for OAuth and optional `X-API-Key` only in private API-key mode.
+- [x] Ensure error responses do not echo the supplied token.
+- [x] Search the repository for `?token`, `api_key=`, and credential examples and remove unsafe guidance.
+- [x] Commit.
 
 ### Task 4: Add production authentication profiles
 

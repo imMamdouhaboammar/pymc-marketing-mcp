@@ -159,27 +159,23 @@ class AuthManager:
         )
 
     def extract_token(self, headers: Headers, query_params: QueryParams) -> str | None:
-        """Extract authentication token from Authorization header, X-API-Key, or Query params."""
-        # 1. Check Authorization header: Bearer <token>
+        """Extract credentials from headers only.
+
+        Query-string credentials are never accepted: URLs are logged by
+        proxies and browsers and leak secrets. ``query_params`` is accepted
+        for interface compatibility but deliberately ignored.
+        """
+        # 1. Authorization header: Bearer <token>
         auth_header = headers.get("authorization", "")
         if auth_header.lower().startswith("bearer "):
             token = auth_header[7:].strip()
             if token:
                 return token
 
-
-        # 2. Check X-API-Key header
+        # 2. X-API-Key header
         x_api_key = headers.get("x-api-key", "").strip()
         if x_api_key:
             return x_api_key
-
-        # 3. Check Query parameter ?token=... or ?api_key=... (for SSE / browser clients)
-        token_param = query_params.get("token", "").strip()
-        if token_param:
-            return token_param
-        api_key_param = query_params.get("api_key", "").strip()
-        if api_key_param:
-            return api_key_param
 
         return None
 
@@ -191,7 +187,7 @@ class AuthManager:
         if not token:
             return AuthContext(
                 authenticated=False,
-                error_message="Missing authentication credentials. Provide Authorization: Bearer <TOKEN>, X-API-Key header, or ?token= query parameter.",
+                error_message="Missing authentication credentials. Provide Authorization: Bearer <TOKEN> or X-API-Key header.",
             )
 
         # Try API Key first

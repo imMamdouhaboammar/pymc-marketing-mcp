@@ -60,7 +60,7 @@ AI Agent Client (Claude / Cursor / Web App)
 The server features a built-in cryptographic authentication subsystem:
 * **API Key Auth**: High-entropy keys prefixed with `mcp_live_...` validated in constant-time.
 * **JWT Bearer Auth**: Signed HS256 tokens with configurable expiration, claims, and permission scopes.
-* **Query Parameter Auth**: `?token=<KEY_OR_JWT>` for clients without custom SSE header support.
+* **Header-Only Credentials**: Credentials are accepted exclusively via `Authorization: Bearer <TOKEN>` or `X-API-Key` headers. Query-string credentials (`?token=` / `?api_key=`) are rejected because URLs leak through proxy and browser logs.
 * **Public Endpoints**: `/health` and `/` remain open for load balancers and health probes.
 
 ### Generating & Managing Keys via CLI
@@ -121,7 +121,9 @@ claude mcp add pymc-marketing https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app
       "args": [
         "-y",
         "mcp-remote",
-        "https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/mcp?token=YOUR_API_KEY_HERE"
+        "https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/mcp",
+        "--header",
+        "Authorization: Bearer YOUR_API_KEY_HERE"
       ]
     }
   }
