@@ -23,9 +23,23 @@ class PyMCMarketingAdapter:
         try:
             from pymc_marketing.mmm import (
                 MMM,
+                BinomialAdstock,
                 BudgetOptimizerWrapper,
+                DelayedAdstock,
                 GeometricAdstock,
+                HillSaturation,
+                HillSaturationSigmoid,
+                InverseScaledLogisticSaturation,
                 LogisticSaturation,
+                LogSaturation,
+                MichaelisMentenSaturation,
+                NoAdstock,
+                NoSaturation,
+                RootSaturation,
+                TanhSaturation,
+                TanhSaturationBaselined,
+                WeibullCDFAdstock,
+                WeibullPDFAdstock,
             )
 
             optimizer_wrapper = BudgetOptimizerWrapper
@@ -38,6 +52,21 @@ class PyMCMarketingAdapter:
                 )
 
                 optimizer_wrapper = MultiDimensionalBudgetOptimizerWrapper
+                # Minimal zoo for legacy path
+                DelayedAdstock = None
+                WeibullCDFAdstock = None
+                WeibullPDFAdstock = None
+                BinomialAdstock = None
+                NoAdstock = None
+                TanhSaturation = None
+                TanhSaturationBaselined = None
+                MichaelisMentenSaturation = None
+                HillSaturation = None
+                HillSaturationSigmoid = None
+                InverseScaledLogisticSaturation = None
+                LogSaturation = None
+                RootSaturation = None
+                NoSaturation = None
             except ImportError as e:
                 raise DomainError(
                     "DEPENDENCY_UNAVAILABLE",
@@ -46,9 +75,59 @@ class PyMCMarketingAdapter:
                     next_action="Install project dependencies with uv sync",
                 ) from e
         self.MMM = MMM
+        self.OptimizerWrapper = optimizer_wrapper
+        # Adstock classes
+        self._adstock_map = {
+            "geometric": GeometricAdstock,
+            "delayed": DelayedAdstock,
+            "weibull_cdf": WeibullCDFAdstock,
+            "weibull_pdf": WeibullPDFAdstock,
+            "binomial": BinomialAdstock,
+            "none": NoAdstock,
+        }
+        # Saturation classes
+        self._saturation_map = {
+            "logistic": LogisticSaturation,
+            "tanh": TanhSaturation,
+            "tanh_baselined": TanhSaturationBaselined,
+            "michaelis_menten": MichaelisMentenSaturation,
+            "hill": HillSaturation,
+            "hill_sigmoid": HillSaturationSigmoid,
+            "inverse_scaled_logistic": InverseScaledLogisticSaturation,
+            "log": LogSaturation,
+            "root": RootSaturation,
+            "none": NoSaturation,
+        }
+        # Backwards-compat aliases kept from v0.3
         self.GeometricAdstock = GeometricAdstock
         self.LogisticSaturation = LogisticSaturation
-        self.OptimizerWrapper = optimizer_wrapper
+
+    def _build_adstock(self, cfg: dict):
+        """Instantiate the correct adstock transform from a config dict."""
+        adstock_type = cfg.get("type", "geometric")
+        l_max = cfg.get("l_max", 8)
+        cls = self._adstock_map.get(adstock_type)
+        if cls is None:
+            raise DomainError(
+                "INVALID_ADSTOCK_TYPE",
+                f"Adstock type '{adstock_type}' is not supported in this PyMC-Marketing version",
+                evidence={"requested": adstock_type, "available": list(self._adstock_map.keys())},
+                next_action="Use a supported adstock type or upgrade pymc-marketing",
+            )
+        return cls(l_max=l_max)
+
+    def _build_saturation(self, cfg: dict):
+        """Instantiate the correct saturation transform from a config dict."""
+        sat_type = cfg.get("type", "logistic")
+        cls = self._saturation_map.get(sat_type)
+        if cls is None:
+            raise DomainError(
+                "INVALID_SATURATION_TYPE",
+                f"Saturation type '{sat_type}' is not supported in this PyMC-Marketing version",
+                evidence={"requested": sat_type, "available": list(self._saturation_map.keys())},
+                next_action="Use a supported saturation type or upgrade pymc-marketing",
+            )
+        return cls()
 
     @staticmethod
     def versions():
@@ -83,8 +162,8 @@ class PyMCMarketingAdapter:
             channel_columns=config["channel_columns"],
             control_columns=config.get("control_columns") or None,
             target_column=target,
-            adstock=self.GeometricAdstock(l_max=config["adstock"]["l_max"]),
-            saturation=self.LogisticSaturation(),
+            adstock=self._build_adstock(config.get("adstock", {})),
+            saturation=self._build_saturation(config.get("saturation", {})),
             yearly_seasonality=config.get("yearly_seasonality"),
             dims=tuple(config.get("dims", [])),
         )
@@ -142,8 +221,8 @@ class PyMCMarketingAdapter:
             channel_columns=config["channel_columns"],
             control_columns=config.get("control_columns") or None,
             target_column=target,
-            adstock=self.GeometricAdstock(l_max=config["adstock"]["l_max"]),
-            saturation=self.LogisticSaturation(),
+            adstock=self._build_adstock(config.get("adstock", {})),
+            saturation=self._build_saturation(config.get("saturation", {})),
             yearly_seasonality=config.get("yearly_seasonality"),
             dims=tuple(config.get("dims", [])),
         )
@@ -242,7 +321,12 @@ class PyMCMarketingAdapter:
         df: pd.DataFrame,
         config: dict,
     ) -> dict[str, Any]:
-        """Evaluate sensitivity of commercial conclusions under alternative adstock/saturation priors."""
+        """Evaluate sensitivity of commercial conclusions under alternative adstock/saturation priors.
+
+        Permutes across multiple alternative adstock specifications:
+        - Halved l_max geometric (same type, shorter memory)
+        - Delayed adstock (different type, peak-delay dynamics)
+        """
         base_contrib = self.channel_contributions(model)
         base_ranks = {
             c["channel"]: i
@@ -253,76 +337,132 @@ class PyMCMarketingAdapter:
             )
         }
 
-        alt_config = dict(config)
-        alt_adstock_max = max(2, config.get("adstock", {}).get("l_max", 8) // 2)
-        alt_config["adstock"] = {"l_max": alt_adstock_max}
+        # Build alternative configurations to test
+        base_l_max = config.get("adstock", {}).get("l_max", 8)
+        base_adstock_type = config.get("adstock", {}).get("type", "geometric")
         alt_sampler = dict(config.get("sampler", {}))
         alt_sampler["draws"] = min(alt_sampler.get("draws", 200), 100)
         alt_sampler["tune"] = min(alt_sampler.get("tune", 200), 100)
         alt_sampler["chains"] = 2
-        alt_config["sampler"] = alt_sampler
 
-        target = alt_config["target_column"]
-        date_col = alt_config["date_column"]
-        xcols = [
-            date_col,
-            *alt_config["channel_columns"],
-            *alt_config.get("control_columns", []),
-            *alt_config.get("dims", []),
+        # Alternative 1: halved l_max with same type
+        alt1_adstock = {"type": base_adstock_type, "l_max": max(2, base_l_max // 2)}
+        # Alternative 2: delayed adstock (if base is geometric, switch; else revert to geometric)
+        alt2_type = "delayed" if base_adstock_type == "geometric" else "geometric"
+        alt2_adstock = {"type": alt2_type, "l_max": base_l_max}
+
+        alternatives = [
+            ("shorter_memory", alt1_adstock),
+            ("alternative_type", alt2_adstock),
         ]
-        X = df[xcols].copy()
-        X[date_col] = pd.to_datetime(X[date_col])
-        y = pd.to_numeric(df[target], errors="raise").rename(target)
 
-        alt_model = self.MMM(
-            date_column=date_col,
-            channel_columns=alt_config["channel_columns"],
-            control_columns=alt_config.get("control_columns") or None,
-            target_column=target,
-            adstock=self.GeometricAdstock(l_max=alt_config["adstock"]["l_max"]),
-            saturation=self.LogisticSaturation(),
-            yearly_seasonality=alt_config.get("yearly_seasonality"),
-            dims=tuple(alt_config.get("dims", [])),
-        )
-        alt_model.build_model(X, y)
-        alt_model.add_original_scale_contribution_variable(var=["channel_contribution", "y"])
-        alt_model.fit(
-            X,
-            y,
-            draws=alt_sampler["draws"],
-            tune=alt_sampler["tune"],
-            chains=alt_sampler["chains"],
-            target_accept=alt_sampler.get("target_accept", 0.9),
-            random_seed=alt_sampler.get("random_seed", 42),
-        )
-        alt_contrib = self.channel_contributions(alt_model)
-        alt_ranks = {
-            c["channel"]: i
-            for i, c in enumerate(
-                sorted(
-                    alt_contrib["channels"], key=lambda x: x["contribution_median"], reverse=True
-                )
-            )
-        }
-
-        rank_shifts = {ch: abs(base_ranks.get(ch, 0) - alt_ranks.get(ch, 0)) for ch in base_ranks}
-        max_shift = max(rank_shifts.values()) if rank_shifts else 0
-
+        all_alt_ranks: list[dict] = []
+        max_shift = 0
         findings = []
-        if max_shift >= 2:
-            findings.append(
-                {
-                    "code": "HIGH_PRIOR_SENSITIVITY",
-                    "severity": "warning",
-                    "message": f"Channel contribution ranking shifted by {max_shift} positions under alternative adstock prior.",
-                    "evidence": {"baseline_ranks": base_ranks, "alternative_ranks": alt_ranks},
-                    "suggested_action": "Calibrate with incrementality experiments or collect additional historical periods.",
+
+        for alt_label, alt_adstock_cfg in alternatives:
+            alt_config = dict(config)
+            alt_config["adstock"] = alt_adstock_cfg
+            alt_config["saturation"] = config.get("saturation", {})
+            alt_config["sampler"] = alt_sampler
+
+            target = alt_config["target_column"]
+            date_col = alt_config["date_column"]
+            xcols = [
+                date_col,
+                *alt_config["channel_columns"],
+                *alt_config.get("control_columns", []),
+                *alt_config.get("dims", []),
+            ]
+            X = df[xcols].copy()
+            X[date_col] = pd.to_datetime(X[date_col])
+            y = pd.to_numeric(df[target], errors="raise").rename(target)
+
+            try:
+                alt_model = self.MMM(
+                    date_column=date_col,
+                    channel_columns=alt_config["channel_columns"],
+                    control_columns=alt_config.get("control_columns") or None,
+                    target_column=target,
+                    adstock=self._build_adstock(alt_adstock_cfg),
+                    saturation=self._build_saturation(alt_config.get("saturation", {})),
+                    yearly_seasonality=alt_config.get("yearly_seasonality"),
+                    dims=tuple(alt_config.get("dims", [])),
+                )
+                alt_model.build_model(X, y)
+                alt_model.add_original_scale_contribution_variable(
+                    var=["channel_contribution", "y"]
+                )
+                alt_model.fit(
+                    X,
+                    y,
+                    draws=alt_sampler["draws"],
+                    tune=alt_sampler["tune"],
+                    chains=alt_sampler["chains"],
+                    target_accept=alt_sampler.get("target_accept", 0.9),
+                    random_seed=alt_sampler.get("random_seed", 42),
+                )
+                alt_contrib = self.channel_contributions(alt_model)
+                alt_ranks = {
+                    c["channel"]: i
+                    for i, c in enumerate(
+                        sorted(
+                            alt_contrib["channels"],
+                            key=lambda x: x["contribution_median"],
+                            reverse=True,
+                        )
+                    )
                 }
-            )
+                rank_shifts = {
+                    ch: abs(base_ranks.get(ch, 0) - alt_ranks.get(ch, 0)) for ch in base_ranks
+                }
+                shift = max(rank_shifts.values()) if rank_shifts else 0
+                max_shift = max(max_shift, shift)
+                all_alt_ranks.append(
+                    {
+                        "label": alt_label,
+                        "adstock_config": alt_adstock_cfg,
+                        "ranks": alt_ranks,
+                        "max_rank_shift": shift,
+                    }
+                )
+                if shift >= 2:
+                    findings.append(
+                        {
+                            "code": "HIGH_PRIOR_SENSITIVITY",
+                            "severity": "warning",
+                            "message": (
+                                f"Channel contribution ranking shifted by {shift} positions "
+                                f"under '{alt_label}' alternative adstock specification."
+                            ),
+                            "evidence": {
+                                "baseline_ranks": base_ranks,
+                                "alternative_ranks": alt_ranks,
+                                "alternative_label": alt_label,
+                                "alternative_adstock": alt_adstock_cfg,
+                            },
+                            "suggested_action": (
+                                "Calibrate with incrementality experiments or collect "
+                                "additional historical periods."
+                            ),
+                        }
+                    )
+            except DomainError as e:
+                # If alternative type not available (e.g. legacy path), record and skip
+                all_alt_ranks.append(
+                    {
+                        "label": alt_label,
+                        "adstock_config": alt_adstock_cfg,
+                        "ranks": None,
+                        "error": e.to_dict().get("error", {}).get("message", str(e)),
+                    }
+                )
 
         return {
             "baseline_ranks": base_ranks,
-            "alternative_ranks": alt_ranks,
+            "alternatives": all_alt_ranks,
+            # Backward-compat alias: last alternative's ranks (same semantics as v0.3 single-alt output)
+            "alternative_ranks": all_alt_ranks[-1]["ranks"] if all_alt_ranks else {},
             "max_rank_shift": max_shift,
             "findings": findings,
             "prior_stability": "sensitive" if max_shift >= 2 else "robust",

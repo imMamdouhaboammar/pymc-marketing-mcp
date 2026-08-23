@@ -19,6 +19,8 @@ class SQLiteMetadataStore:
     def _init(self):
         self.conn.executescript(
             """
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
             CREATE TABLE IF NOT EXISTS datasets (
                 dataset_id TEXT PRIMARY KEY,
                 payload TEXT NOT NULL
@@ -30,6 +32,10 @@ class SQLiteMetadataStore:
             CREATE TABLE IF NOT EXISTS scenarios (
                 scenario_id TEXT PRIMARY KEY,
                 model_id TEXT,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS clv_models (
+                model_id TEXT PRIMARY KEY,
                 payload TEXT NOT NULL
             );
             """
@@ -66,6 +72,12 @@ class SQLiteMetadataStore:
 
     def get_model(self, model_id: str) -> dict[str, Any]:
         return self._get("models", "model_id", model_id, "MODEL_NOT_FOUND")
+
+    def put_clv_model(self, payload: dict[str, Any]):
+        self._put("clv_models", "model_id", payload["model_id"], payload)
+
+    def get_clv_model(self, model_id: str) -> dict[str, Any]:
+        return self._get("clv_models", "model_id", model_id, "CLV_MODEL_NOT_FOUND")
 
     def put_scenario(self, payload: dict[str, Any]):
         self._put("scenarios", "scenario_id", payload["scenario_id"], payload)

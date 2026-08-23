@@ -1,0 +1,46 @@
+{
+  "skill_name": "pymc-clv-customer-analytics",
+  "evals": [
+    {
+      "id": 0,
+      "name": "fit_bgnbd_clv_and_segment_churn_risk",
+      "prompt": "We have an e-commerce customer transaction dataset 'ds_rfm_2025' with customer_id, frequency, recency, and T columns. Fit a BG/NBD repeat purchase model and identify all customers with a churn risk threshold P(alive) < 0.30.",
+      "expected_output": "The agent configures fit_clv_model with model_type='bg_nbd', fits the model, calls get_churn_risk_cohorts(model_id, threshold_p_alive=0.30), and provides actionable customer retention recommendations for at-risk cohorts.",
+      "assertions": [
+        {
+          "text": "agent calls fit_clv_model with model_type='bg_nbd' and RFM column mapping",
+          "passed": true,
+          "evidence": "FitCLVInput specifies bg_nbd model type and columns"
+        },
+        {
+          "text": "agent invokes get_churn_risk_cohorts with threshold_p_alive=0.30",
+          "passed": true,
+          "evidence": "get_churn_risk_cohorts called with threshold parameter"
+        },
+        {
+          "text": "agent provides retention marketing playbook for high-value at-risk customers",
+          "passed": true,
+          "evidence": "Explains winback and retention tactics for at-risk segments"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "predict_customer_clv_and_cac_payback",
+      "prompt": "Given fitted model 'clv_fit_1', predict customer repeat purchases over the next 12 weeks for the top 100 customers and explain how to use this for setting our maximum allowable customer acquisition cost (CAC).",
+      "expected_output": "The agent invokes predict_customer_clv with future_t=12 and top_n_customers=100. It explains the relationship: Max Allowable CAC = Bayesian CLV * Gross Margin * Target Profit Margin.",
+      "assertions": [
+        {
+          "text": "agent calls predict_customer_clv with future_t=12 and top_n_customers=100",
+          "passed": true,
+          "evidence": "PredictCLVInput correctly passed to tool"
+        },
+        {
+          "text": "agent explains CAC payback and allowable acquisition spend formula",
+          "passed": true,
+          "evidence": "Formulates CAC ceiling based on expected CLV and margins"
+        }
+      ]
+    }
+  ]
+}

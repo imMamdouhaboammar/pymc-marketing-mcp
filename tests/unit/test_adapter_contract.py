@@ -40,6 +40,10 @@ def test_fit_builds_model_and_persists_original_scale_contributions(tmp_path):
     adapter.MMM = FakeMMM
     adapter.GeometricAdstock = FakeAdstock
     adapter.LogisticSaturation = FakeSaturation
+    # Required maps for _build_adstock / _build_saturation factories (Phase 1)
+    adapter._adstock_map = {"geometric": FakeAdstock}
+    adapter._saturation_map = {"logistic": FakeSaturation}
+    adapter.OptimizerWrapper = None
 
     df = pd.DataFrame(
         {

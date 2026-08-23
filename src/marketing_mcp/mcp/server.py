@@ -13,7 +13,12 @@ from marketing_mcp.schemas.models import (
     CalibrateMMMInput,
     CompareModelsInput,
     CrossValidateMMMInput,
+    FitCLVInput,
     FitMMMInput,
+    FlightingOptimizationInput,
+    GetPosteriorPlotsInput,
+    ModelComparisonInput,
+    PredictCLVInput,
     PriorSensitivityInput,
     ToolEnvelope,
 )
@@ -124,7 +129,11 @@ def create_server(app: Application | None = None):
         name="fit_mmm",
         description=(
             "Fit a real Bayesian Marketing Mix Model with PyMC-Marketing using typed, "
-            "controlled configuration. No arbitrary Python is accepted."
+            "controlled configuration. No arbitrary Python is accepted. "
+            "Supports adstock types: geometric (default), delayed, weibull_cdf, weibull_pdf, binomial, none. "
+            "Supports saturation types: logistic (default), tanh, tanh_baselined, michaelis_menten, "
+            "hill, hill_sigmoid, inverse_scaled_logistic, log, root, none. "
+            "Per-channel adstock/saturation overrides can be set via channel_priors."
         ),
     )
     async def fit_mmm(config: FitMMMInput):
@@ -350,6 +359,74 @@ def create_server(app: Application | None = None):
         except DomainError as e:
             return e.to_dict()
 
+    @mcp.tool(
+        name="get_posterior_plots",
+        description=(
+            "Generate posterior visualization plots from a fitted and approved MMM. "
+            "Returns base64-encoded PNG/SVG images in the evidence envelope and caches "
+            "them as MCP resources at marketing://models/{model_id}/plots/{plot_type}. "
+            "Supported plot types: saturation_curves, waterfall_decomposition, "
+            "actual_vs_predicted, channel_contribution_share."
+        ),
+    )
+    async def get_posterior_plots(config: GetPosteriorPlotsInput):
+        try:
+            record = app.metadata.get_model(config.model_id)
+            artifact_path = record.get("artifact_path")
+            if not artifact_path:
+                return DomainError(
+                    "ARTIFACT_NOT_FOUND",
+                    f"No artifact found for model {config.model_id}",
+                    next_action="Ensure the model was fitted successfully",
+                ).to_dict()
+            model = app.models.adapter.load(Path(artifact_path))
+            plots = app.plots.generate_all(
+                model,
+                config.model_id,
+                config.plot_types,
+                config.format,
+            )
+            generated = [pt for pt, v in plots.items() if v.get("success")]
+            failed = [pt for pt, v in plots.items() if not v.get("success")]
+            warnings = [
+                {"code": "PLOT_FAILED", "plot_type": pt, "detail": plots[pt].get("error")}
+                for pt in failed
+            ]
+            return _env(
+                summary={"model_id": config.model_id, "generated": generated, "failed": failed},
+                evidence={"plots": plots},
+                warnings=warnings,
+                next_actions=["get_channel_contributions", "simulate_budget"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.resource("marketing://models/{model_id}/plots/{plot_type}")
+    async def plot_resource(model_id: str, plot_type: str) -> bytes:
+        """Serve a cached posterior plot as raw bytes (PNG)."""
+        try:
+            cached = app.plots.get_cached_plot(model_id, plot_type)
+            if cached is not None:
+                return cached
+            # Not yet generated — return JSON error
+            import json as _json
+
+            return _json.dumps(
+                {
+                    "error": {
+                        "code": "PLOT_NOT_CACHED",
+                        "message": f"Plot '{plot_type}' for model '{model_id}' has not been generated yet.",
+                        "next_action": "Call get_posterior_plots first to generate the plot.",
+                    }
+                }
+            ).encode()
+        except (DomainError, OSError, ValueError, KeyError) as e:
+            import json as _json
+
+            return _json.dumps(
+                {"error": {"code": "PLOT_RESOURCE_ERROR", "message": str(e)}}
+            ).encode()
+
     @mcp.resource("marketing://datasets/{dataset_id}")
     async def dataset_resource(dataset_id: str) -> str:
         try:
@@ -391,5 +468,146 @@ def create_server(app: Application | None = None):
             )
         except DomainError as e:
             return json.dumps(e.to_dict(), indent=2)
+
+    # -----------------------------------------------------------------------
+    # Phase 3 — Customer Lifetime Value (CLV) Tools
+    # -----------------------------------------------------------------------
+
+    @mcp.tool(
+        name="fit_clv_model",
+        description=(
+            "Fit a Bayesian Customer Lifetime Value (CLV) model on RFM transaction data. "
+            "Supported model types: bg_nbd (BG/NBD repeat purchase model), "
+            "gamma_gamma (monetary value model — requires monetary_value_column), "
+            "shifted_beta_geo (subscription churn model). "
+            "Input must be a dataset with one row per customer containing "
+            "frequency, recency, T, and optionally monetary_value columns."
+        ),
+    )
+    async def fit_clv_model(config: FitCLVInput):
+        try:
+            r = app.clv.fit_clv(config)
+            return _env(
+                summary=r.model_dump(),
+                provenance=r.package_provenance,
+                next_actions=["predict_customer_clv", "get_churn_risk_cohorts"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="predict_customer_clv",
+        description=(
+            "Generate per-customer CLV predictions from a fitted BG/NBD or GammaGamma model. "
+            "Returns P(alive), expected future purchases, and a ranked customer table. "
+            "Use future_t to set the forecast horizon (default: 12 periods). "
+            "Use top_n_customers to cap the returned table size."
+        ),
+    )
+    async def predict_customer_clv(config: PredictCLVInput):
+        try:
+            r = app.clv.predict_clv(config)
+            return _env(
+                summary={
+                    "model_id": config.model_id,
+                    "future_t": config.future_t,
+                    "total_customers": r.get("total_customers"),
+                },
+                evidence=r,
+                next_actions=["get_churn_risk_cohorts"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="get_churn_risk_cohorts",
+        description=(
+            "Identify customers at churn risk from a fitted CLV model. "
+            "Returns customers whose Bayesian P(alive) is below the specified threshold. "
+            "Lower threshold = higher confidence of churn. Default threshold: 0.3."
+        ),
+    )
+    async def get_churn_risk_cohorts(model_id: str, threshold_p_alive: float = 0.3):
+        try:
+            r = app.clv.get_churn_risk_cohorts(model_id, threshold=threshold_p_alive)
+            return _env(
+                summary={
+                    "model_id": model_id,
+                    "threshold": threshold_p_alive,
+                    "at_risk_count": r.get("at_risk_count"),
+                    "at_risk_pct": r.get("at_risk_pct"),
+                },
+                evidence=r,
+                next_actions=["predict_customer_clv"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.resource("marketing://clv/{model_id}")
+    async def clv_model_resource(model_id: str) -> str:
+        try:
+            return json.dumps(app.metadata.get_clv_model(model_id), indent=2)
+        except DomainError as e:
+            return json.dumps(e.to_dict(), indent=2)
+
+    # -----------------------------------------------------------------------
+    # Phase 4 — Dynamic Multi-Period Flighting Optimization
+    # -----------------------------------------------------------------------
+
+    @mcp.tool(
+        name="optimize_flighting",
+        description=(
+            "Optimize a dynamic weekly media flighting schedule over a planning horizon, "
+            "accounting for adstock carryover dynamics, channel spend constraints, "
+            "target iROAS floors, and profit-maximization objectives. "
+            "The model must be approved or approved_with_caution before optimization. "
+            "Returns a week-by-week spend table per channel, posterior response distribution, "
+            "and net-profit estimates."
+        ),
+    )
+    async def optimize_flighting(config: FlightingOptimizationInput):
+        try:
+            r = app.decisions.optimize_flighting(config)
+            return _env(
+                summary={
+                    "model_id": config.model_id,
+                    "total_budget": config.total_budget,
+                    "planning_weeks": config.planning_weeks,
+                    "objective": config.objective,
+                },
+                evidence=r,
+                next_actions=["simulate_budget", "get_channel_contributions"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    # -----------------------------------------------------------------------
+    # Phase 5 — Bayesian Model Comparison (LOO/WAIC/Stacking)
+    # -----------------------------------------------------------------------
+
+    @mcp.tool(
+        name="select_best_model",
+        description=(
+            "Compare multiple fitted MMMs using PSIS-LOO, WAIC, or Bayesian stacking weights "
+            "via ArviZ. All models must be fitted on the same dataset. "
+            "Returns ranked specifications, LOO/WAIC scores, and recommended model ID. "
+            "Methods: loo (PSIS-LOO), waic (WAIC), stacking (BMA weights), all (run all three)."
+        ),
+    )
+    async def select_best_model(config: ModelComparisonInput):
+        try:
+            r = app.models.select_best_model(config)
+            return _env(
+                summary={
+                    "method": config.method,
+                    "model_ids": config.model_ids,
+                    "best_model_id": r.get("best_model_id"),
+                },
+                evidence=r,
+                warnings=r.get("pareto_k_warnings", []),
+                next_actions=["get_channel_contributions", "simulate_budget"],
+            )
+        except DomainError as e:
+            return e.to_dict()
 
     return mcp

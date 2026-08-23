@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Severity = Literal["info", "warning", "error"]
 DecisionStatus = Literal["approved", "approved_with_caution", "rejected"]
@@ -46,13 +46,42 @@ class DatasetValidationResult(BaseModel):
     valid_for_modeling: bool
 
 
+AdstockType = Literal[
+    "geometric",
+    "delayed",
+    "weibull_cdf",
+    "weibull_pdf",
+    "binomial",
+    "none",
+]
+SaturationType = Literal[
+    "logistic",
+    "tanh",
+    "tanh_baselined",
+    "michaelis_menten",
+    "hill",
+    "hill_sigmoid",
+    "inverse_scaled_logistic",
+    "log",
+    "root",
+    "none",
+]
+
+
 class AdstockConfig(BaseModel):
-    type: Literal["geometric"] = "geometric"
+    type: AdstockType = "geometric"
     l_max: int = Field(default=8, ge=1, le=52, description="Maximum lag periods for adstock")
 
 
 class SaturationConfig(BaseModel):
-    type: Literal["logistic"] = "logistic"
+    type: SaturationType = "logistic"
+
+
+class ChannelPriorConfig(BaseModel):
+    """Per-channel adstock and/or saturation override. Channels not listed use global config."""
+
+    adstock: AdstockConfig | None = None
+    saturation: SaturationConfig | None = None
 
 
 class SamplerConfig(BaseModel):
@@ -81,10 +110,12 @@ class FitMMMInput(BaseModel):
         default=None, ge=1, le=12, description="Order of Fourier yearly seasonality"
     )
     adstock: AdstockConfig = Field(
-        default_factory=AdstockConfig, description="Adstock configuration"
+        default_factory=AdstockConfig,
+        description="Global adstock configuration (default for all channels)",
     )
     saturation: SaturationConfig = Field(
-        default_factory=SaturationConfig, description="Saturation configuration"
+        default_factory=SaturationConfig,
+        description="Global saturation configuration (default for all channels)",
     )
     sampler: SamplerConfig = Field(
         default_factory=SamplerConfig, description="NUTS sampler configuration"
@@ -94,6 +125,90 @@ class FitMMMInput(BaseModel):
         max_length=4,
         description="Multidimensional panel dimensions (e.g. ['geo'])",
     )
+    channel_priors: dict[str, ChannelPriorConfig] = Field(
+        default_factory=dict,
+        description=(
+            "Per-channel adstock and/or saturation overrides. "
+            "Keys must be a subset of channel_columns. "
+            "Channels not listed use the global adstock/saturation config."
+        ),
+    )
+
+    @field_validator("channel_priors", mode="after")
+    @classmethod
+    def _channel_priors_are_known_channels(cls, v: dict) -> dict:
+        # Deferred — full check via model_validator after channel_columns is known
+        return v
+
+    @model_validator(mode="after")
+    def _validate_channel_priors_keys(self) -> FitMMMInput:
+        unknown = set(self.channel_priors) - set(self.channel_columns)
+        if unknown:
+            raise ValueError(
+                f"channel_priors contains unknown channels: {sorted(unknown)}. "
+                f"Keys must be a subset of channel_columns."
+            )
+        return self
+
+
+# ---------------------------------------------------------------------------
+# CLV Schemas (Phase 3)
+# ---------------------------------------------------------------------------
+
+CLVModelType = Literal["bg_nbd", "gamma_gamma", "shifted_beta_geo"]
+
+
+class CLVModelConfig(BaseModel):
+    model_type: CLVModelType = "bg_nbd"
+    customer_id_column: str = Field(description="Column containing unique customer identifiers")
+    frequency_column: str = Field(description="Column with repeat purchase count")
+    recency_column: str = Field(description="Column with recency (time since last purchase)")
+    T_column: str = Field(description="Column with total observation period length")
+    monetary_value_column: str | None = Field(
+        default=None,
+        description="Column with average monetary value per purchase (required for gamma_gamma)",
+    )
+    sampler: SamplerConfig = Field(default_factory=SamplerConfig)
+
+    @model_validator(mode="after")
+    def _gamma_gamma_requires_monetary(self) -> CLVModelConfig:
+        if self.model_type == "gamma_gamma" and not self.monetary_value_column:
+            raise ValueError("gamma_gamma model requires monetary_value_column to be set")
+        return self
+
+
+class FitCLVInput(BaseModel):
+    dataset_id: str = Field(description="Registered dataset ID containing RFM data")
+    config: CLVModelConfig
+
+
+class PredictCLVInput(BaseModel):
+    model_id: str = Field(description="Fitted CLV model ID")
+    future_t: int = Field(
+        default=12,
+        ge=1,
+        le=104,
+        description="Number of future periods to forecast",
+    )
+    top_n_customers: int | None = Field(
+        default=None,
+        ge=1,
+        le=10000,
+        description="If set, return only the top N customers by expected purchases",
+    )
+
+
+class CLVModelRecord(BaseModel):
+    model_id: str
+    model_type: CLVModelType
+    dataset_id: str
+    status: ModelStatus
+    artifact_path: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    package_provenance: dict[str, str] = Field(default_factory=dict)
+    created_at: str
+    updated_at: str
+    failure: dict[str, Any] | None = None
 
 
 class ModelRecord(BaseModel):
@@ -232,6 +347,98 @@ class ArchiveModelInput(BaseModel):
 
 class PriorSensitivityInput(BaseModel):
     model_id: str = Field(description="Model ID to evaluate for prior sensitivity")
+
+
+PlotType = Literal[
+    "saturation_curves",
+    "waterfall_decomposition",
+    "actual_vs_predicted",
+    "channel_contribution_share",
+]
+
+
+class GetPosteriorPlotsInput(BaseModel):
+    model_id: str = Field(description="Fitted model ID to visualize")
+    plot_types: list[PlotType] = Field(
+        default=["saturation_curves", "waterfall_decomposition"],
+        min_length=1,
+        max_length=4,
+        description="Which posterior plots to generate",
+    )
+    format: Literal["png", "svg"] = Field(default="png", description="Output image format")
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Dynamic Flighting Schemas
+# ---------------------------------------------------------------------------
+
+SpendPattern = Literal["flat", "frontloaded", "backloaded", "pulsed"]
+FlightingObjective = Literal["maximize_response", "maximize_net_profit", "target_roas"]
+
+
+class WeeklyFlightingConstraint(BaseModel):
+    channel: str = Field(description="Channel name this constraint applies to")
+    min_weekly: float | None = Field(default=None, ge=0, description="Minimum weekly spend floor")
+    max_weekly: float | None = Field(default=None, ge=0, description="Maximum weekly spend cap")
+    pattern: SpendPattern = Field(
+        default="flat",
+        description="Preferred spend pattern for this channel across the planning horizon",
+    )
+
+
+class FlightingOptimizationInput(BaseModel):
+    model_id: str = Field(description="Approved MMM model ID to use for response estimation")
+    total_budget: float = Field(
+        gt=0, description="Total budget to allocate across all channels and weeks"
+    )
+    planning_weeks: int = Field(default=12, ge=2, le=52, description="Planning horizon in weeks")
+    target_iroas_min: float | None = Field(
+        default=None,
+        ge=0,
+        description="Minimum acceptable posterior median iROAS across the planning period",
+    )
+    margin_pct: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Revenue margin fraction for net-profit objective (revenue × margin − spend)",
+    )
+    channel_constraints: list[WeeklyFlightingConstraint] = Field(
+        default_factory=list,
+        description="Per-channel weekly spend floor/cap and pattern constraints",
+    )
+    objective: FlightingObjective = Field(
+        default="maximize_response",
+        description="Optimization objective function",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — Model Selection Schemas
+# ---------------------------------------------------------------------------
+
+ComparisonMethod = Literal["loo", "waic", "stacking", "all"]
+
+
+class ModelComparisonInput(BaseModel):
+    model_ids: list[str] = Field(
+        min_length=2,
+        max_length=10,
+        description="List of 2–10 model IDs to compare. All must be fitted on the same dataset.",
+    )
+    method: ComparisonMethod = Field(
+        default="loo",
+        description="Comparison method: loo (PSIS-LOO), waic (WAIC), stacking (BMA weights), all",
+    )
+
+
+class ModelComparisonResult(BaseModel):
+    method: str
+    ranked_models: list[dict[str, Any]] = Field(default_factory=list)
+    best_model_id: str
+    stacking_weights: dict[str, float] | None = None
+    pareto_k_warnings: list[dict[str, Any]] = Field(default_factory=list)
+    interpretation: str = ""
 
 
 class ToolEnvelope(BaseModel):

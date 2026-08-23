@@ -1,0 +1,41 @@
+{
+  "skill_name": "pymc-budget-optimization",
+  "evals": [
+    {
+      "id": 0,
+      "name": "constrained_budget_optimization_with_floors",
+      "prompt": "We have $600,000 for next quarter. Run budget optimization on approved model 'mmm_v1'. We need at least $100k in Google Search, at most $250k in Meta, and exactly $50k in TV.",
+      "expected_output": "The agent configures optimize_budget with budget=600000, planning_periods=12, and constraints setting min/max/fixed bounds on Google, Meta, and TV. It reports baseline vs optimized expected response and checks for extrapolation risks.",
+      "assertions": [
+        {
+          "text": "agent invokes optimize_budget with properly structured constraints",
+          "passed": true,
+          "evidence": "optimize_budget called with ChannelConstraint objects"
+        },
+        {
+          "text": "agent reports expected incremental lift over baseline spend",
+          "passed": true,
+          "evidence": "Explains difference between baseline and optimized KPI response"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "dynamic_flighting_net_profit_maximization",
+      "prompt": "Plan a 12-week media flighting schedule for $1.2M total budget. Our gross margin is 45%, and we want to maximize net profit. TV should use a pulsed schedule, and Meta should be frontloaded.",
+      "expected_output": "The agent calls optimize_flighting with objective='maximize_net_profit', margin_pct=0.45, planning_weeks=12, and channel_constraints specifying pattern='pulsed' for TV and pattern='frontloaded' for Meta.",
+      "assertions": [
+        {
+          "text": "agent invokes optimize_flighting with maximize_net_profit and margin_pct=0.45",
+          "passed": true,
+          "evidence": "FlightingOptimizationInput contains objective and margin parameters"
+        },
+        {
+          "text": "agent configures channel flighting patterns (pulsed and frontloaded)",
+          "passed": true,
+          "evidence": "WeeklyFlightingConstraint items specify correct patterns"
+        }
+      ]
+    }
+  ]
+}

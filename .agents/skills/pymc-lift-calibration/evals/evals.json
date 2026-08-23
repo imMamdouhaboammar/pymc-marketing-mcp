@@ -1,0 +1,46 @@
+{
+  "skill_name": "pymc-lift-calibration",
+  "evals": [
+    {
+      "id": 0,
+      "name": "calibrate_mmm_with_geo_lift_test",
+      "prompt": "We ran a Geo-lift experiment on Meta ads for base model 'mmm_base_2025'. In the test markets, baseline spend was $40k, spend increment was $20k, and incremental revenue measured was $50k with a 95% confidence interval of [$30.4k, $69.6k]. Calibrate the model.",
+      "expected_output": "The agent derives standard error sigma = (69600 - 30400) / (2 * 1.96) = 10000. It constructs a CalibrateMMMInput payload with channel='meta_spend', x=40000, delta_x=20000, delta_y=50000, sigma=10000, calls calibrate_mmm, notes the new calibrated model ID and parent lineage, and advises running diagnose_mmm on the new artifact.",
+      "assertions": [
+        {
+          "text": "agent computes standard error sigma = 10000 from the 95% confidence interval",
+          "passed": true,
+          "evidence": "Sigma is calculated as approximately 10000"
+        },
+        {
+          "text": "agent calls calibrate_mmm with model_id and lift_tests list",
+          "passed": true,
+          "evidence": "calibrate_mmm invoked with LiftTestMeasurement payload"
+        },
+        {
+          "text": "agent highlights model lineage parent linkage and recommends diagnostic gating",
+          "passed": true,
+          "evidence": "Explains parent_model_id and diagnose_mmm next step"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "recommend_next_measurement_experiment",
+      "prompt": "Our MMM shows wide credible intervals for Connected TV and TikTok ads. Which channels should we test first and what experiment should we design?",
+      "expected_output": "The agent recommends calling recommend_next_measurement(model_id) to evaluate parameter uncertainty. It explains how to set up a matched market test or geo-lift holdout to collect empirical delta_y and sigma for future calibration.",
+      "assertions": [
+        {
+          "text": "agent suggests using recommend_next_measurement to identify highest information gain",
+          "passed": true,
+          "evidence": "Tool recommend_next_measurement proposed for prioritizing test"
+        },
+        {
+          "text": "agent details experimental design options (geo-lift or holdout)",
+          "passed": true,
+          "evidence": "Provides structured experiment methodology"
+        }
+      ]
+    }
+  ]
+}

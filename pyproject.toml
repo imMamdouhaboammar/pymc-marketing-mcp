@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pymc-marketing-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "A decision-safe MCP interface for Bayesian marketing science with PyMC-Marketing"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -23,6 +23,7 @@ dependencies = [
   "uvicorn>=0.34,<1",
   "structlog>=25,<26",
   "pyarrow>=18,<24",
+  "pyjwt>=2.8.0,<3",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +32,8 @@ dev = ["pytest>=8,<10", "pytest-cov>=6,<8", "pytest-xdist>=3.5", "ruff>=0.12,<1"
 [project.scripts]
 marketing-mcp = "marketing_mcp.cli:main"
 marketing-mcp-demo = "marketing_mcp.demo:main"
+marketing-mcp-auth = "marketing_mcp.auth_cli:main"
+
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/marketing_mcp"]

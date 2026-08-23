@@ -2,6 +2,15 @@
 
 All notable changes to `pymc-marketing-mcp` are documented in this file.
 
+## [0.4.0] - 2026-08-22
+
+### Added
+- **Adstock & Saturation Model Zoo (Phase 1)**: Expanded from fixed Geometric/Logistic to full PyMC-Marketing transform suite (`delayed`, `weibull_cdf`, `weibull_pdf`, `binomial`, `none` adstocks; `tanh`, `tanh_baselined`, `michaelis_menten`, `hill`, `hill_sigmoid`, `inverse_scaled_logistic`, `log`, `root` saturations) with per-channel custom prior overrides via `channel_priors`.
+- **Visual Posterior Artifact Delivery (Phase 2)**: Added `get_posterior_plots` tool and `marketing://models/{model_id}/plots/{plot_type}` MCP resources for headless rendering of saturation curves, waterfall decompositions, actual vs predicted fits, and channel contribution shares in PNG/SVG.
+- **Customer Lifetime Value (CLV) Suite (Phase 3)**: Added `fit_clv_model`, `predict_customer_clv`, `get_churn_risk_cohorts` tools and `CLVService` / `CLVAdapter` wrapping PyMC-Marketing BG/NBD (`BetaGeoModel`), Gamma-Gamma, and Shifted Beta Geometric models with RFM dataset validation.
+- **Dynamic Multi-Period Flighting (Phase 4)**: Added `optimize_flighting` tool with weekly spend schedule construction across flat, frontloaded, backloaded, and pulsed patterns, accounting for adstock carryover, net-profit maximization (margin revenue − spend), and target-iROAS floor constraints.
+- **Bayesian Model Comparison & Stacking (Phase 5)**: Added `select_best_model` tool powered by `arviz.compare` (PSIS-LOO, WAIC, Bayesian model averaging stacking weights) with cross-dataset validation and Pareto-k diagnostic warnings.
+
 ## [0.3.0] - 2026-08-21
 
 ### Added

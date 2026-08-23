@@ -1,4 +1,4 @@
-# MCP Tool Contracts (v0.3.0)
+# MCP Tool Contracts (v0.4.0)
 
 Every MCP tool returns structured, agent-oriented data wrapped in a standard `ToolEnvelope` (summary, evidence, warnings, provenance, next_actions). Large posterior arrays stay server-side.
 
@@ -18,11 +18,15 @@ Every MCP tool returns structured, agent-oriented data wrapped in a standard `To
 
 ### `fit_mmm(config: FitMMMInput)`
 - Fits a real Bayesian Marketing Mix Model using PyMC-Marketing.
-- Controls sampler configuration (draws, tune, chains, target_accept, random_seed), adstock (geometric), saturation (logistic), and yearly seasonality.
+- Supports full transform zoo:
+  - Adstocks: `geometric` (default), `delayed`, `weibull_cdf`, `weibull_pdf`, `binomial`, `none`.
+  - Saturations: `logistic` (default), `tanh`, `tanh_baselined`, `michaelis_menten`, `hill`, `hill_sigmoid`, `inverse_scaled_logistic`, `log`, `root`, `none`.
+  - `channel_priors`: per-channel overrides for adstock/saturation specifications.
+- Controls sampler configuration (draws, tune, chains, target_accept, random_seed), adstock, saturation, and yearly seasonality.
 - Automatically hashes semantic configuration, records dataset fingerprint, and attaches package provenance.
 
 ### `get_model_status(model_id: str)`
-- Returns model record, execution status (`queued`, `running`, `completed`, `failed`, `cancelled`), lineage stage (`initial_fit`, `calibrated`, `refit`), and error details.
+- Returns model record, execution status (`queued`, `running`, `completed`, `failed`, `cancelled`), lineage stage (`initial_fit`, `calibrated`, `refreshed`), and error details.
 
 ### `calibrate_mmm(input: CalibrateMMMInput)`
 - Calibrates an existing fitted MMM using experimental incrementality lift tests (`add_lift_test_measurements`).
@@ -30,6 +34,11 @@ Every MCP tool returns structured, agent-oriented data wrapped in a standard `To
 
 ### `compare_models(input: CompareModelsInput)`
 - Compares sampler diagnostics, predictive RMSE/NRMSE, divergences, R-hat, ESS, and lineage stages across multiple fitted models.
+
+### `select_best_model(config: ModelComparisonInput)`
+- Information-theoretic model comparison powered by ArviZ.
+- Supports PSIS-LOO (`loo`), WAIC (`waic`), and Bayesian Model Averaging stacking weights (`stacking` or `all`).
+- Enforces single-dataset comparative validity and surfaces Pareto-k diagnostic warnings ($k > 0.7$).
 
 ### `archive_model(input: ArchiveModelInput)`
 - Transitions a model record to `cancelled`/archived state.
@@ -45,9 +54,20 @@ Every MCP tool returns structured, agent-oriented data wrapped in a standard `To
 - Evaluates out-of-sample predictive RMSE and NRMSE across rolling folds.
 
 ### `evaluate_prior_sensitivity(input: PriorSensitivityInput)`
-- Evaluates commercial conclusion stability (channel rank ordering and iROAS) under altered adstock and saturation priors.
+- Evaluates commercial conclusion stability (channel rank ordering and iROAS) under altered adstock and saturation priors across multiple alternative specifications.
 
-## 4. Decision & Incrementality Tools
+## 4. Visual Artifact Tools
+
+### `get_posterior_plots(config: GetPosteriorPlotsInput)`
+- Generates headless PNG/SVG visualizations from fitted MMM posterior samples.
+- Supported plot types:
+  - `saturation_curves`: channel saturation and response curves with 94% HDI.
+  - `waterfall_decomposition`: posterior median decomposition waterfall.
+  - `actual_vs_predicted`: observed vs posterior predictive samples with credible bands.
+  - `channel_contribution_share`: channel percentage contribution shares (bar + pie).
+- Returns base64 image strings in evidence envelope and caches artifacts to MCP plot resources.
+
+## 5. Decision & Incrementality Tools
 
 ### `get_channel_contributions(model_id: str)`
 - Returns posterior channel contribution summaries (median and 94% credible intervals in original scale).
@@ -66,12 +86,32 @@ Every MCP tool returns structured, agent-oriented data wrapped in a standard `To
 - Computes SLSQP budget optimization subject to channel or cell constraints.
 - Compares baseline vs recommended posterior responses with uncertainty intervals.
 
+### `optimize_flighting(config: FlightingOptimizationInput)`
+- Optimizes a multi-week media flighting schedule over a planning horizon (2–52 weeks).
+- Supports spend patterns: `flat`, `frontloaded`, `backloaded`, `pulsed`.
+- Implements net-profit maximization ($\text{Revenue} \times \text{Margin} - \text{Spend}$) and minimum target-iROAS floor constraints.
+
 ### `recommend_next_measurement(model_id: str)`
 - Recommends evidence-gathering experiments when data or model uncertainties are high.
 
-## 5. MCP Resources
+## 6. Customer Lifetime Value (CLV) Tools
+
+### `fit_clv_model(config: FitCLVInput)`
+- Fits Bayesian CLV models on customer RFM data.
+- Supported architectures: `bg_nbd` (BG/NBD repeat purchase), `gamma_gamma` (monetary spend per transaction), `shifted_beta_geo` (discrete subscription churn).
+
+### `predict_customer_clv(config: PredictCLVInput)`
+- Generates individual-level predictions: $P(\text{alive})$, expected future transactions, and expected customer value.
+- Supports forecast horizon `future_t` and `top_n_customers` filtering.
+
+### `get_churn_risk_cohorts(model_id: str, threshold_p_alive: float = 0.3)`
+- Segments at-risk customer cohorts with $P(\text{alive}) < \text{threshold}$.
+
+## 7. MCP Resources
 
 - `marketing://datasets/{dataset_id}`: Full dataset metadata and inspection status.
 - `marketing://models/{model_id}`: Full model record and configuration.
 - `marketing://models/{model_id}/diagnostics`: Detailed diagnostic metrics and findings.
 - `marketing://models/{model_id}/lineage`: Model parent linkage, semantic hash, and package provenance.
+- `marketing://models/{model_id}/plots/{plot_type}`: Binary PNG visualization artifact.
+- `marketing://clv/{model_id}`: CLV model metadata and lifecycle status.

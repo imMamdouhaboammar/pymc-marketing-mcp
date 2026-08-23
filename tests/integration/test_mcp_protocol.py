@@ -56,6 +56,12 @@ def test_mcp_stdio_client_discovery_and_tools(tmp_path):
                 "calibrate_mmm",
                 "compare_models",
                 "archive_model",
+                "get_posterior_plots",
+                "fit_clv_model",
+                "predict_customer_clv",
+                "get_churn_risk_cohorts",
+                "optimize_flighting",
+                "select_best_model",
             }
             assert expected_tools.issubset(tool_names)
 

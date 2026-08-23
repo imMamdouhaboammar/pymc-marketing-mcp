@@ -1148,7 +1148,7 @@ wheels = [
 
 [[package]]
 name = "pymc-marketing-mcp"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "arviz" },
@@ -1159,6 +1159,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "pyjwt" },
     { name = "pymc-marketing" },
     { name = "structlog" },
     { name = "uvicorn" },
@@ -1183,6 +1184,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2,<3" },
     { name = "pyarrow", specifier = ">=18,<24" },
     { name = "pydantic", specifier = ">=2.12,<2.13" },
+    { name = "pyjwt", specifier = ">=2.8.0,<3" },
     { name = "pymc-marketing", specifier = ">=1.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6,<8" },
