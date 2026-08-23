@@ -218,7 +218,9 @@ class DecisionService:
         model, record = self._approved(input.model_id)
         import numpy as np
 
+        from marketing_mcp.adapters.mmm_config import ADSTOCK_MAP, SATURATION_MAP
         from marketing_mcp.domain.decisions.flighting import (
+            build_official_response_evaluator,
             optimize_flighting_schedule,
         )
 
@@ -228,29 +230,81 @@ class DecisionService:
                 if ch in model.X:
                     p95_map[ch] = float(np.percentile(model.X[ch], 95))
 
-        channel_params = {}
-        if hasattr(model, "fit_result") and hasattr(model.fit_result, "data_vars"):
-            post = model.fit_result
-            channels = getattr(model, "channel_columns", [])
+        channels = list(getattr(model, "channel_columns", []) or [])
+
+        # Resolve the model's actual transform families from the fitted instance.
+        adstock_instance = getattr(model, "adstock", None)
+        saturation_instance = getattr(model, "saturation", None)
+
+        def _type_name(instance, mapping):
+            if instance is None:
+                return None
+            for name, cls in mapping.items():
+                if cls is not None and isinstance(instance, cls):
+                    return name
+            return None
+
+        adstock_type = _type_name(adstock_instance, ADSTOCK_MAP)
+        saturation_type = _type_name(saturation_instance, SATURATION_MAP)
+        l_max = int(getattr(adstock_instance, "l_max", 4) or 4)
+
+        # Training-time channel scaling: posterior parameters live in scaled space.
+        channel_scale: dict[str, float] | None = None
+        try:
+            scales = model.get_scales_as_xarray()
+            scales_da = scales["channel_scale"]
+            channel_scale = {}
             for ch in channels:
-                p = {}
-                if "adstock_alpha" in post:
+                if "channel" in scales_da.dims:
+                    channel_scale[ch] = float(
+                        np.asarray(scales_da.sel(channel=ch)).reshape(-1).mean()
+                    )
+                else:
+                    channel_scale[ch] = float(np.asarray(scales_da).reshape(-1).mean())
+        except (AttributeError, KeyError, ValueError, TypeError):
+            channel_scale = None
+
+        # Family-correct posterior means keyed by full posterior variable name.
+        channel_params: dict[str, dict[str, float]] = {ch: {} for ch in channels}
+        post = getattr(model, "fit_result", None)
+        data_vars = getattr(post, "data_vars", None)
+        if data_vars is not None:
+            for var in data_vars:
+                if not var.startswith(("adstock_", "saturation_")):
+                    continue
+                da = post[var]
+                has_channel_dim = "channel" in da.dims
+                for ch in channels:
+                    vals = da.sel(channel=ch) if has_channel_dim else da
                     try:
-                        p["alpha"] = float(post["adstock_alpha"].sel(channel=ch).mean())
-                    except (KeyError, ValueError, TypeError, AttributeError):
-                        pass
-                if "saturation_beta" in post:
-                    try:
-                        p["beta"] = float(post["saturation_beta"].sel(channel=ch).mean())
-                    except (KeyError, ValueError, TypeError, AttributeError):
-                        pass
-                if "saturation_lam" in post:
-                    try:
-                        p["lam"] = float(post["saturation_lam"].sel(channel=ch).mean())
-                    except (KeyError, ValueError, TypeError, AttributeError):
-                        pass
-                if p:
-                    channel_params[ch] = p
+                        channel_params[ch][var] = float(
+                            np.asarray(vals, dtype=float).reshape(-1).mean()
+                        )
+                    except (KeyError, ValueError, TypeError):
+                        continue
+
+        response_evaluator = None
+        if adstock_type is None or saturation_type is None:
+            raise DomainError(
+                "INPUT_INVALID",
+                "Model transform families are not supported for flighting optimization; "
+                "refusing to approximate with a generic response surface",
+                evidence={
+                    "adstock_class": type(adstock_instance).__name__ if adstock_instance else None,
+                    "saturation_class": type(saturation_instance).__name__
+                    if saturation_instance
+                    else None,
+                },
+                next_action="Refit the model using a supported adstock/saturation family",
+            )
+        response_evaluator = build_official_response_evaluator(
+            adstock_type=adstock_type,
+            saturation_type=saturation_type,
+            l_max=l_max,
+            channel_params=channel_params,
+            channel_scale=channel_scale,
+            channel_columns=channels,
+        )
 
         constraints_dicts = [c.model_dump() for c in input.channel_constraints]
         flighting_res = optimize_flighting_schedule(
@@ -263,6 +317,7 @@ class DecisionService:
             margin_pct=input.margin_pct,
             channel_parameters=channel_params if channel_params else None,
             historical_channel_p95=p95_map,
+            response_evaluator=response_evaluator,
         )
 
         total_channel_spend = flighting_res["total_channel_spend"]

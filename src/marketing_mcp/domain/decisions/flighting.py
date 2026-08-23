@@ -7,11 +7,13 @@ and enforces minimum target-iROAS constraints via SLSQP.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Literal
 
 import numpy as np
 from scipy.optimize import minimize
 
+from marketing_mcp.adapters.mmm_config import ADSTOCK_MAP, SATURATION_MAP
 from marketing_mcp.errors import DomainError
 
 FlightingObjective = Literal["maximize_response", "maximize_net_profit", "target_roas"]
@@ -149,6 +151,136 @@ def evaluate_carryover_response(
     return total_response
 
 
+def build_official_response_evaluator(
+    adstock_type: str,
+    saturation_type: str,
+    l_max: int,
+    channel_params: dict[str, dict[str, float]],
+    channel_scale: dict[str, float] | None = None,
+    channel_columns: list[str] | None = None,
+) -> Callable[[np.ndarray], float]:
+    """Compile a fast numeric response evaluator from official PyMC-Marketing transforms.
+
+    The returned callable maps a raw (n_channels, n_weeks) spend matrix to the
+    total multi-period response using the exact transform classes the model was
+    fitted with, including training-time channel scaling.
+
+    Args:
+        adstock_type: Key of ``ADSTOCK_MAP`` (e.g. 'geometric', 'delayed', 'weibull_pdf', 'none').
+        saturation_type: Key of ``SATURATION_MAP`` (e.g. 'logistic', 'michaelis_menten').
+        l_max: Maximum adstock lag used at fit time.
+        channel_params: Per-channel posterior means keyed by FULL posterior variable
+            name — ``adstock_<param>`` and ``saturation_<param>`` (e.g.
+            ``{"meta": {"adstock_alpha": 0.5, "saturation_lam": 3.1}}``). Full names
+            are required because families can share a stripped parameter name with
+            different semantics (e.g. ``adstock_alpha`` vs ``saturation_alpha``).
+        channel_scale: Optional training-time per-channel scaling factors; spends
+            are divided by them before evaluation (scaled-space parity with fit).
+        channel_columns: Channel order matching spend matrix rows. Defaults to
+            sorted keys of channel_params for deterministic ordering.
+
+    Raises:
+        DomainError: INPUT_INVALID when a type is unsupported or required family
+            parameters are missing.
+    """
+    import pytensor
+    import pytensor.xtensor as ptx
+
+    channels = channel_columns or sorted(channel_params)
+    if not channels:
+        raise DomainError("INPUT_INVALID", "channel_params must cover at least one channel")
+
+    adstock_cls = ADSTOCK_MAP.get(adstock_type)
+    if adstock_cls is None:
+        raise DomainError(
+            "INPUT_INVALID",
+            f"Unsupported adstock type '{adstock_type}' for flighting response evaluation",
+            evidence={"requested": adstock_type, "available": list(ADSTOCK_MAP)},
+        )
+    saturation_cls = SATURATION_MAP.get(saturation_type)
+    if saturation_cls is None:
+        raise DomainError(
+            "INPUT_INVALID",
+            f"Unsupported saturation type '{saturation_type}' for flighting response evaluation",
+            evidence={"requested": saturation_type, "available": list(SATURATION_MAP)},
+        )
+
+    adstock_instance = (
+        adstock_cls(l_max=max(1, int(l_max))) if adstock_type != "none" else adstock_cls(l_max=1)
+    )
+    saturation_instance = saturation_cls()
+
+    # Iterate default_priors dicts (not sets): insertion order matches each
+    # transform's positional function signature, keeping graph wiring correct.
+    adstock_prior_order = list(getattr(adstock_instance, "default_priors", {}) or {})
+    saturation_prior_order = list(getattr(saturation_instance, "default_priors", {}) or {})
+    # Full posterior variable names keep families with same-named parameters
+    # (e.g. adstock_alpha vs saturation_alpha) from colliding.
+    required_adstock = {f"adstock_{n}" for n in adstock_prior_order}
+    required_saturation = {f"saturation_{n}" for n in saturation_prior_order}
+
+    param_arrays: dict[str, np.ndarray] = {}
+    missing: dict[str, list[str]] = {}
+    for ch in channels:
+        p = channel_params.get(ch, {})
+        have = set(p)
+        need = required_adstock | required_saturation
+        absent = need - have
+        if absent:
+            missing[ch] = sorted(absent)
+        for name in need:
+            if name in p:
+                arr = param_arrays.setdefault(name, np.zeros(len(channels)))
+                arr[channels.index(ch)] = float(p[name])
+
+    if missing:
+        raise DomainError(
+            "INPUT_INVALID",
+            "Posterior parameters missing for flighting response evaluation",
+            evidence={
+                "missing": missing,
+                "adstock_required": sorted(required_adstock),
+                "saturation_required": sorted(required_saturation),
+            },
+        )
+
+    x_sym = ptx.xtensor("x", dims=("channel", "date"), shape=(None, None), dtype="float64")
+    if channel_scale:
+        scale_vec = np.array([float(channel_scale.get(ch, 1.0)) for ch in channels])
+        x_in = x_sym / ptx.as_xtensor(scale_vec, dims=("channel",))
+    else:
+        x_in = x_sym
+
+    symbolic_inputs = [x_sym]
+    numeric_defaults = []
+    adstock_args: list[Any] = []
+    for name in adstock_prior_order:
+        p_sym = ptx.xtensor(f"p_adstock_{name}", dims="channel", shape=(None,), dtype="float64")
+        symbolic_inputs.append(p_sym)
+        numeric_defaults.append(param_arrays[f"adstock_{name}"])
+        adstock_args.append(p_sym)
+
+    adstocked = adstock_instance.function(x_in, *adstock_args, dim="date")
+
+    saturation_args: list[Any] = []
+    for name in saturation_prior_order:
+        p_sym = ptx.xtensor(f"p_saturation_{name}", dims="channel", shape=(None,), dtype="float64")
+        symbolic_inputs.append(p_sym)
+        numeric_defaults.append(param_arrays[f"saturation_{name}"])
+        saturation_args.append(p_sym)
+
+    response = saturation_instance.function(adstocked, *saturation_args)
+    total_response = response.sum()
+
+    compiled = pytensor.function(symbolic_inputs, total_response)
+
+    def evaluate(spend_matrix: np.ndarray) -> float:
+        mat = np.asarray(spend_matrix, dtype="float64").reshape((len(channels), -1))
+        return float(compiled(mat, *numeric_defaults))
+
+    return evaluate
+
+
 def optimize_flighting_schedule(
     channel_columns: list[str],
     total_budget: float,
@@ -159,6 +291,7 @@ def optimize_flighting_schedule(
     margin_pct: float = 1.0,
     channel_parameters: dict[str, dict[str, float]] | None = None,
     historical_channel_p95: dict[str, float] | None = None,
+    response_evaluator: Callable[[np.ndarray], float] | None = None,
 ) -> dict[str, Any]:
     """Execute dynamic channel-by-week SLSQP flighting optimization.
 
@@ -168,6 +301,14 @@ def optimize_flighting_schedule(
       1. Total budget conservation: sum_{c, w} x[c, w] == total_budget
       2. Per-channel weekly bounds: min_weekly <= x[c, w] <= max_weekly
       3. Target iROAS constraint (if specified): Response / total_budget >= target_iroas_min
+
+    Args:
+        response_evaluator: Optional compiled evaluator mapping a raw
+            (n_channels, n_weeks) spend matrix to total response. When provided
+            (e.g. ``build_official_response_evaluator`` output for the fitted
+            model's transform families), it fully replaces the generic built-in
+            response surface for the objective, the iROAS constraint, and the
+            reported posterior response.
 
     Raises:
       DomainError("OPTIMIZATION_INFEASIBLE"): When constraints are contradictory or cannot be satisfied.
@@ -250,9 +391,14 @@ def optimize_flighting_schedule(
     x0 = x0_matrix.flatten()
 
     # Objective function definition
+    def _response(mat: np.ndarray) -> float:
+        if response_evaluator is not None:
+            return float(response_evaluator(mat))
+        return evaluate_carryover_response(mat, param_list)
+
     def objective_fn(x: np.ndarray) -> float:
         mat = x.reshape((n_channels, planning_weeks))
-        resp = evaluate_carryover_response(mat, param_list)
+        resp = _response(mat)
         total_sp = float(np.sum(x))
 
         if objective == "maximize_net_profit":
@@ -290,7 +436,7 @@ def optimize_flighting_schedule(
     if target_iroas_min is not None and target_iroas_min > 0:
         def roas_constraint(x: np.ndarray) -> float:
             mat = x.reshape((n_channels, planning_weeks))
-            resp = evaluate_carryover_response(mat, param_list)
+            resp = _response(mat)
             achieved_roas = resp / max(1e-6, float(np.sum(x)))
             return float(achieved_roas - target_iroas_min)
 
@@ -309,7 +455,7 @@ def optimize_flighting_schedule(
     if not opt_res.success and target_iroas_min is not None:
         # Verify if target ROAS constraint was violated
         mat = opt_res.x.reshape((n_channels, planning_weeks))
-        resp = evaluate_carryover_response(mat, param_list)
+        resp = _response(mat)
         achieved_roas = resp / max(1e-6, float(np.sum(opt_res.x)))
         if achieved_roas < target_iroas_min:
                 raise DomainError(
@@ -338,7 +484,12 @@ def optimize_flighting_schedule(
         weekly_schedule[ch] = spends
         total_channel_spend[ch] = round(sum(spends), 2)
 
-    total_response = evaluate_carryover_response(opt_mat, param_list)
+    # Evaluate final response on the ROUNDED schedule so reported gross revenue
+    # matches the returned weekly allocation exactly.
+    rounded_mat = np.array(
+        [weekly_schedule[ch] for ch in channel_columns], dtype=float
+    )
+    total_response = _response(rounded_mat)
     total_spend_actual = sum(total_channel_spend.values())
     budget_residual = round(abs(total_spend_actual - total_budget), 4)
 

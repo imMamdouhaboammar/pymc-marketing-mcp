@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from marketing_mcp.domain.decisions.flighting import (
     apply_spend_pattern,
+    build_official_response_evaluator,
     build_weekly_schedule,
     check_extrapolation_risk,
     compute_net_profit,
@@ -212,3 +213,133 @@ class TestFlightingSchemas:
     def test_flighting_input_rejects_negative_budget(self):
         with pytest.raises(ValidationError):
             FlightingOptimizationInput(model_id="mmm_123", total_budget=-100.0)
+
+
+class TestOfficialResponseEvaluator:
+    """The optimizer must evaluate response through official PyMC-Marketing
+    transform classes for the model's actual configured families, not a
+    hard-coded geometric+logistic formula."""
+
+    SPEND = np.array(
+        [[100.0, 120.0, 90.0, 80.0, 110.0], [50.0, 60.0, 70.0, 55.0, 65.0]]
+    )
+
+    def _independent_mm_response(self, spend_matrix, params):
+        import xarray as xr
+        from pymc_marketing.mmm import MichaelisMentenSaturation
+
+        sat = MichaelisMentenSaturation()
+        total = 0.0
+        for i in range(spend_matrix.shape[0]):
+            p = params[i]
+            out = sat.function(xr.DataArray(spend_matrix[i], dims="date"), p["alpha"], p["lam"])
+            total += float(np.asarray(out.eval() if hasattr(out, "eval") else out).sum())
+        return total
+
+    def test_michaelis_menten_matches_official_transform(self):
+        evaluator = build_official_response_evaluator(
+            adstock_type="none",
+            saturation_type="michaelis_menten",
+            l_max=1,
+            channel_params={
+                "meta": {"saturation_alpha": 2.3, "saturation_lam": 300.0},
+                "google": {"saturation_alpha": 1.7, "saturation_lam": 220.0},
+            },
+            channel_columns=["meta", "google"],
+        )
+        expected = self._independent_mm_response(
+            self.SPEND,
+            [
+                {"alpha": 2.3, "lam": 300.0},
+                {"alpha": 1.7, "lam": 220.0},
+            ],
+        )
+        assert float(evaluator(self.SPEND)) == pytest.approx(expected, rel=1e-9)
+
+    def test_family_selection_changes_response_on_same_inputs(self):
+        # Pinned-library semantics: logistic uses efficiency lam on scaled spends
+        # (tanh form); michaelis_menten uses max-contribution alpha + half-saturation lam.
+        logistic_eval = build_official_response_evaluator(
+            adstock_type="none",
+            saturation_type="logistic",
+            l_max=1,
+            channel_params={
+                "meta": {"saturation_lam": 1.0, "saturation_beta": 2.5},
+                "google": {"saturation_lam": 1.4, "saturation_beta": 1.8},
+            },
+            channel_columns=["meta", "google"],
+        )
+        mm_eval = build_official_response_evaluator(
+            adstock_type="none",
+            saturation_type="michaelis_menten",
+            l_max=1,
+            channel_params={
+                "meta": {"saturation_alpha": 2.5, "saturation_lam": 0.8},
+                "google": {"saturation_alpha": 1.8, "saturation_lam": 1.1},
+            },
+            channel_columns=["meta", "google"],
+        )
+        r_logistic = float(logistic_eval(self.SPEND))
+        r_mm = float(mm_eval(self.SPEND))
+        assert r_logistic > 0
+        assert r_mm > 0
+        assert not np.isclose(r_logistic, r_mm, rtol=1e-3)
+
+    def test_geometric_adstock_carryover_affects_response(self):
+        # Spends in training-scale units (channel/max scaling puts data in [0, 1]).
+        # With carryover, shifting the same budget across weeks changes weekly
+        # adstocked levels, so total response through the nonlinear saturation changes.
+        evaluator = build_official_response_evaluator(
+            adstock_type="geometric",
+            saturation_type="logistic",
+            l_max=4,
+            channel_params={
+                "meta": {
+                    "adstock_alpha": 0.6,
+                    "saturation_beta": 2.5,
+                    "saturation_lam": 1.0,
+                }
+            },
+        )
+        front = np.array([[0.40, 0.10, 0.10, 0.10]])
+        back = np.array([[0.10, 0.10, 0.10, 0.40]])
+        r_front = float(evaluator(front))
+        r_back = float(evaluator(back))
+        assert 0 < r_back < r_front < 4 * 2.5
+
+    def test_channel_scale_divides_spends_before_evaluation(self):
+        # Same relative schedule, different absolute scale: dividing by
+        # channel_scale must reproduce the scaled-space evaluation.
+        params = {
+            "meta": {
+                "adstock_alpha": 0.6,
+                "saturation_beta": 2.5,
+                "saturation_lam": 1.0,
+            }
+        }
+        scaled_eval = build_official_response_evaluator(
+            adstock_type="geometric",
+            saturation_type="logistic",
+            l_max=4,
+            channel_params=params,
+        )
+        raw_eval = build_official_response_evaluator(
+            adstock_type="geometric",
+            saturation_type="logistic",
+            l_max=4,
+            channel_params=params,
+            channel_scale={"meta": 1000.0},
+        )
+        scaled = np.array([[0.40, 0.10, 0.10, 0.10]])
+        raw = scaled * 1000.0
+        assert float(scaled_eval(scaled)) == pytest.approx(float(raw_eval(raw)), rel=1e-12)
+
+    def test_unknown_transform_type_raises_domain_error(self):
+        with pytest.raises(DomainError) as exc_info:
+            build_official_response_evaluator(
+                adstock_type="nonexistent",
+                saturation_type="logistic",
+                l_max=4,
+                channel_params={"meta": {}},
+            )
+        assert exc_info.value.code in ("INPUT_INVALID", "INVALID_ADSTOCK_TYPE")
