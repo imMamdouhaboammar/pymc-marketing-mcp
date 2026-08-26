@@ -13,7 +13,6 @@ concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: true
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
@@ -21,27 +20,33 @@ permissions:
 
 jobs:
   build-docs:
-    name: Build & Generate Documentation
+    name: Build Documentation Artifacts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate Documentation Site with Markdown Docs
-        uses: ldeluigi/markdown-docs@v0.6.0
+      - name: Install uv and setup Python
+        uses: astral-sh/setup-uv@v5
         with:
-          src: docs
-          dst: _site
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Check documentation drift
+        run: uv run python scripts/check_docs_drift.py
+
+      - name: Prepare site directory
+        run: |
+          mkdir -p _site
+          cp README.md _site/index.md
+          cp -r docs/* _site/
 
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
-
-      - name: Upload Documentation HTML Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: documentation-site-${{ github.sha }}
           path: _site
 
   deploy-pages:

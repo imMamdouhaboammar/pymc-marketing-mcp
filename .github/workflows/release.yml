@@ -24,11 +24,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install uv
+      - name: Install uv and setup Python
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install 3.12
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
@@ -50,6 +50,7 @@ jobs:
           /tmp/release-smoke-venv/bin/pip install dist/*.whl
           /tmp/release-smoke-venv/bin/marketing-mcp --help
           /tmp/release-smoke-venv/bin/marketing-mcp-auth --help
+          /tmp/release-smoke-venv/bin/marketing-mcp-worker --help
 
       - name: Generate release evidence and compute checksums
         run: |
@@ -57,7 +58,7 @@ jobs:
           sha256sum dist/* > dist/SHA256SUMS
 
       - name: GH Release
-        uses: softprops/action-gh-release@v3.0.2
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*

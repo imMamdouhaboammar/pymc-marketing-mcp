@@ -14,11 +14,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and setup Python
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install 3.12
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
       - name: Install exact locked dependencies
         run: uv sync --frozen --extra dev
@@ -36,11 +36,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and setup Python
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install 3.12
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
       - name: Install latest allowed dependencies within declared bounds
         run: uv sync --upgrade --extra dev

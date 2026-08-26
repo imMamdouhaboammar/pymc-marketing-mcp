@@ -19,11 +19,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and setup Python
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install 3.12
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
@@ -50,11 +50,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and setup Python
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install 3.12
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
@@ -69,11 +69,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and setup Python
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install 3.12
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
@@ -88,17 +88,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and setup Python
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install 3.12
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
       - name: Run G0/H0 release truth tests
-        run: uv run pytest tests/release/test_g0_production_truth.py -q -m "not statistical"
+        run: uv run pytest tests/release/test_g0_production_truth.py tests/release/test_h0_runtime_truth.py -q -m "not statistical"
 
   package-smoke:
     name: Package & Build Smoke
@@ -107,11 +107,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and setup Python
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install 3.12
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
       - name: Build wheel and sdist
         run: uv build
@@ -123,6 +123,7 @@ jobs:
           /tmp/smoke-venv/bin/marketing-mcp --help
           /tmp/smoke-venv/bin/marketing-mcp-demo --help
           /tmp/smoke-venv/bin/marketing-mcp-auth --help
+          /tmp/smoke-venv/bin/marketing-mcp-worker --help
 
   docker-smoke:
     name: Docker Build Smoke

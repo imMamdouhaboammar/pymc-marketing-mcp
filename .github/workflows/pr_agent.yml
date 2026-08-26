@@ -18,7 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: PR Agent
-        uses: The-PR-Agent/pr-agent@v0.43.0
+        if: env.OPENAI_KEY != ''
+        uses: The-PR-Agent/pr-agent@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
