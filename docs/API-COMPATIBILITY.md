@@ -1,35 +1,110 @@
-# API & Ecosystem Compatibility Matrix
+# API and Ecosystem Compatibility
 
-This document outlines the version requirements and API compatibility guarantees for PyMC Marketing MCP v0.4.0. The canonical runtime version is reported by `marketing_mcp.version_info()`; `scripts/check_docs_drift.py` fails when this heading drifts from it.
+This document describes the compatibility policy for PyMC Marketing MCP v0.4.0
 
-## Core Dependencies
+Do not treat a hand-written tested-version table as release evidence. Declared ranges come from `pyproject.toml`; the exact environment for a release comes from `uv.lock` plus machine-generated current-commit evidence
 
-| Package | Supported Versions | Tested Version | Notes |
-| :--- | :--- | :--- | :--- |
-| **Python** | `>=3.12, <3.14` | `3.12.13` | CPython runtime with multithreaded BLAS/LAPACK |
-| **pymc-marketing** | `>=1.0.0` | `1.0.0` | Unified `MMM`, `BudgetOptimizerWrapper`, `TimeSliceCrossValidator` |
-| **pymc** | `>=6.0.0` | `6.0.1` | PyMC 6 sampling backend with PyTensor compiler |
-| **arviz** | `>=0.21, <2.0` | `1.3.0` | Diagnostic summary (R-hat, ESS, divergences) |
-| **xarray** | `>=2025.1` | `2026.7.0` | Multi-dimensional DataTree and Dataset backend |
-| **h5netcdf** | `>=1.4.0` | `1.7.4` | NetCDF4 HDF5 backend for model serialization |
-| **h5py** | `>=3.10.0` | `3.15.1` | HDF5 binary storage engine |
-| **mcp** | `>=2.0.0, <3.0` | `2.0.0` | Official MCP Python SDK (stdio + Streamable HTTP) |
-| **pydantic** | `>=2.12, <2.13` | `2.12.5` | Type validation, constraint checking, tool schemas |
-| **pandas** | `>=2.2, <3.0` | `2.3.3` | Panel and tabular dataset ingestion |
-| **numpy** | `>=2.0, <3.0` | `2.3.2` | Numerical computation |
-| **uvicorn** | `>=0.34, <1.0` | `0.41.0` | Streamable HTTP ASGI host |
+## Declared runtime ranges
 
-## API Evolution & Migration Guide
+| Package | Declared range | Role |
+|---|---|---|
+| Python | `>=3.12,<3.14` | supported runtime, currently Python 3.12 and 3.13 |
+| `pymc-marketing` | `>=1.0.0` | MMM, incrementality, optimizer and CLV computation boundary |
+| `mcp[cli]` | `>=2,<3` | MCP Python SDK, stdio and Streamable HTTP |
+| `pydantic` | `>=2.12,<2.13` | public input/output contracts |
+| `pandas` | `>=2.2,<3` | tabular ingestion and manipulation |
+| `numpy` | `>=2,<3` | numerical arrays |
+| `xarray` | `>=2025.1` | posterior and multidimensional allocation structures |
+| `arviz` | `>=0.21,<2` | posterior diagnostics and model comparison support |
+| `h5netcdf` | `>=1.4.0` | NetCDF persistence backend |
+| `h5py` | `>=3.10.0` | HDF5 support |
+| `uvicorn` | `>=0.34,<1` | HTTP ASGI host |
+| `structlog` | `>=25,<26` | structured logging foundation |
+| `pyarrow` | `>=18,<24` | Parquet ingestion |
+| `pyjwt` | `>=2.8,<3` | JWT validation primitives |
 
-### 1. PyMC-Marketing 1.0.0 Unification
-- **Previous (0.19.x)**: `pymc_marketing.mmm.multidimensional.MultidimensionalMMM` and separate wrapper modules.
-- **Current (1.0.0)**: `from pymc_marketing.mmm import MMM, BudgetOptimizerWrapper, TimeSliceCrossValidator`. A single `MMM` class natively handles single-dimensional and multidimensional panel configurations through `dims=("geo",)`.
+PyMC itself is currently supplied through the PyMC-Marketing dependency stack. Release evidence records the exact installed PyMC/PyTensor versions used by the statistical suite
 
-### 2. Model Persistence Format
-- Model artifacts are serialized via `model.save(filepath)` using `h5netcdf` into standard NetCDF (`.nc`) files.
-- `model.load(filepath)` reconstitutes the model instance, prior distributions, posterior traces, and dimensional coordinates.
+## Exact tested environment
 
-### 3. Incrementality & Response API
-- Total iROAS: `model.incrementality.contribution_over_spend(frequency="all_time")` returns `xarray.DataArray` with shape `(chain, draw, channel, *dims)`.
-- Marginal iROAS: `model.incrementality.marginal_contribution_over_spend(frequency="all_time")` computes derivative at current operating point.
-- Budget Scenario Simulation: `BudgetOptimizerWrapper(model=model, start_date=..., end_date=...).sample_response_distribution(allocation, noise_level=0.0, include_carryover=True)` returns `xarray.Dataset` with variable `total_media_contribution_original_scale`.
+For a release candidate, obtain exact versions from
+
+```bash
+uv sync --frozen --extra dev
+uv run python -c "from marketing_mcp import version_info; print(version_info())"
+```
+
+The release-evidence collector must record the same environment for the exact commit being assessed
+
+No exact version in an old Markdown file overrides `uv.lock` or generated evidence
+
+## PyMC-Marketing 1.x boundary
+
+The adapter targets the PyMC-Marketing 1.x unified MMM APIs used by the current codebase, including model fitting, transforms, response sampling, incrementality, model comparison and CLV model families
+
+Supported transform vocabulary is defined by the project Pydantic schemas and tested against real model construction. Documentation must not advertise an adstock or saturation transform that the schemas/adapter cannot construct
+
+Model persistence uses the PyMC-Marketing save/load path with NetCDF-compatible artifacts
+
+## Public compatibility layers
+
+### MCP protocol
+
+The server currently exposes
+
+- stdio
+- Streamable HTTP
+
+The project has its own asynchronous job tools for current clients
+
+- `submit_fit_mmm_job`
+- `get_job_status`
+- `cancel_job`
+- `list_jobs`
+
+These tools must not be described as standards-compliant MCP Tasks support
+
+The target architecture keeps the internal JobService transport-neutral so a future MCP Tasks extension adapter can be added without changing the job state model
+
+### Historical CLV wrappers
+
+`fit_clv_model` and `predict_customer_clv` remain deprecated compatibility wrappers. New workflows should use the model-specific CLV tools listed in `docs/CAPABILITIES.md`
+
+## Compatibility policy
+
+A dependency change is accepted only when the relevant behavioral contracts pass, not only when imports succeed
+
+Minimum canary coverage for upstream changes
+
+1. import/constructor smoke for the PyMC-Marketing adapter
+2. real small MMM fit
+3. save/load round trip
+4. diagnostic gate
+5. incrementality/iROAS path
+6. scenario + budget optimization path
+7. multidimensional allocation path
+8. CLV model smoke where affected
+9. MCP discovery and stdio/HTTP round trip
+10. capability/docs drift check
+
+Statistical changes require real-library tests with explicit seed/tolerance where appropriate
+
+## Production dependency policy target
+
+The current `pymc-marketing>=1.0.0` lower-bound-only declaration is broader than the evidence policy we want for a production release
+
+Before feature thaw/release
+
+- define a bounded supported production range based on executed compatibility evidence
+- keep a frozen production lock
+- run a latest-allowed compatibility canary
+- optionally run a non-blocking pre-release upstream lane
+- never widen a dependency range automatically because one smoke test passed
+
+See `docs/superpowers/plans/2026-08-26-upstream-compatibility-capability-gates.md`
+
+## Release compatibility claim
+
+A release may say a dependency combination is supported only when the exact or declared compatibility lane has current-head evidence
+
+If a newer upstream version exists but has not passed the repository canary, it is not part of the verified production claim yet
