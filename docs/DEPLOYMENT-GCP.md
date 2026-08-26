@@ -1,162 +1,180 @@
-# Google Cloud Run Deployment Guide
+# Google Cloud Deployment
 
-This document outlines the production architecture and deployment instructions for running **PyMC Marketing MCP** on **Google Cloud Run**.
+## Status
 
----
+The repository contains Cloud Run/Docker deployment assets, but the current Cloud Run path is **development/staging only** and is not the approved production topology
 
-## 1. Architecture Overview
+Do not describe `scripts/deploy_cloud_run.sh`, `cloudbuild.yaml`, a single Cloud Run instance, SQLite on container/GCS-FUSE storage, or a successful `/health` response as proof of production readiness
+
+Production deployment is blocked by the G2, G3, G4, G5 and H1-H4 requirements in `docs/PRODUCTION-READINESS.md`
+
+## Current deployment path
+
+The current service can run as one Streamable HTTP process
 
 ```text
-AI Agent Client (Claude / Cursor / Web App)
-       │
-       ▼ (Streamable HTTP / SSE: POST/GET https://<service-url>/mcp)
-┌─────────────────────────────────────────────────────────────┐
-│ Google Cloud Run (Serverless Container)                     │
-│                                                             │
-│  - 4 vCPUs (Dedicated, no CPU throttling)                   │
-│  - 8 GiB RAM (High-throughput Bayesian sampling)             │
-│  - Execution Environment: Gen 2                              │
-│  - Timeout: 1800s (30 mins for MCMC sampling)               │
-│  - Concurrency: 1 | Max Instances: 1                        │
-│                                                             │
-│  Container (/app):                                          │
-│    marketing-mcp --transport streamable-http                │
-│    Uvicorn ASGI Engine (Starlette + MCP 2.0.0 SDK)          │
-│                                                             │
-│  Mounted Volume (/var/lib/marketing-mcp):                   │
-│    ├── data/       (Raw CSV/Parquet datasets)               │
-│    ├── artifacts/  (NetCDF .nc fitted models & plots)       │
-│    ├── inbox/      (Ingestion staging)                      │
-│    └── metadata.db (SQLite provenance & diagnostics ledger) │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ (Cloud Storage FUSE Mount)
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Google Cloud Storage Bucket (gs://pymc-marketing-storage)   │
-│  - Persistent Model Weights (.nc)                           │
-│  - Versioned Experiment History & Diagnostics Ledger        │
-└─────────────────────────────────────────────────────────────┘
+MCP client
+  -> Cloud Run / container
+  -> marketing-mcp --transport streamable-http
+  -> Uvicorn + MCP server
+  -> local Application
+       -> SQLite metadata
+       -> SQLite jobs
+       -> local artifacts
+       -> in-process AsyncioJobExecutor
+       -> PyMC-Marketing
 ```
 
----
+This topology can be useful for controlled testing, but it has production limits
 
-## 2. Key Optimization Parameters
+- API and statistical compute share the same process/container lifetime
+- long-running jobs are not isolated from the API process
+- SQLite is the active metadata/job repository
+- artifact storage is local-path based
+- current ownership/security paths are not yet proven end to end for remote MCP resources
+- current release does not have a generated CI evidence pack proving the deployment
 
-| Parameter | Recommended Setting | Rationale |
-| :--- | :--- | :--- |
-| **CPU** | `4 vCPU` | PyMC NUTS sampler runs multi-chain sampling concurrently. |
-| **Memory** | `8 GiB` | ArviZ `InferenceData` xarray graphs require adequate RAM for large posterior draws. |
-| **Timeout** | `1800` (30 mins) | Bayesian MCMC fitting (`fit_mmm`, `cross_validate_mmm`) requires more than standard 5m web timeouts. |
-| **CPU Throttling** | `--no-cpu-throttling` | Keeps CPU always allocated during MCMC processing without throttling. |
-| **Concurrency** | `80` | Allows concurrent SSE streaming connections and JSON-RPC tool calls without blocking. |
-| **Max Instances** | `1` | Prevents multiple containers from modifying SQLite metadata simultaneously. |
-| **Execution Env** | `gen2` | Second-generation execution environment provides full Linux kernel compatibility and fast filesystem I/O. |
-| **Authentication** | `API Key / JWT` | Dual-mode auth middleware protecting endpoints via Bearer headers, X-API-Key, or Query params. |
+## Current deployment script warning
 
----
+`scripts/deploy_cloud_run.sh` is not the production source of truth
 
-## 3. Authentication & Key Management
+It currently carries assumptions that must be fixed before it can be promoted, including single-instance SQLite constraints, application-level API-key handling and deployment-specific storage variables. It must be covered by shell/static checks and release smoke tests before use as a release path
 
-The server features a built-in cryptographic authentication subsystem:
-* **API Key Auth**: High-entropy keys prefixed with `mcp_live_...` validated in constant-time.
-* **JWT Bearer Auth**: Signed HS256 tokens with configurable expiration, claims, and permission scopes.
-* **Header-Only Credentials**: Credentials are accepted exclusively via `Authorization: Bearer <TOKEN>` or `X-API-Key` headers. Query-string credentials (`?token=` / `?api_key=`) are rejected because URLs leak through proxy and browser logs.
-* **Public Endpoints**: `/health` and `/` remain open for load balancers and health probes.
+Raw credentials must never be printed as deployment output or committed into configuration
 
-### Generating & Managing Keys via CLI
-```bash
-# Generate a new API Key
-marketing-mcp-auth generate-api-key
+## Development Cloud Run example
 
-# Mint a 365-day signed JWT Bearer token
-marketing-mcp-auth mint-jwt --secret "YOUR_JWT_SECRET" --client-id "claude-desktop" --days 365
-
-# Verify an existing token or API key
-marketing-mcp-auth verify "mcp_live_..."
-```
-
----
-
-## 4. One-Command Automated Deployment
-
-Run the included automated deployment script:
+Use explicit project/environment values rather than repository-specific hardcoded examples
 
 ```bash
-# Export custom variables if needed (defaults to active gcloud config)
-export GCP_PROJECT_ID="project-10698895-5ed8-4764-bb7"
-export GCP_REGION="us-central1"
+export GCP_PROJECT_ID="YOUR_PROJECT_ID"
+export GCP_REGION="YOUR_REGION"
+export MARKETING_MCP_SECURITY_PROFILE="http-private-api-key"
+export MARKETING_MCP_API_KEY="YOUR_TEST_KEY"
 
-./scripts/deploy_cloud_run.sh
+# Build/deploy using your reviewed staging pipeline
 ```
 
----
+Header credentials only
 
-## 5. Client Configuration & Integration
-
-### Claude Desktop (`claude_desktop_config.json`) / Antigravity / Cursor
-```json
-{
-  "mcpServers": {
-    "pymc-marketing": {
-      "url": "https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
+```text
+Authorization: Bearer <TOKEN>
+X-API-Key: <KEY>
 ```
 
-### Claude Code (CLI)
-```bash
-claude mcp add pymc-marketing https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/mcp --header "Authorization: Bearer YOUR_API_KEY_HERE"
+Query-string credentials are not supported
+
+## Health endpoints
+
+Current HTTP endpoints include
+
+- `GET /health`: compatibility summary
+- `GET /health/live`: process liveness
+- `GET /health/ready`: configured application dependency check
+- `/mcp`: Streamable HTTP MCP endpoint
+
+A green liveness response only proves that the process is alive
+
+Production readiness must additionally fail when required durable metadata, job-execution, artifact or auth-verifier dependencies are unavailable
+
+## Target production topology
+
+```text
+Remote MCP clients
+  -> HTTPS / platform ingress
+  -> authenticated MCP API service
+       -> request Principal + tenant context
+       -> scope + object authorization
+       -> short read/control operations
+       -> durable job submission
+
+MCP API service
+  -> PostgreSQL metadata/job repository
+  -> object storage for datasets/models/plots
+  -> credential verifier / OAuth resource-server integration
+  -> structured logs + metrics + traces
+
+Statistical worker service / process pool
+  -> durable job claim
+  -> heartbeat / cancellation
+  -> PyMC-Marketing sampling
+  -> immutable artifact write + checksum
+  -> transactional job/resource completion
+
+Operations
+  -> readiness checks
+  -> queue/error alerts
+  -> backup/restore
+  -> release evidence tied to image digest + git SHA
 ```
 
-### OpenAI Codex / Stdio-Only Clients (via mcp-remote bridge)
-```json
-{
-  "mcpServers": {
-    "pymc-marketing": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/mcp",
-        "--header",
-        "Authorization: Bearer YOUR_API_KEY_HERE"
-      ]
-    }
-  }
-}
-```
+The exact Google Cloud products may change as long as the repository interfaces and release gates are satisfied. The application domain must not depend directly on Cloud Run, Pub/Sub, Cloud SQL or GCS-specific semantics
 
-### Python / Gemini / Custom AI Agents (LangChain, LangGraph, LlamaIndex)
-```python
-import asyncio
-import httpx2
-from mcp.client.session import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+## Target Google Cloud mapping
 
-async def main():
-    url = "https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/mcp"
-    api_key = "YOUR_API_KEY_HERE"
-    headers = {"Authorization": f"Bearer {api_key}"}
+A reasonable production mapping is
 
-    async with (
-        httpx2.AsyncClient(headers=headers) as http_client,
-        streamable_http_client(url, http_client=http_client) as (read, write),
-        ClientSession(read, write) as session,
-    ):
-        await session.initialize()
-        tools = await session.list_tools()
-        print(f"Connected! Available tools: {len(tools.tools)}")
+| Concern | Target property | Possible GCP implementation |
+|---|---|---|
+| MCP API | short-lived authenticated requests | Cloud Run service |
+| Metadata/jobs | durable transactional state | Cloud SQL for PostgreSQL |
+| Artifacts | immutable checksum-addressed objects | Cloud Storage |
+| Statistical workers | process-isolated CPU-heavy jobs | separate Cloud Run worker/job or equivalent compute pool |
+| Credentials | no raw secret persistence in browser/repo | Secret Manager for service secrets, OAuth issuer/resource server for users/clients |
+| Logs/traces/metrics | request/job correlation | OpenTelemetry + Cloud Logging/Monitoring or compatible backend |
+| Release identity | immutable artifact tied to commit | Artifact Registry digest + OCI labels + release evidence |
 
-asyncio.run(main())
-```
+This table is target architecture, not a statement that these adapters already exist
 
----
+## Production authentication target
 
-## 6. Verification Endpoints
-* **Health Check**: `GET https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/health`
-* **MCP SSE Endpoint**: `POST/GET https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/mcp`
+`http-production-oauth` is the intended remote production posture
 
+Production requirements include
+
+- issuer and audience configured
+- token verifier wired into the actual MCP HTTP path
+- verified claims mapped to `Principal`
+- required scopes enforced at tool execution
+- object/tenant ownership enforced for tools and MCP resources
+- no query credentials
+- no raw browser-generated API-key authority
+
+Private API keys may remain useful for staging or tightly controlled private deployments after the credential-authority hardening plan is complete
+
+## Worker and concurrency policy
+
+Do not set a single universal concurrency value in documentation
+
+API concurrency and statistical worker concurrency solve different problems and must be configured separately
+
+- API service: bounded concurrency for MCP sessions and control/read calls
+- statistical workers: admission-controlled concurrency based on CPU, memory and sampler workload
+- queue/backpressure: reject or queue work when capacity is exhausted rather than running arbitrary concurrent fits in one API process
+
+No fixed MCMC completion latency is promised across arbitrary datasets/models
+
+## Deployment verification before production
+
+Required release evidence includes
+
+1. build wheel and container from one commit
+2. clean-install wheel smoke test
+3. container startup and `/health/live` smoke test
+4. production-style `/health/ready` dependency failure/success tests
+5. real authenticated Streamable HTTP MCP session
+6. limited-scope and cross-tenant denial tests
+7. job submission, worker execution, cancellation and restart recovery
+8. artifact checksum/persistence verification
+9. backup/restore test
+10. image digest and git SHA recorded in generated release evidence
+
+Until those pass from the release candidate, deployment instructions remain staging guidance
+
+See
+
+- `docs/ARCHITECTURE.md`
+- `docs/SECURITY.md`
+- `docs/PRODUCTION-READINESS.md`
+- `docs/superpowers/plans/2026-08-26-jobs-mcp-task-boundary.md`
+- `docs/superpowers/plans/2026-08-26-runtime-truth-ci-gates.md`

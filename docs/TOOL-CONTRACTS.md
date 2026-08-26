@@ -1,153 +1,215 @@
 # MCP Tool Contracts (v0.4.0)
 
-Every MCP tool returns structured, agent-oriented data wrapped in a standard `ToolEnvelope` (summary, evidence, warnings, provenance, next_actions). Large posterior arrays stay server-side.
+This document describes the current public MCP contract
 
-## 1. Dataset Tools
+The generated capability inventory in `docs/CAPABILITIES.md` is the source of truth for public names and maturity. This document adds behavioral and safety semantics
 
-### `register_dataset(path: str)`
-- Registers a local CSV or Parquet file from the safe ingest root.
-- Returns `dataset_id`, format, row count, and SHA-256 fingerprint.
+All tool results use structured JSON-compatible envelopes and must not fabricate model-dependent quantities
 
-### `inspect_dataset(dataset_id: str)`
-- Returns row count, inferred temporal frequency, date range, candidate target/channel/control columns, missing periods, and inspection findings.
+## Common rules
 
-### `validate_dataset(dataset_id: str, date_column: str, target_column: str, channel_columns: list[str], control_columns: list[str] | None, dims: list[str] | None)`
-- Runs statistical and panel-shape validation: 52+ week minimum, zero-spend variation, extreme channel correlation (>= 0.90), negative spend, duplicate periods, and rectangular panel integrity across dimension cells.
+- dataset/model/job IDs are server-controlled identifiers
+- model-dependent numerical claims come from PyMC-Marketing/PyMC/ArviZ paths
+- domain errors return stable error codes and next actions where available
+- decision-grade tools require the persisted diagnostic gate to allow the decision
+- warnings such as extrapolation or `approved_with_caution` remain user-visible
+- local stdio is a trusted-local context
+- remote scope/object authorization is still being hardened end to end, as documented in `docs/SECURITY.md`
 
-## 2. Modeling & Lineage Tools
+## Dataset tools
 
-### `fit_mmm(config: FitMMMInput)`
-- Fits a real Bayesian Marketing Mix Model using PyMC-Marketing.
-- Supports full transform zoo:
-  - Adstocks: `geometric` (default), `delayed`, `weibull_cdf`, `weibull_pdf`, `binomial`, `none`.
-  - Saturations: `logistic` (default), `tanh`, `tanh_baselined`, `michaelis_menten`, `hill`, `hill_sigmoid`, `inverse_scaled_logistic`, `log`, `root`, `none`.
-  - `channel_priors`: per-channel overrides for adstock/saturation specifications.
-- Controls sampler configuration (draws, tune, chains, target_accept, random_seed), adstock, saturation, and yearly seasonality.
-- Automatically hashes semantic configuration, records dataset fingerprint, and attaches package provenance.
+### `register_dataset`
 
-### `get_model_status(model_id: str)`
-- Returns model record, execution status (`queued`, `running`, `completed`, `failed`, `cancelled`), lineage stage (`initial_fit`, `calibrated`, `refreshed`), and error details.
+Register an allowed CSV/Parquet input, persist metadata and fingerprint the content
 
-### `calibrate_mmm(input: CalibrateMMMInput)`
-- Calibrates an existing fitted MMM using experimental incrementality lift tests (`add_lift_test_measurements`).
-- Produces a new calibrated model artifact with `parent_model_id` lineage linkage.
+### `inspect_dataset`
 
-### `compare_models(input: CompareModelsInput)`
-- Compares sampler diagnostics, predictive RMSE/NRMSE, divergences, R-hat, ESS, and lineage stages across multiple fitted models.
+Return schema/dtype/range and candidate-role information without returning the raw dataset as an MCP response
 
-### `select_best_model(config: ModelComparisonInput)`
-- Information-theoretic model comparison powered by ArviZ.
-- Supports PSIS-LOO (`loo`), WAIC (`waic`), and Bayesian Model Averaging stacking weights (`stacking` or `all`).
-- Enforces single-dataset comparative validity and surfaces Pareto-k diagnostic warnings ($k > 0.7$).
+### `validate_dataset`
 
-### `archive_model(input: ArchiveModelInput)`
-- Transitions a model record to `cancelled`/archived state.
+Validate MMM roles, temporal/panel structure and blocking data-quality conditions before fitting
 
-## 3. Diagnostics & Cross-Validation Tools
+## MMM/model lifecycle tools
 
-### `diagnose_mmm(model_id: str)`
-- Mandatory statistical gate. Checks divergences (= 0), R-hat (<= 1.05 fail, <= 1.01 clean), bulk ESS (>= 50 fail, >= 400 clean), 94% posterior predictive coverage (>= 50% fail, >= 80% clean), normalized RMSE, and residual autocorrelation.
-- Computes decision status: `approved`, `approved_with_caution`, or `rejected`.
+### `fit_mmm`
 
-### `cross_validate_mmm(input: CrossValidateMMMInput)`
-- Runs rolling Time-Slice Cross-Validation with `TimeSliceCrossValidator`.
-- Evaluates out-of-sample predictive RMSE and NRMSE across rolling folds.
+Fit a controlled PyMC-Marketing MMM using typed transform/prior/configuration inputs and persist model identity, artifact and provenance
 
-### `evaluate_prior_sensitivity(input: PriorSensitivityInput)`
-- Evaluates commercial conclusion stability (channel rank ordering and iROAS) under altered adstock and saturation priors across multiple alternative specifications.
+The synchronous tool remains part of the compatibility surface. Long-running production compute is intended to move behind durable jobs
 
-## 4. Visual Artifact Tools
+### `get_model_status`
 
-### `get_posterior_plots(config: GetPosteriorPlotsInput)`
-- Generates headless PNG/SVG visualizations from fitted MMM posterior samples.
-- Supported plot types:
-  - `saturation_curves`: channel saturation and response curves with 94% HDI.
-  - `waterfall_decomposition`: posterior median decomposition waterfall.
-  - `actual_vs_predicted`: observed vs posterior predictive samples with credible bands.
-  - `channel_contribution_share`: channel percentage contribution shares (bar + pie).
-- Returns base64 image strings in evidence envelope and caches artifacts to MCP plot resources.
+Return persisted model state, configuration, diagnostic status and provenance summary
 
-## 5. Decision & Incrementality Tools
+### `cross_validate_mmm`
 
-### `get_channel_contributions(model_id: str)`
-- Returns posterior channel contribution summaries (median and 94% credible intervals in original scale).
+Run PyMC-Marketing time-slice cross-validation and return bounded out-of-sample evidence
 
-### `get_incremental_roas(model_id: str)`
-- Returns total iROAS and marginal iROAS from PyMC-Marketing official incrementality API with posterior uncertainty ($P(\text{iROAS} > 1)$, median, 94% CI).
+### `evaluate_prior_sensitivity`
 
-### `get_response_curves(model_id: str)`
-- Returns sampled saturation and response curve data.
+Evaluate supported alternative prior/transform configurations and report stability/sensitivity evidence
 
-### `simulate_budget(config: BudgetSimulationInput)`
-- Evaluates exact requested channel or dimension-cell spend scenarios with posterior response sampling.
-- Emits `EXTRAPOLATION_RISK` warning if spend exceeds 1.5x of historical 95th percentile spend.
+### `calibrate_mmm`
 
-### `optimize_budget(config: BudgetOptimizationInput)`
-- Computes SLSQP budget optimization subject to channel or cell constraints.
-- Compares baseline vs recommended posterior responses with uncertainty intervals.
+Create a calibrated child model using compatible lift-test evidence. Calibration preserves parent/child lineage and does not mutate the parent model artifact in place
 
-### `optimize_flighting(config: FlightingOptimizationInput)`
-- Optimizes a multi-week media flighting schedule over a planning horizon (2–52 weeks).
-- Supports spend patterns: `flat`, `frontloaded`, `backloaded`, `pulsed`.
-- Implements net-profit maximization ($\text{Revenue} \times \text{Margin} - \text{Spend}$) and minimum target-iROAS floor constraints.
+### `compare_models`
 
-### `recommend_next_measurement(model_id: str)`
-- Recommends evidence-gathering experiments when data or model uncertainties are high.
+Compare compatible stored models using the implemented information-criterion/model-comparison semantics and identity checks
 
-## 6. Customer Lifetime Value (CLV) Tools
+### `select_best_model`
 
-### `fit_purchase_model(config: FitPurchaseModelInput)`
-- Fits a Bayesian repeat purchase or contractual churn frequency model (`bg_nbd` or `shifted_beta_geo`).
-- Normalizes user column names (`customer_id_col`, `frequency_col`, `recency_col`, `T_col`, `cohort_col`) into canonical RFM schemas.
+Experimental capability for ranking compatible models by the implemented selection/weighting path. Do not present as verified until executable evidence is linked in the capability inventory
 
-### `fit_value_model(config: FitValueModelInput)`
-- Fits a Bayesian monetary value transaction model (`gamma_gamma`) on repeat transactions (`frequency > 0`).
-- Estimates expected average order value / spend per customer.
+### `archive_model`
 
-### `predict_expected_purchases(config: PredictExpectedPurchasesInput)`
-- Evaluates expected future transaction counts per customer over horizon `future_t`.
-- Returns `total_customers` for full population sizing alongside `top_n` truncation.
+Experimental administrative lifecycle operation that marks a model archived while retaining artifact/lineage history
 
-### `predict_probability_alive(config: PredictProbabilityAliveInput)`
-- Evaluates posterior retention / active probability $P(\text{alive})$ per customer from purchase or churn models.
-- Returns summary metrics (`customers_likely_alive`, `customers_at_churn_risk`).
+## Diagnostics
 
-### `predict_expected_spend(config: PredictExpectedSpendInput)`
-- Predicts expected monetary spend per transaction for repeat customers using a fitted `gamma_gamma` model.
+### `diagnose_mmm`
 
-### `estimate_customer_lifetime_value(config: EstimateCLVInput)`
-- Integrates a fitted purchase model (`bg_nbd` or `shifted_beta_geo`) with a monetary value model (`gamma_gamma`).
-- Computes discounted net present Customer Lifetime Value (CLV) over forecast horizon `future_t` with discount rate `discount_rate`.
+Run sampler and posterior-predictive checks, persist the decision status and return diagnostics/warnings
 
-### `get_churn_risk_cohorts(model_id: str, threshold_p_alive: float = 0.3)`
-- Segments at-risk customer cohorts with $P(\text{alive}) < \text{threshold}$.
+Current hard-rejection conditions include
 
-### `fit_clv_model(config: FitCLVInput)`
-- (Deprecated compatibility wrapper): Fits Bayesian CLV models on customer RFM data.
+- divergences `> 0`
+- max R-hat `> 1.05`
+- min ESS `< 50`
+- posterior-predictive coverage `< 0.50`
 
-### `predict_customer_clv(config: PredictCLVInput)`
-- (Deprecated compatibility wrapper): Generates individual-level predictions: $P(\text{alive})$, expected future transactions, and expected customer value.
+Current caution conditions include max R-hat above 1.01 but at most 1.05, ESS below 400 but at least 50, weaker predictive coverage, high NRMSE or high residual autocorrelation
 
-## 8. Asynchronous Job Tools
+See `docs/DECISION-INTEGRITY.md`
 
-### `submit_fit_mmm_job(config: FitMMMInput, idempotency_key: str | None = None)`
-- Submits an asynchronous MMM fitting background job without blocking the connection.
-- Returns `JobRecord` in `queued` state with `job_id` and tracking metadata.
+## Descriptive and decision tools
 
-### `get_job_status(job_id: str)`
-- Retrieves execution status (`queued`, `running`, `succeeded`, `cancelling`, `cancelled`, `failed`), progress, results, or error details for an asynchronous job.
+### `get_channel_contributions`
 
-### `cancel_job(job_id: str)`
-- Cancels a queued or running background job.
+Return posterior channel-contribution summaries with uncertainty and provenance
 
-### `list_jobs(status: str | None = None, limit: int = 50)`
-- Lists recent background jobs for the authenticated caller's tenant.
+This is descriptive evidence. A rejected model may be inspected for diagnosis, but the response must retain the rejected/caution context
 
-## 9. MCP Resources
+### `get_incremental_roas`
 
-- `marketing://datasets/{dataset_id}`: Full dataset metadata and inspection status.
-- `marketing://models/{model_id}`: Full model record and configuration.
-- `marketing://models/{model_id}/diagnostics`: Detailed diagnostic metrics and findings.
-- `marketing://models/{model_id}/lineage`: Model parent linkage, semantic hash, and package provenance.
-- `marketing://models/{model_id}/plots/{plot_type}`: Binary PNG visualization artifact.
-- `marketing://clv/{model_id}`: CLV model metadata and lifecycle status.
+Return total and marginal incremental ROAS from the PyMC-Marketing incrementality path
+
+**Decision gate required**. A rejected/undiagnosed model must not produce decision-grade iROAS
+
+### `get_response_curves`
+
+Experimental descriptive response/saturation evidence sampled from the model path
+
+### `simulate_budget`
+
+Evaluate the caller's counterfactual allocation against the approved fitted model
+
+**Decision gate required**. The tool must evaluate the requested scenario rather than substituting optimizer output
+
+### `optimize_budget`
+
+Run constrained budget allocation through the supported PyMC-Marketing optimizer/response path and compare the recommended allocation with baseline evidence
+
+**Decision gate required**. Budget and explicit constraints must be preserved; infeasible constraints are reported rather than silently relaxed
+
+### `optimize_flighting`
+
+Build/evaluate a multi-period weekly spend schedule with the implemented carryover and constraint semantics
+
+**Decision gate required**. Returns week/channel allocation plus posterior response/decision evidence
+
+### `recommend_next_measurement`
+
+Experimental helper that suggests evidence-gathering options when current model/data uncertainty indicates that another experiment or measurement may be useful
+
+It must be allowed to return that no single experiment is implied
+
+## Plotting
+
+### `get_posterior_plots`
+
+Experimental tool that renders/caches supported posterior/model plots as headless artifacts
+
+Numerical interpretation must still come from the typed/statistical result paths, not from visual guessing
+
+## CLV tools
+
+### `fit_purchase_model`
+
+Fit a supported PyMC-Marketing purchase/churn frequency model such as BG/NBD or Shifted Beta-Geometric according to the input contract
+
+### `fit_value_model`
+
+Fit the Gamma-Gamma monetary-value model using compatible customer data
+
+### `predict_expected_purchases`
+
+Predict future purchase frequency from a compatible fitted purchase model
+
+### `predict_probability_alive`
+
+Return probability-alive/retention evidence only for model families whose semantics support it
+
+### `predict_expected_spend`
+
+Predict expected transaction value from a compatible fitted value model
+
+### `estimate_customer_lifetime_value`
+
+Combine compatible purchase and value models to estimate discounted customer lifetime value over the requested horizon
+
+### `get_churn_risk_cohorts`
+
+Experimental cohort grouping over compatible CLV/churn outputs
+
+### `fit_clv_model`
+
+Deprecated compatibility wrapper. New callers should use model-specific CLV tools
+
+### `predict_customer_clv`
+
+Deprecated compatibility wrapper. New callers should use the explicit purchase/value/LTV prediction tools
+
+## Asynchronous job tools
+
+### `submit_fit_mmm_job`
+
+Submit an MMM fitting job and return a persisted job record without waiting for the fit to finish
+
+Current implementation note: the job repository is SQLite and execution uses the in-process async executor/thread delegation. This is **not yet production worker isolation** and is not MCP Tasks extension support
+
+### `get_job_status`
+
+Return the persisted job state/result/error for an authorized job
+
+### `cancel_job`
+
+Request cancellation of a queued/running job and persist the resulting state transition
+
+Current in-process cancellation cannot be presented as proof that a separate statistical worker can always be terminated/recovered
+
+### `list_jobs`
+
+List recent jobs for the current execution context/tenant according to the implemented job repository policy
+
+## MCP resources
+
+Current resource templates include
+
+- `marketing://datasets/{dataset_id}`
+- `marketing://models/{model_id}`
+- `marketing://models/{model_id}/diagnostics`
+- `marketing://models/{model_id}/lineage`
+- `marketing://models/{model_id}/plots/{plot_type}`
+- `marketing://clv/{model_id}`
+
+Current hardening note: these resources are public MCP resource contracts, but their request-scoped principal/scope/object-authorization path is not yet proven to match protected tool authorization. Remote production release is blocked until H2 closes
+
+## Maturity semantics
+
+- `stable`: capability behavior has referenced executable evidence, subject to the wider release/security/runtime status
+- `experimental`: exposed but not yet evidenced strongly enough to present as verified
+- `deprecated`: retained for compatibility and scheduled for removal
+
+A stable individual tool does not imply the service is production-ready. Service readiness is governed by `docs/PRODUCTION-READINESS.md`

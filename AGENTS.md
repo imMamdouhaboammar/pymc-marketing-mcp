@@ -1,39 +1,115 @@
-# pymc-marketing-mcp
+# pymc-marketing-mcp Agent Guide
 
-Decision-safe MCP server exposing PyMC-Marketing (Bayesian MMM) as tools.
-Python 3.12+, hatchling build, `src/marketing_mcp/` layout, pytest + ruff.
+Decision-safe MCP interface over PyMC-Marketing for Bayesian marketing science
+
+Supported runtime: Python `>=3.12,<3.14` (3.12 and 3.13). The Ruff `py311` target is a lint/parser compatibility setting, not the declared runtime support floor
+
+## Read before changing code
+
+1. `docs/README.md` for documentation truth hierarchy
+2. `docs/PRODUCTION-READINESS.md` for current status and blockers
+3. `docs/CAPABILITIES.md` and `docs/TOOL-CONTRACTS.md` for the public MCP surface
+4. `docs/DECISION-INTEGRITY.md` for decision-gate behavior
+5. `docs/superpowers/plans/README.md` for the active stabilization/hardening execution order
+
+Do not infer that a planned task, existing test file or historical review means a production property is already complete
 
 ## Commands
 
 ```bash
-uv run pytest -m "not statistical"   # fast tests (excludes the sampling suite)
-uv run pytest -m statistical          # sampling tests (slow; real PyMC-Marketing fits)
-uv run pytest                         # everything, including the statistical suite
-uv run ruff check src tests scripts   # lint
-uv run python scripts/generate_capability_inventory.py --check  # capability inventory drift
-uv run python scripts/check_docs_drift.py                       # documentation drift
+uv run pytest -m "not statistical" -v
+uv run pytest -m statistical -v
+uv run pytest -v
+uv run ruff check src tests scripts
+uv run python scripts/generate_capability_inventory.py --check
+uv run python scripts/check_docs_drift.py
+uv build
 ```
 
-There is no default fast filter: bare `uv run pytest` runs the statistical suite too, so use
-`-m "not statistical"` for a fast loop.
+Bare `uv run pytest` includes the real statistical suite. Use `-m "not statistical"` for a bounded development loop
 
-## Skills
+## Engineering workflow
 
-Invoke these installed skills (`~/.agents/skills/`) when working on matching tasks:
+Material work follows
 
-| Task | Skill |
+```text
+Inspect current source + evidence
+  -> select focused skills/workflows
+  -> write failing test
+  -> implement the smallest correct change
+  -> run focused tests
+  -> independent review
+  -> run wider verification
+  -> update capability/docs/evidence
+  -> commit
+```
+
+For multi-step work, use the repository Superpowers planning/TDD workflow defined by the active plans. Do not implement directly from an old plan without checking current source first
+
+## Focused skills
+
+Use only the skills relevant to the change rather than loading every available skill
+
+| Change | Focus |
 |---|---|
-| Writing/fixing tests under `tests/` | `python-testing-patterns`, `pytest-coverage` |
-| Refactoring services/models in `src/marketing_mcp/` | `python-design-patterns` |
-| Adding/changing MCP tools or validation | `mcp-server-patterns` |
-| Editing `Dockerfile` / `docker-compose.yml` | `docker-patterns` |
-| Optimizing pandas/numpy/xarray hot paths | `python-performance-optimization` |
+| Tests | Python testing / pytest coverage patterns |
+| Service/repository design | Python design patterns + Superpowers TDD |
+| MCP tool/resource changes | MCP server patterns + capability contract review |
+| Docker/deployment | Docker patterns + production-readiness requirements |
+| pandas/numpy/xarray performance | Python performance patterns + statistical invariants |
+| Statistical semantics | PyMC-Marketing source/API review + real statistical tests |
+| Security boundary | scope/ownership/request-safety review + negative authorization tests |
+| Agent skill/eval changes | capability routing + tool-trace negative evals |
 
-## Conventions
+Skill/router advice never overrides executable repository contracts or release gates
 
-- Statistical tests are marked `statistical`; keep fast loops on `-m "not statistical"`.
-- Tool contracts live in `docs/TOOL-CONTRACTS.md` — update alongside tool changes, and regenerate
-  `docs/CAPABILITIES.md` with `scripts/generate_capability_inventory.py` when tools change.
-- Documentation claims about versions, tools, transforms, transports, and the decision gate are
-  checked by `scripts/check_docs_drift.py`; keep them true.
-- Line length 100 (ruff), target py311+ syntax.
+## Public contract rules
+
+- Public capability names/status live in `src/marketing_mcp/capabilities.py`
+- Regenerate `docs/CAPABILITIES.md` whenever the registry changes
+- Every public tool must remain documented in `docs/TOOL-CONTRACTS.md`
+- Every decision-gated capability must match actual service enforcement and `docs/DECISION-INTEGRITY.md`
+- Deprecated capabilities remain explicit until removal is a deliberate compatibility change
+- Experimental capabilities must not be described as verified/stable without executable evidence
+
+## Statistical rules
+
+- Model-dependent quantities come from PyMC-Marketing/PyMC/ArviZ, never an LLM calculation
+- Release-critical statistical behavior requires real-library tests
+- Rejected models block decision-grade operations
+- Warnings and extrapolation caveats remain visible
+- Causal certainty must not be inferred from diagnostic approval
+- Changing diagnostic thresholds is a statistical/decision-policy change, not a copy edit
+
+## Security rules
+
+- Remote clients are untrusted
+- Do not add arbitrary code, shell, SQL or unsafe deserialization surfaces
+- Do not accept credentials in query strings
+- Never log raw credentials or raw customer/dataset rows
+- New remote tools/resources must use the authenticated request principal, required scope and object/tenant authorization
+- Trusted stdio behavior must not accidentally become the fallback identity for protected remote requests
+- Security changes require bypass, cross-tenant and secret-exposure negative tests
+
+## Jobs and persistence rules
+
+- Current local jobs use SQLite + in-process async execution
+- Do not call this production worker durability until process/worker isolation and restart evidence exist
+- Keep JobService transport-neutral so future MCP Tasks support can be an adapter rather than a second state model
+- Persistence changes require restart, partial-write and integrity tests
+
+## Documentation truth rules
+
+Documentation is part of the release contract
+
+When changing versions, tools, transforms, transports, decision gates, security boundaries, persistence behavior or deployment topology, update the relevant current-state docs in the same change
+
+Historical docs must say `historical` or clearly name their historical release scope
+
+No document may mark G0-G5, H0-H6 or AQG green from assertion alone. Current-head machine evidence is required
+
+## Release claim rule
+
+Before calling work production-ready, release-ready, M4-complete or equivalent, verify that `docs/release-evidence/` contains generated evidence for the exact commit and that the required CI/security/statistical/recovery/agent gates are green
+
+If that evidence is absent, describe the implementation and remaining blockers without promoting the maturity label
