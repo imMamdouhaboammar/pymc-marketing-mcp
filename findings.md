@@ -1,73 +1,148 @@
-# Findings — PyMC Marketing MCP v0.4.x Upgrade Research
+# Current Repository Findings: 2026-08-26
 
-## Codebase Findings (2026-08-22)
+This file summarizes the current hardening review of PyMC Marketing MCP v0.4.0
 
-### Test Suite Baseline
-- 46 tests pass in 96.79s (`uv run pytest -v`)
-- No failures, 64 expected warnings (ArviZ scalar divide, Numba cache, xarray FutureWarning)
-- Multi-core via `pytest-xdist`
-- Statistical tests take the longest: `test_real_pymc_mmm_end_to_end_statistical_workflow`, `test_real_multidimensional_mmm_panel_sampling`
+The previous 2026-08-22 research snapshot described a much smaller repository with 17 MCP tools and early planned phases. That snapshot is superseded by the current codebase and remains available in Git history
 
-### Adapter Architecture (PyMCMarketingAdapter)
-- `src/marketing_mcp/adapters/pymc_marketing.py` — 659 lines
-- Current model instantiation: `MMM(adstock=GeometricAdstock(l_max=...), saturation=LogisticSaturation(), ...)`
-- Both are **hardcoded** in `fit()`, `time_slice_cross_validate()`, and `evaluate_prior_sensitivity()` — all three need parametrization
-- `AdstockConfig` schema (schemas/models.py L49-51): only `type: Literal["geometric"]` and `l_max: int` — must expand
-- `SaturationConfig` schema (schemas/models.py L54-56): only `type: Literal["logistic"]` — must expand
-- `FitMMMInput` (L70-97) uses `AdstockConfig` and `SaturationConfig` as typed fields — schema expansion propagates cleanly
+## Executive assessment
 
-### PyMC-Marketing 1.0 Available Transforms
-- **Adstock classes (all importable from `pymc_marketing.mmm`):**
-  - `GeometricAdstock` (currently used, `l_max`)
-  - `DelayedAdstock` (`l_max`, `l_delay`)
-  - `WeibullAdstock` (`l_max`, kind: "PDF"|"CDF")
-- **Saturation classes (all importable from `pymc_marketing.mmm`):**
-  - `LogisticSaturation` (currently used, no required params)
-  - `TanhSaturation` (no required params)
-  - `TanhSaturationBaseline` (no required params)
-  - `MichaelisMentenSaturation` (no required params)
-  - `HillSaturation` (no required params)
+The statistical/domain side of the repository is materially stronger than a prototype. Real PyMC-Marketing tests cover MMM fitting, multidimensional models, calibration, CLV, model comparison, flighting and decision invariants
 
-### MCP Server Tool Count
-- 17 tools registered (verified by `test_mcp_stdio_client_discovery_and_tools`)
-- 4 MCP resources (`marketing://datasets/{id}`, `marketing://models/{id}`, `marketing://models/{id}/diagnostics`, `marketing://models/{id}/lineage`)
-- Adding visual artifact tools → resources will be: `marketing://models/{id}/plots/saturation`, etc.
+The main risk is now a mismatch between implemented primitives and end-to-end production properties
 
-### Diagnostic Engine
-- `src/marketing_mcp/domain/diagnostics/engine.py` — hard gate thresholds: divergences=0, R-hat<=1.01, ESS>=50
-- Soft warnings: ESS<400, coverage<80%, NormPPRMSE>1.0, residual autocorr>=0.7
-- These thresholds should remain UNTOUCHED in Phase 1 (adstock/saturation zoo)
+The repository should be treated as advanced beta / release-candidate implementation until current-head evidence proves the complete production path
 
-### Prior Sensitivity (Current)
-- `evaluate_prior_sensitivity()` in adapter uses hardcoded `GeometricAdstock(l_max // 2)` as the alt model
-- Once Phase 1 lands (multiple adstock types), prior sensitivity should permute over all supported types, not just geometric
+## P0 findings
 
-### Storage / Persistence
-- SQLite metadata at `metadata.db`; NetCDF `.nc` via `h5netcdf` + `h5py`
-- `ModelRecord.config` is a free JSON dict persisted in SQLite — adstock/saturation type stored in `config["adstock"]["type"]` and `config["saturation"]["type"]`
-- Migration path: fully backward compatible — existing records with `type: "geometric"` still load correctly
+### 1. Remote identity propagation is not proven through MCP execution
 
-### Visual Artifacts
-- ArviZ is transitively installed and provides `az.plot_posterior`, `az.plot_trace`
-- PyMC-Marketing provides `model.plot_channel_contribution_share_hdi()`, `model.plot_waterfall_components_decomposition()`
-- Matplotlib is available (ArviZ dependency)
-- Plan: `matplotlib.use("Agg")` for headless PNG rendering → save to `artifacts/plots/{model_id}/` → expose via MCP resource
+HTTP authentication middleware and tool scope checks both exist
 
-### CLV (Phase 3 research)
-- `pymc_marketing.clv` namespace exists in PyMC-Marketing 1.0
-- Classes: `BetaGeoModel`, `GammaGammaModel`, `ModifiedBetaGeoModel`, `ShiftedBetaGeometricModelIndividual`
-- CLV requires RFM transaction data (date, customer_id, frequency, recency, T, monetary_value)
-- Separate from MMM — no shared model state, different data shape validation
-- New dataset format: must extend `DatasetInspection` schema with CLV-specific candidate column detection
+However, `create_http_app()` currently creates the MCP server without a request-scoped context provider, while tool modules fall back to the trusted stdio context when no provider is supplied
 
-### Dynamic Flighting (Phase 4 research)
-- PyMC-Marketing `BudgetOptimizerWrapper` currently used for single-period allocation
-- Multi-period flighting: extend to `planning_periods` > 1 with time-varying spend arrays
-- Carryover from period N affects saturation in period N+1 (adstock propagation)
-- Requires extending `allocation_to_xarray` to handle T x C (time x channel) allocation arrays
+Required evidence
 
-### LOO/WAIC Model Comparison (Phase 5 research)
-- `arviz.compare({"model_A": idata_A, "model_B": idata_B}, ic="loo")` returns comparison DataFrame
-- PSIS-LOO via `az.loo(idata)` — fully available, no new deps
-- Bayesian stacking weights via `az.compare(..., method="stacking")`
-- Only requirement: both models fitted on the same dataset (same `dataset_id`)
+```text
+limited-scope HTTP token
+  -> authenticated request
+  -> real MCP session
+  -> real tool call
+  -> request Principal
+  -> required scope allow/deny
+```
+
+This is H1 and blocks remote production security
+
+### 2. MCP resources bypass the tool authorization pattern
+
+Resource handlers currently read metadata/artifacts directly and do not receive request execution context
+
+Remote production requires the same principal, scope and object/tenant authorization policy for resources such as model, dataset, diagnostics, lineage, plot and CLV resources
+
+This is H2
+
+### 3. Ownership helpers exist but lifecycle wiring is incomplete
+
+The code has `attach_ownership`, `inherit_ownership` and dataset/model/job authorization helpers
+
+The production property is stronger: every created/derived resource must receive ownership, every read/mutation must authorize it and legacy local records need an explicit remote migration policy
+
+Primitive/helper tests do not prove that property
+
+### 4. Dashboard API-key management is not a production credential authority
+
+The current dashboard generates credentials in the browser and can persist raw secret material in Firestore/localStorage
+
+The server authentication path is configured separately
+
+Target
+
+```text
+backend generates raw key once
+  -> stores verifier/hash only
+  -> returns raw secret once
+  -> revocation changes the verifier used by MCP auth
+```
+
+This is H3
+
+### 5. Current asynchronous jobs are not production worker isolation
+
+The repository now has SQLite job records, status/cancellation/idempotency primitives and stale-job recovery
+
+Execution still uses an in-process `AsyncioJobExecutor`, while MMM fitting may run through the API process thread pool
+
+A process/container crash can therefore stop active compute even though the job row survives
+
+Target requires process/worker isolation, durable heartbeat/recovery and production metadata/artifact repositories
+
+This is G2/H4
+
+### 6. Release/operability gates were marked greener than the available evidence
+
+The repository contains release-test files, logging/metrics/readiness foundations and a release-evidence collector
+
+But current requirements also call for PR CI, nightly statistical CI, security/supply-chain CI, compatibility canary, release workflow, traces, alerts/runbooks and a generated evidence pack for the exact candidate commit
+
+Those broader artifacts are not all present today
+
+`docs/PRODUCTION-READINESS.md` now reflects the difference between implementation and release proof
+
+### 7. Agent eval evidence is not yet fully executable
+
+Agent behavior tests/skills exist, but committed eval fixtures still include pre-marked pass values and do not yet provide the complete runtime tool-trace evidence required by AQG/H5
+
+### 8. Compatibility needs an admission policy before feature growth
+
+The project is on PyMC-Marketing 1.x and has a broad lower-bound dependency declaration
+
+Before feature thaw the repository needs a locked production lane, latest-allowed canary and capability-admission checklist so an upstream API change cannot silently alter decision semantics
+
+This is H6
+
+## Current strengths
+
+- explicit capability registry checked against MCP discovery
+- generated capability documentation
+- thin/focused MCP tool modules
+- real PyMC-Marketing statistical tests
+- diagnostic decision state persisted on models
+- scenario versus optimization separation
+- dynamic flighting tests
+- model-specific CLV paths
+- model/dataset fingerprints and calibration lineage
+- query-string credential rejection
+- scope catalog and ownership primitives
+- SQLite migrations and local job state
+- liveness/readiness and observability foundations
+- detailed stabilization/hardening plans with release gates
+
+## Documentation issues found and corrected in the hardening branch
+
+The audit found conflicting claims across README, readiness, architecture, security, deployment, statistical policy, verification and historical review documents
+
+Examples included
+
+- one document saying advanced beta while another claimed full M4/Enterprise readiness
+- stale PyMC-Marketing 0.19/v0.2 architecture text
+- a historical 17-tool verification matrix presented as current
+- diagnostic R-hat policy documented more strictly than the code
+- incremental ROAS omitted from the documented decision gate despite service enforcement
+- single-instance SQLite/GCS-FUSE deployment described as production architecture
+- historical v0.3 review presented as a current final review
+
+The active documentation truth model is now `docs/README.md`
+
+## Recommended execution order
+
+1. H0 current-head truth/evidence baseline
+2. H1 HTTP principal propagation
+3. H2 tool/resource ownership isolation
+4. H3 dashboard/server credential authority
+5. G2/H4 production jobs/storage/recovery
+6. G4/G5 observability and CI/release evidence
+7. AQG/H5 executable agent evals
+8. H6 upstream compatibility/capability admission
+9. only then resume new public statistical capabilities
+
+Full plan index: `docs/superpowers/plans/README.md`
