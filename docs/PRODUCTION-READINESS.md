@@ -1,89 +1,136 @@
 # Production Readiness Gates
 
-Source of truth for release status. Gate definitions are copied from
-`docs/superpowers/specs/2026-08-23-production-grade-stabilization.md`.
+This document is the human-readable release-status view for the current codebase
 
-A gate may be marked green only from executable evidence produced at the commit being assessed.
-Manually asserted pass/fail claims are not evidence.
+A gate is green only when machine-collected evidence for the exact commit being assessed proves every required property. The existence of a release test, a passing result from an older commit, or a hand-written status line is not sufficient evidence
 
-## Status
+See `docs/release-evidence/README.md` for the evidence contract and `docs/superpowers/plans/README.md` for the execution order
 
-| Gate | Name | Status | Evidence |
-|---|---|---|---|
-| G0 | Baseline Truth | green | `tests/release/test_g0_production_truth.py` |
-| G1 | Scientific Correctness | green | `tests/release/test_g1_scientific_correctness.py` |
-| G2 | Service Recovery | green | `tests/release/test_g2_jobs_persistence.py` |
-| G3 | Remote Security | green | `tests/release/test_g3_remote_security.py` |
-| G4 | Operability | green | `tests/release/test_g4_observability_ci.py` |
-| G5 | Release Evidence | green | `tests/release/test_g5_agent_evals_rc.py` |
-| AQG | Agent Quality Gate | green | `tests/evals/test_agent_behavior_evals.py` |
+## Current status
 
-Current maturity: **Production Release Candidate (M4/Enterprise-Grade)**. Full production stabilization achieved across all gates.
+Current maturity: **advanced beta / release-candidate implementation, not release-approved**
 
-## Gate G0 - Baseline Truth
+The 2026-08-26 core hardening commit implemented meaningful portions of G2 through G5, but the repository does not currently contain a machine-generated release-evidence record for the branch head, and several gate definitions are broader than the tests that currently exist
 
-Must pass before feature work continues.
+| Gate | Name | Current status | What is true today | What still blocks green |
+|---|---|---|---|---|
+| G0 | Baseline Truth | evidence pending | canonical version, capability inventory, tool-contract and docs-drift machinery exist | regenerate and execute current-head evidence after this documentation alignment |
+| G1 | Scientific Correctness | strong implementation, evidence pending | real PyMC-Marketing statistical suites cover MMM, CLV, flighting, model comparison and decision invariants | current-head machine evidence must rerun the full statistical suite and record dependency identity |
+| G2 | Service Recovery | partial | SQLite migrations, job records, idempotency primitives, cancellation state and stale-job recovery exist | production repository adapters, process/worker isolation, artifact durability, restart recovery with real statistical jobs, backup/restore and recovery evidence |
+| G3 | Remote Security | partial | fail-closed security profiles, header-only credentials, scope policy, ownership helpers, request safety and secret redaction exist | prove HTTP principal propagation into real MCP tool calls, protect MCP resources with the same principal/policy, wire ownership through resource lifecycle, prove OAuth verifier runtime integration and cross-principal E2E denial |
+| G4 | Operability | partial | structured logging, metrics foundations, liveness/readiness endpoints and local dependency checks exist | distributed traces, production dependency readiness, worker/job correlation, alert definitions, runbooks and operational evidence |
+| G5 | Release Evidence | blocked | release-evidence collector and release identity helpers exist | PR CI, nightly statistical CI, security CI, compatibility canary, release workflow, clean wheel/container smoke and current-head generated evidence |
+| AQG | Agent Quality Gate | partial | agent behavior tests and skill packages exist | remove pre-marked pass values, execute trace-based scenarios, run negative decision/security evals and record results in release evidence |
 
-- package version, health endpoint version, docs, and image tag agree
-- all public tools appear in generated inventory
+## 2026-08-26 hardening gates
+
+The H-gates supplement the original G-gates. They do not replace them
+
+| Gate | Purpose | Current status |
+|---|---|---|
+| H0 | Runtime truth and CI evidence | blocked until current-head CI/evidence is generated |
+| H1 | Real HTTP principal reaches tool execution | not proven |
+| H2 | Tools and MCP resources enforce object/tenant isolation | not proven end to end |
+| H3 | Dashboard and server share one secure credential authority | not implemented |
+| H4 | Statistical jobs are durable and transport-neutral with worker isolation | partial, current executor is in-process |
+| H5 | Agent skills are routed and eval-backed by executable traces | partial |
+| H6 | Upstream compatibility and capability admission gate feature growth | not yet enforced by CI |
+
+## Gate definitions
+
+### G0: Baseline Truth
+
+Required properties
+
+- package/runtime/documentation release identity agrees
+- every public MCP tool/resource matches the generated capability inventory
 - every public tool has a documented contract
-- v0.4 tests are executed and recorded from current HEAD
-- no documentation claims a completed behavior without a linked test
+- documentation drift checks pass
+- release claims are backed by evidence from the commit being assessed
 
-## Gate G1 - Scientific Correctness
+### G1: Scientific Correctness
 
-Status: green at current head (fast suite 311 passed, statistical suite 27 passed, ruff clean, no documentation drift).
+Current code has strong coverage for
 
-- channel-specific configuration changes actual model construction (`tests/statistical/test_channel_specific_config.py`)
-- model comparison honors explicit criterion/weighting semantics (`tests/statistical/test_model_selection_real_idata.py`)
-- CLV APIs are model-specific and real-fit tested (`tests/statistical/test_clv_real_models.py`)
-- dynamic flighting evaluates the official PyMC-Marketing response path with carryover, budget conservation, and solver constraints (`tests/statistical/test_flighting_optimization.py`)
-- statistical invariants pack covers continuity, saturation marginal, constraint respect, reload stability, calibration lineage, and fingerprint-guarded comparison (`tests/statistical/test_decision_invariants.py`)
-- plot calculations use statistically correct per-draw aggregation and name-based time dimensions (`tests/unit/test_posterior_summaries.py`, `tests/statistical/test_plot_summary_consistency.py`)
-- all decision tools retain diagnostics gating with surfaced caution warnings; descriptive outputs are labeled on rejected models (`tests/contract/test_decision_gate_contract.py`)
+- channel-specific MMM configuration
+- real model comparison semantics
+- model-specific CLV workflows
+- dynamic flighting with carryover and constraints
+- continuity, saturation, conservation, reload, calibration-lineage and fingerprint invariants
+- posterior summary dimensional correctness
+- diagnostic gating before decision-grade outputs
 
-## Gate G2 - Service Recovery
+The decision-policy thresholds are defined in `docs/DECISION-INTEGRITY.md` and implemented in `src/marketing_mcp/domain/diagnostics/engine.py`
 
-- model/job state survives process restart
-- artifact and metadata references remain consistent
-- duplicate submissions can be detected
-- cancellation and failure state are persisted
+### G2: Service Recovery
+
+Green requires all of the following, not only a local job table
+
+- expensive statistical work is represented by durable job state
+- CPU-heavy sampling does not depend on the request event loop or API process lifetime
+- metadata and artifacts survive process/instance replacement
+- job state, cancellation, failure and result references survive restart
+- idempotency detects semantic conflicts as well as duplicates
+- production metadata and artifact adapters pass common contracts
+- artifact integrity and orphan reconciliation are tested
 - backup and restore are tested
 
-## Gate G3 - Remote Security
+### G3: Remote Security
 
-- production HTTP refuses startup without configured auth
-- token-in-query is rejected
-- scopes are enforced per tool group
-- secrets are redacted in logs and errors
-- unauthorized cross-principal access is rejected
+Green requires
 
-## Gate G4 - Operability
+- insecure production HTTP refuses startup
+- query-string credentials are rejected
+- authenticated HTTP identity becomes the `Principal` used by the actual MCP invocation
+- scopes are enforced by tool group
+- object/tenant ownership is enforced on tools and MCP resources
+- secrets are absent from logs, errors and evidence
+- OAuth/API-key verification is wired into the production runtime, not only unit-tested in isolation
+- cross-principal access is rejected through a real remote MCP session
 
-- logs, metrics, and traces include request and job correlation IDs
-- readiness reflects dependency health
-- sampling failures are observable
-- alertable error-rate and queue-depth metrics exist
-- operator runbook covers the top failure modes
+### G4: Operability
 
-## Gate G5 - Release Evidence
+Green requires
 
-- PR pipeline green
-- nightly statistical suite green
-- package and image built from the same commit
-- clean install smoke test passes
-- dependency canary is green or explicitly waived with documented evidence
-- release evidence file is generated from CI
+- request, tool, job and storage operations can be correlated
+- logs are structured and redacted
+- metrics expose request/job outcomes without high-cardinality labels
+- traces connect MCP requests to later job execution
+- liveness and readiness have distinct semantics
+- production readiness checks required database, job and artifact dependencies
+- operator alerts and runbooks cover the main failure families
 
-## Agent Quality Gate
+### G5: Release Evidence
 
-- every skill capability maps to a current tool contract
-- evals run rather than contain pre-marked pass values
-- negative scenarios protect diagnostics and causal claims
-- tool trace assertions prove behavior
+Green requires
 
-## Release Rule
+- required PR workflow is present and green
+- statistical workflow is present and green for the release candidate
+- security/supply-chain checks run
+- upstream compatibility canary is green or explicitly waived with evidence
+- wheel and container are built from the same commit
+- clean-install and container smoke tests pass
+- hashes/digests and dependency versions are captured
+- release evidence is generated by CI for the exact release commit
 
-No `0.5.0` release until G0 through G5 plus the Agent Quality Gate are green from current-head CI
-evidence. No `1.0.0` release until the M5 Decision-Grade gate in
-`docs/superpowers/plans/2026-08-23-decision-governance-audit.md` is also green.
+### Agent Quality Gate
+
+Green requires
+
+- every skill capability maps to the current capability/tool contract
+- no committed eval fixture asserts its own success with a pre-marked pass value
+- eval scenarios execute and capture tool traces
+- negative scenarios protect diagnostics, causal claims, warnings and tenant/security boundaries
+- final results are included in the release evidence pack
+
+## Evidence currently available
+
+`docs/release-evidence/v0.4-current-head.md` is a historical pre-hardening baseline and does not establish the status of later commits
+
+Until a generated `<current-sha>.json` and matching summary exist and all required workflows have run, the current branch must not be described as production-ready, enterprise-ready, M4-complete or release-approved
+
+## Release rules
+
+No v0.5.0 release until G0 through G5, H0 through H6 and AQG are green from current-head CI evidence
+
+No v1.0.0 release until the M5 Decision-Grade requirements in `docs/superpowers/plans/2026-08-23-decision-governance-audit.md` are also proven, including immutable decision records, auditability, recovery and governance evidence
