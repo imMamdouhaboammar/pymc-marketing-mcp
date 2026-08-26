@@ -11,6 +11,8 @@ from starlette.staticfiles import StaticFiles
 from marketing_mcp import __version__
 from marketing_mcp.app import Application
 from marketing_mcp.auth import AuthManager, MCPAuthMiddleware
+from marketing_mcp.http.health import create_readiness_handler, liveness_handler
+from marketing_mcp.http.safety import RequestSafetyMiddleware
 from marketing_mcp.mcp.server import create_server
 
 SERVICE_NAME = "pymc-marketing-mcp"
@@ -53,6 +55,7 @@ def create_http_app(
         auth_mgr.api_key_validator.add_key(api_key)
         auth_mgr.enabled = True
 
+    app.add_middleware(RequestSafetyMiddleware)
     app.add_middleware(MCPAuthMiddleware, auth_manager=auth_mgr)
 
     async def health_check(_request):
@@ -68,6 +71,11 @@ def create_http_app(
         return await health_check(request)
 
     app.add_route("/health", health_check, methods=["GET"])
+    app.add_route("/health/live", liveness_handler, methods=["GET"])
+    if application is not None:
+        app.add_route("/health/ready", create_readiness_handler(application), methods=["GET"])
+    else:
+        app.add_route("/health/ready", create_readiness_handler(Application()), methods=["GET"])
     app.add_route("/", root_handler, methods=["GET"])
 
     if dist_path.exists() and (dist_path / "assets").exists():

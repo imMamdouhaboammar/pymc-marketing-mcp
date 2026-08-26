@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from .adapters.pymc_marketing import PyMCMarketingAdapter
 from .config import Settings
+from .jobs.repository import SQLiteJobRepository
+from .jobs.service import JobService
 from .services.clv_service import CLVService
 from .services.dataset_service import DatasetService
 from .services.decision_service import DecisionService
@@ -17,6 +19,9 @@ class Application:
         self.settings = settings or Settings.from_env()
         self.metadata = SQLiteMetadataStore(self.settings.metadata_db)
         self.artifacts = LocalArtifactStore(self.settings.artifact_dir)
+        self.job_repo = SQLiteJobRepository(self.metadata.conn)
+        self.job_repo.recover_stale_running_jobs()
+        self.jobs = JobService(self.job_repo)
         self.datasets = DatasetService(
             self.metadata, self.settings.data_dir, self.settings.max_dataset_mb
         )

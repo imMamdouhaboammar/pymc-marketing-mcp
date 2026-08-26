@@ -33,6 +33,7 @@ CAPABILITY_DOMAINS: tuple[str, ...] = (
     "decisions",
     "plots",
     "clv",
+    "jobs",
 )
 
 
@@ -381,6 +382,47 @@ _INVENTORY: tuple[Capability, ...] = (
         "clv",
         "Group customers into churn-risk cohorts from a fitted CLV model.",
         delegates_to="clv.get_churn_risk_cohorts",
+    ),
+    # --- jobs -------------------------------------------------------------------------------
+    _tool(
+        "submit_fit_mmm_job",
+        "jobs",
+        "Submit an asynchronous MMM fitting job to run in the background without blocking.",
+        delegates_to="jobs.submit_job",
+        status="stable",
+        evidence_test_ids=(
+            "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
+        ),
+    ),
+    _tool(
+        "get_job_status",
+        "jobs",
+        "Retrieve the execution status, results, or error details of an asynchronous job.",
+        delegates_to="jobs.get_job",
+        status="stable",
+        evidence_test_ids=(
+            "tests/unit/test_job_state_machine.py::TestJobRepositoryAndService::test_create_and_retrieve_job",
+        ),
+    ),
+    _tool(
+        "cancel_job",
+        "jobs",
+        "Cancel a currently queued or running background job.",
+        delegates_to="jobs.cancel_job",
+        status="stable",
+        evidence_test_ids=(
+            "tests/unit/test_job_state_machine.py::TestJobRepositoryAndService::test_async_job_cancellation",
+        ),
+    ),
+    _tool(
+        "list_jobs",
+        "jobs",
+        "List recent asynchronous background jobs for the active tenant.",
+        delegates_to="jobs.list_jobs",
+        status="stable",
+        evidence_test_ids=(
+            "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_cross_tenant_job_access_blocked",
+        ),
     ),
     # --- resources --------------------------------------------------------------------------
     _resource(
