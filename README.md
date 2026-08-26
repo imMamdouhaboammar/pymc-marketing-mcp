@@ -1,103 +1,94 @@
 # PyMC Marketing MCP
 
-LLMs can explain marketing data. They should not invent marketing science.
+LLMs can explain marketing data. They should not invent marketing science
 
-PyMC Marketing MCP gives MCP-compatible agents a controlled interface to Bayesian Marketing Mix Modeling with PyMC-Marketing. It handles dataset checks, MMM fitting, diagnostic gating, posterior contribution analysis, total and marginal iROAS, counterfactual spend scenarios, and constrained budget allocation while keeping the statistical computation inside PyMC-Marketing.
+PyMC Marketing MCP gives MCP-compatible agents a controlled interface to Bayesian marketing science with PyMC-Marketing. The current v0.4.0 codebase covers dataset validation, MMM fitting, diagnostics, posterior contributions, total and marginal iROAS, scenario simulation, budget optimization, dynamic flighting, lift-test calibration, model comparison, CLV workflows, plots, lineage and asynchronous job tools
 
-The core boundary is simple: the agent frames the business question and explains evidence. PyMC-Marketing computes the statistical quantities. The MCP layer validates inputs, persists artifacts, applies decision gates, reports uncertainty, and records provenance.
+The boundary is intentional: the agent frames the business question and explains evidence, PyMC-Marketing computes model-dependent quantities, and this project owns input contracts, persistence, diagnostic policy, decision gating, authorization boundaries, output shaping and provenance
 
 ```text
 User question
   -> AI agent
-  -> MCP tool
-  -> dataset / model validation
-  -> PyMC-Marketing
+  -> MCP tool/resource
+  -> validation + authorization
+  -> application service
+  -> PyMC-Marketing / PyMC / ArviZ
   -> posterior evidence
-  -> decision gate
-  -> structured result + uncertainty + provenance
-  -> AI explanation
+  -> diagnostic and decision policy
+  -> structured result + warnings + provenance
 ```
 
-## Production readiness
+## Current maturity
 
-This project is currently an **advanced beta**, not a production-grade service. A production
-stabilization program is in progress and new capability work is frozen until its release gates pass.
+The repository is an **advanced beta with release-candidate implementation work**, not a release-approved production service
 
-- Gates and current status: `docs/PRODUCTION-READINESS.md`
-- Program spec: `docs/superpowers/specs/2026-08-23-production-grade-stabilization.md`
-- Execution order: `docs/superpowers/plans/README.md`
+A large stabilization change on 2026-08-26 added local job persistence, security primitives, ownership helpers, structured logging, metrics and readiness checks. Those are meaningful implementation steps, but the broader production properties are not yet proven end to end for the current commit
 
-Treat capability claims in this README and in `docs/` as verified only where a linked executable
-test exists. Sections describing earlier releases are historical records, not current evidence.
+Current blockers include
 
-## Version 0.3.0 highlights (historical)
+- remote HTTP authentication is not yet proven to propagate the real request principal into every MCP tool invocation
+- MCP resources do not yet apply the same request principal, scope and ownership checks as protected tools
+- ownership helpers exist, but resource creation/read paths still need full end-to-end ownership evidence
+- asynchronous jobs currently execute inside the API process; production worker isolation, durable production repositories and crash recovery remain target work
+- the dashboard API-key prototype still stores raw credentials independently of the server credential authority
+- production CI, nightly statistical CI, compatibility canary and release workflows are not yet present
+- there is no machine-generated release-evidence record for the current branch head
+- committed agent eval fixtures still need conversion to executable trace evidence
 
-The historical `0.3.0` release delivered comprehensive Bayesian statistical verification, model lineage, lift test calibration, cross-validation, and multi-core accelerated testing:
+Read these before making a production claim
 
-- **Time-Slice Cross-Validation**: `cross_validate_mmm` evaluates out-of-sample predictive accuracy across temporal folds with PyMC-Marketing's `TimeSliceCrossValidator`.
-- **Prior Sensitivity Analysis**: `evaluate_prior_sensitivity` quantifies channel rank shifts under alternative adstock and saturation priors.
-- **Lift Test Calibration**: `calibrate_mmm` incorporates real or synthetic experimental incrementality lift tests directly into model likelihood with full lineage tracking.
-- **Extrapolation Risk Guard**: Spend scenarios or optimization allocations exceeding 1.5x historical 95th percentile spend automatically trigger actionable warnings.
-- **Multi-Core Accelerated Testing**: Pytest suite runs concurrently via `pytest-xdist`; it contained 46 tests at that time. For the current suite, see `docs/release-evidence/`.
-- **Official MCP 2.0.0 Transports**: Fully tested stdio and Streamable HTTP clients with dynamic port discovery and structured error envelopes.
+- Documentation truth map: `docs/README.md`
+- Current gate status: `docs/PRODUCTION-READINESS.md`
+- Current capability inventory: `docs/CAPABILITIES.md`
+- Hardening execution order: `docs/superpowers/plans/README.md`
+- Release evidence rules: `docs/release-evidence/README.md`
 
-See `docs/DECISION-INTEGRITY.md` and `docs/VERIFICATION-MATRIX.md` for details.
+New public capability work remains frozen until the stabilization gates and the 2026-08-26 hardening gates are proven from current-head evidence
 
-## Current compatibility
+## Current local/runtime capabilities
 
-- Python 3.12 to 3.13
-- PyMC-Marketing `>=1.0.0`
-- PyMC `>=6.0.0`
-- ArviZ `>=0.21,<2.0`
-- Official MCP Python SDK v2 (`mcp>=2.0.0`)
-- NetCDF4 storage via `h5netcdf` and `h5py`
-- CSV and Parquet datasets
-- SQLite metadata and NetCDF model artifacts for local deployment
+The supported local path uses Python 3.12 or 3.13, PyMC-Marketing 1.x, the MCP Python SDK 2.x, SQLite metadata/job state and local NetCDF/artifact storage
 
-## Install
+The public surface is generated from `src/marketing_mcp/capabilities.py`; do not maintain a hand-written tool count here
+
+Typical MMM flow
+
+1. `register_dataset`
+2. `inspect_dataset`
+3. `validate_dataset`
+4. `fit_mmm` or `submit_fit_mmm_job`
+5. `diagnose_mmm`
+6. inspect descriptive evidence
+7. use decision-grade tools only when diagnostics permit them
+8. retain model, dataset, configuration and package provenance in the final interpretation
+
+Decision-grade outputs include scenario/optimization workflows and incremental ROAS. The exact gate contract is documented in `docs/DECISION-INTEGRITY.md`
+
+## Install and verify
 
 ```bash
-uv sync --extra dev
-uv run pytest -n auto -v
+uv sync --frozen --extra dev
+uv run pytest -m "not statistical" -v
+uv run pytest -m statistical -v
+uv run ruff check src tests
+uv run python scripts/check_docs_drift.py
 ```
 
-## Run with stdio
+## Run locally with stdio
 
 ```bash
 uv run marketing-mcp --transport stdio
 ```
 
-## Run with Streamable HTTP
+Local stdio is intentionally treated as a trusted local principal
+
+## Run Streamable HTTP for development
 
 ```bash
 uv run marketing-mcp --transport streamable-http --host 127.0.0.1 --port 8000
-# endpoint: http://127.0.0.1:8000/mcp
 ```
 
-## Docker
-
-```bash
-docker compose up --build
-```
-
-## Core flow
-
-1. `register_dataset`
-2. `inspect_dataset`
-3. `validate_dataset`
-4. `fit_mmm`
-5. `diagnose_mmm`
-6. `get_channel_contributions`
-7. `get_incremental_roas`
-8. `get_response_curves`
-9. `simulate_budget`
-10. `optimize_budget`
-11. `cross_validate_mmm`
-12. `evaluate_prior_sensitivity`
-13. `calibrate_mmm`
-14. `compare_models`
-15. `archive_model`
-16. Explain the posterior result, diagnostics, assumptions, and provenance
+Do not infer production readiness from a successful local HTTP start. Remote production mode additionally requires the security, storage, worker, observability and release-evidence gates in `docs/PRODUCTION-READINESS.md`
 
 ## Synthetic demo
 
@@ -109,15 +100,27 @@ uv run marketing-mcp-demo --fast
 
 ```text
 src/marketing_mcp/
-  mcp/            protocol tools + resources
-  services/       application workflows (modeling, dataset, decision, diagnostics)
-  domain/         validation, diagnostics engine & gate, allocation & extrapolation
-  adapters/       PyMC-Marketing 1.0.0 boundary
-  storage/        SQLite metadata + NetCDF artifacts
+  mcp/            MCP tools, resources, envelopes and execution context
+  services/       dataset, modeling, diagnostics, decision, plotting and CLV workflows
+  domain/         validation, diagnostics policy, allocation and decision helpers
+  adapters/       PyMC-Marketing computation boundary
+  storage/        current SQLite/local artifact adapters and migrations
+  jobs/           current SQLite job repository and in-process async executor
+  security/       principals, scopes, ownership helpers, OAuth verifier and request safety
+  observability/  logging and metrics foundations
+  http/           health/readiness and request safety
   schemas/        typed Pydantic contracts
 tests/
-  statistical/    real NUTS sampling, panel MMM, calibration, cross-validation
-  integration/    MCP stdio/HTTP protocol, persistence lifecycle
-  unit/           domain logic, failure datasets, security guardrails
-docs/             architecture, contracts, safety, security, verification matrix
+  statistical/    real PyMC-Marketing sampling and decision invariants
+  integration/    protocol, persistence and lifecycle behavior
+  contract/       public contract and decision-gate behavior
+  release/        release-gate assertions
+docs/
+  README.md       documentation truth map
+  superpowers/    stabilization and hardening plans
+  release-evidence/ machine-collected release proof when generated
 ```
+
+## Historical releases
+
+Earlier v0.3 and v0.4 notes remain in `CHANGELOG.md` and `docs/FINAL-REVIEW.md` for provenance. They do not establish the readiness of the current commit
