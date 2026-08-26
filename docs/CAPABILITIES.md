@@ -24,7 +24,7 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 35 capabilities (12 experimental, 21 stable, 2 deprecated).
+**Totals:** 39 capabilities (12 experimental, 25 stable, 2 deprecated).
 
 
 ## Tools
@@ -51,6 +51,10 @@ approved the model.
 | `recommend_next_measurement` | decisions | experimental | not enforced | `decisions.recommend_measurement` | Suggest the next experiment or lift test that would most reduce decision uncertainty. | none |
 | `simulate_budget` | decisions | stable | required | `decisions.simulate` | Evaluate a counterfactual spend scenario against the fitted baseline. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts` |
 | `diagnose_mmm` | diagnostics | stable | not enforced | `diagnostics.diagnose` | Run the mandatory sampler and posterior-predictive gate and set the decision status. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts` |
+| `cancel_job` | jobs | stable | not enforced | `jobs.cancel_job` | Cancel a currently queued or running background job. | `tests/unit/test_job_state_machine.py::TestJobRepositoryAndService::test_async_job_cancellation` |
+| `get_job_status` | jobs | stable | not enforced | `jobs.get_job` | Retrieve the execution status, results, or error details of an asynchronous job. | `tests/unit/test_job_state_machine.py::TestJobRepositoryAndService::test_create_and_retrieve_job` |
+| `list_jobs` | jobs | stable | not enforced | `jobs.list_jobs` | List recent asynchronous background jobs for the active tenant. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_cross_tenant_job_access_blocked` |
+| `submit_fit_mmm_job` | jobs | stable | not enforced | `jobs.submit_job` | Submit an asynchronous MMM fitting job to run in the background without blocking. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence` |
 | `archive_model` | modeling | experimental | not enforced | `models.archive_model` | Mark a stored model as archived while preserving its artifact and lineage. | none |
 | `calibrate_mmm` | modeling | stable | not enforced | `models.calibrate` | Refit a model with experimental lift-test measurements added to the likelihood. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_lift_test_calibration_and_lineage` |
 | `compare_models` | modeling | stable | not enforced | `models.compare_models` | Compare stored models on configuration, diagnostics, and iROAS ordering. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_lift_test_calibration_and_lineage` |

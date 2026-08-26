@@ -6,41 +6,22 @@ from pathlib import Path
 from typing import Any
 
 from marketing_mcp.errors import DomainError
+from marketing_mcp.storage.migrations import MigrationRunner
 
 
 class SQLiteMetadataStore:
     def __init__(self, path: Path | str):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path)
+        self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._init()
 
     def _init(self):
-        self.conn.executescript(
-            """
-            PRAGMA journal_mode = WAL;
-            PRAGMA synchronous = NORMAL;
-            CREATE TABLE IF NOT EXISTS datasets (
-                dataset_id TEXT PRIMARY KEY,
-                payload TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS models (
-                model_id TEXT PRIMARY KEY,
-                payload TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS scenarios (
-                scenario_id TEXT PRIMARY KEY,
-                model_id TEXT,
-                payload TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS clv_models (
-                model_id TEXT PRIMARY KEY,
-                payload TEXT NOT NULL
-            );
-            """
-        )
-        self.conn.commit()
+        self.conn.execute("PRAGMA journal_mode = WAL;")
+        self.conn.execute("PRAGMA synchronous = NORMAL;")
+        runner = MigrationRunner(self.conn)
+        runner.apply_pending()
 
     def close(self):
         self.conn.close()

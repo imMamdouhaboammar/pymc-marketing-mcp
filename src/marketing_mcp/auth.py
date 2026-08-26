@@ -216,8 +216,8 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
         # 1. Allow health check, dashboard static assets, and public endpoints without auth
         path = request.url.path
         if (
-            path in self.public_paths
-            or path.startswith("/assets/")
+            path.startswith(("/health", "/assets/"))
+            or path in self.public_paths
             or path.endswith((".js", ".css", ".html", ".ico", ".svg", ".png", ".json"))
             or not self.auth_manager.enabled
         ):

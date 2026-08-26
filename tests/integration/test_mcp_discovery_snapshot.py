@@ -48,6 +48,10 @@ EXPECTED_TOOLS = frozenset(
         "get_churn_risk_cohorts",
         "optimize_flighting",
         "select_best_model",
+        "submit_fit_mmm_job",
+        "get_job_status",
+        "cancel_job",
+        "list_jobs",
     }
 )
 

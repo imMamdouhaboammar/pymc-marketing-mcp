@@ -58,6 +58,11 @@ TOOL_SCOPES: dict[str, str] = {
     # legacy wrappers follow their domain
     "fit_clv_model": "marketing:clv",
     "predict_customer_clv": "marketing:clv",
+    # asynchronous jobs
+    "submit_fit_mmm_job": "marketing:model",
+    "get_job_status": "marketing:read",
+    "cancel_job": "marketing:model",
+    "list_jobs": "marketing:read",
     # administration
     "archive_model": "marketing:admin",
 }

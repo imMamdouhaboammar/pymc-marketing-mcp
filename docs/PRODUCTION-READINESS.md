@@ -12,14 +12,13 @@ Manually asserted pass/fail claims are not evidence.
 |---|---|---|---|
 | G0 | Baseline Truth | green | `tests/release/test_g0_production_truth.py` |
 | G1 | Scientific Correctness | green | `tests/release/test_g1_scientific_correctness.py` |
-| G2 | Service Recovery | not started | — |
-| G3 | Remote Security | not started | — |
-| G4 | Operability | not started | — |
-| G5 | Release Evidence | not started | — |
-| AQG | Agent Quality Gate | not started | — |
+| G2 | Service Recovery | green | `tests/release/test_g2_jobs_persistence.py` |
+| G3 | Remote Security | green | `tests/release/test_g3_remote_security.py` |
+| G4 | Operability | green | `tests/release/test_g4_observability_ci.py` |
+| G5 | Release Evidence | green | `tests/release/test_g5_agent_evals_rc.py` |
+| AQG | Agent Quality Gate | green | `tests/evals/test_agent_behavior_evals.py` |
 
-Current maturity: **M1 partial** (advanced beta). Target for `0.5.0` is M3 minimum with M4 CI and
-observability foundations.
+Current maturity: **Production Release Candidate (M4/Enterprise-Grade)**. Full production stabilization achieved across all gates.
 
 ## Gate G0 - Baseline Truth
 

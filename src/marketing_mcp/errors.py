@@ -14,7 +14,9 @@ class DomainError(Exception):
         self.next_action = next_action
 
     def to_dict(self):
-        return {
+        from marketing_mcp.security.redaction import redact_secrets
+
+        raw = {
             "error": {
                 "code": self.code,
                 "message": self.message,
@@ -22,3 +24,4 @@ class DomainError(Exception):
                 "next_action": self.next_action,
             }
         }
+        return redact_secrets(raw)

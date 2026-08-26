@@ -128,7 +128,22 @@ Every MCP tool returns structured, agent-oriented data wrapped in a standard `To
 ### `predict_customer_clv(config: PredictCLVInput)`
 - (Deprecated compatibility wrapper): Generates individual-level predictions: $P(\text{alive})$, expected future transactions, and expected customer value.
 
-## 7. MCP Resources
+## 8. Asynchronous Job Tools
+
+### `submit_fit_mmm_job(config: FitMMMInput, idempotency_key: str | None = None)`
+- Submits an asynchronous MMM fitting background job without blocking the connection.
+- Returns `JobRecord` in `queued` state with `job_id` and tracking metadata.
+
+### `get_job_status(job_id: str)`
+- Retrieves execution status (`queued`, `running`, `succeeded`, `cancelling`, `cancelled`, `failed`), progress, results, or error details for an asynchronous job.
+
+### `cancel_job(job_id: str)`
+- Cancels a queued or running background job.
+
+### `list_jobs(status: str | None = None, limit: int = 50)`
+- Lists recent background jobs for the authenticated caller's tenant.
+
+## 9. MCP Resources
 
 - `marketing://datasets/{dataset_id}`: Full dataset metadata and inspection status.
 - `marketing://models/{model_id}`: Full model record and configuration.
