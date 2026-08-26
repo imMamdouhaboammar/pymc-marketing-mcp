@@ -168,8 +168,8 @@ Acceptance: remote MCP API-key auth, scope denial, tenant denial, resource denia
 **Files:**
 - Modify: `.github/workflows/release.yml`
 - Modify: `scripts/collect_release_evidence.py`
-- Create: `docs/release-evidence/<candidate-sha>.json` through CI only
-- Create: `docs/release-evidence/<candidate-sha>.md` through CI only
+- Create through CI: `docs/release-evidence/${GITHUB_SHA}.json`
+- Create through CI: `docs/release-evidence/${GITHUB_SHA}.md`
 
 **Interfaces:**
 - Consumes: green P0 state
@@ -209,9 +209,9 @@ git commit -m "ci: prove beta release artifacts from one commit"
 ## Task 4: Execute production-GA plans
 
 **Files:**
-- Read: production persistence plan
-- Read: production identity plan
-- Read: final launch-gates plan
+- Read: `docs/superpowers/plans/2026-08-26-production-persistence-hardening.md`
+- Read: `docs/superpowers/plans/2026-08-26-production-auth-dashboard-identity.md`
+- Read: `docs/superpowers/plans/2026-08-26-final-launch-gates.md`
 
 **Interfaces:**
 - Consumes: successful public beta and operational feedback
@@ -237,7 +237,8 @@ Acceptance: documented drill restores metadata and artifacts into a fresh enviro
 
 **Files:**
 - Modify: `docs/PRODUCTION-READINESS.md`
-- Create: final release evidence pack through CI
+- Create through CI: `docs/release-evidence/${GITHUB_SHA}.json`
+- Create through CI: `docs/release-evidence/${GITHUB_SHA}.md`
 
 **Interfaces:**
 - Consumes: all gate evidence
