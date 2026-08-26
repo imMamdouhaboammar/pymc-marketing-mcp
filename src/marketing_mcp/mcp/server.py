@@ -9,7 +9,7 @@ from marketing_mcp.mcp.tools.mmm import register_mmm_tools
 from marketing_mcp.mcp.tools.model_selection import register_model_selection_tools
 
 
-def create_server(app: Application | None = None):
+def create_server(app: Application | None = None, context_provider=None):
     try:
         from mcp.server.mcpserver import MCPServer
     except ImportError as e:
@@ -26,11 +26,11 @@ def create_server(app: Application | None = None):
     )
 
     register_resources(mcp, app)
-    register_clv_tools(mcp, app)
-    register_model_selection_tools(mcp, app)
-    register_decisions_tools(mcp, app)
-    register_mmm_tools(mcp, app)
-    register_datasets_tools(mcp, app)
+    register_clv_tools(mcp, app, context_provider=context_provider)
+    register_model_selection_tools(mcp, app, context_provider=context_provider)
+    register_decisions_tools(mcp, app, context_provider=context_provider)
+    register_mmm_tools(mcp, app, context_provider=context_provider)
+    register_datasets_tools(mcp, app, context_provider=context_provider)
 
 
     return mcp

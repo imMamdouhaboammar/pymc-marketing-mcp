@@ -9,15 +9,20 @@ from marketing_mcp.schemas.models import (
     CompareModelsInput,
     ModelComparisonInput,
 )
+from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
-def register_model_selection_tools(mcp, app: Application) -> None:
+def register_model_selection_tools(mcp, app: Application, context_provider=None) -> None:
+    from marketing_mcp.mcp.context import stdio_context_provider
+
+    resolve_context = context_provider or stdio_context_provider
     @mcp.tool(
         name="compare_models",
         description="Compare diagnostics, predictive metrics, and lineage across multiple fitted MMMs.",
     )
     async def compare_models(input: CompareModelsInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("compare_models")[0])
             r = app.models.compare_models(input.model_ids)
             return env(summary=r)
         except DomainError as e:
@@ -35,6 +40,7 @@ def register_model_selection_tools(mcp, app: Application) -> None:
     )
     async def select_best_model(config: ModelComparisonInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("select_best_model")[0])
             r = app.models.select_best_model(config)
             return env(
                 summary={

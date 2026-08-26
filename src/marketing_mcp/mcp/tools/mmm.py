@@ -15,9 +15,13 @@ from marketing_mcp.schemas.models import (
     GetPosteriorPlotsInput,
     PriorSensitivityInput,
 )
+from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
-def register_mmm_tools(mcp, app: Application) -> None:
+def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
+    from marketing_mcp.mcp.context import stdio_context_provider
+
+    resolve_context = context_provider or stdio_context_provider
     @mcp.tool(
         name="fit_mmm",
         description=(
@@ -31,6 +35,7 @@ def register_mmm_tools(mcp, app: Application) -> None:
     )
     async def fit_mmm(config: FitMMMInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("fit_mmm")[0])
             r = app.models.fit(config)
             return env(
                 summary=r.model_dump(),
@@ -47,6 +52,7 @@ def register_mmm_tools(mcp, app: Application) -> None:
     )
     async def get_model_status(model_id: str):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("get_model_status")[0])
             return env(summary=app.models.status(model_id).model_dump())
         except DomainError as e:
             return e.to_dict()
@@ -61,6 +67,7 @@ def register_mmm_tools(mcp, app: Application) -> None:
     )
     async def diagnose_mmm(model_id: str):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("diagnose_mmm")[0])
             r = app.diagnostics.diagnose(model_id)
             next_acts = ["get_channel_contributions", "get_incremental_roas", "get_response_curves"]
             if r.decision_tools_enabled:
@@ -90,6 +97,7 @@ def register_mmm_tools(mcp, app: Application) -> None:
     )
     async def cross_validate_mmm(input: CrossValidateMMMInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("cross_validate_mmm")[0])
             r = app.diagnostics.cross_validate(input)
             return env(
                 summary=r,
@@ -109,6 +117,7 @@ def register_mmm_tools(mcp, app: Application) -> None:
     )
     async def evaluate_prior_sensitivity(input: PriorSensitivityInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("evaluate_prior_sensitivity")[0])
             r = app.diagnostics.prior_sensitivity(input)
             return env(
                 summary=r,
@@ -128,6 +137,7 @@ def register_mmm_tools(mcp, app: Application) -> None:
     )
     async def calibrate_mmm(input: CalibrateMMMInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("calibrate_mmm")[0])
             r = app.models.calibrate(input)
             return env(
                 summary=r.model_dump(),
@@ -144,6 +154,7 @@ def register_mmm_tools(mcp, app: Application) -> None:
     )
     async def archive_model(input: ArchiveModelInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("archive_model")[0])
             r = app.models.archive_model(input.model_id)
             return env(summary=r)
         except DomainError as e:
@@ -162,6 +173,7 @@ def register_mmm_tools(mcp, app: Application) -> None:
     )
     async def get_posterior_plots(config: GetPosteriorPlotsInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("get_posterior_plots")[0])
             record = app.metadata.get_model(config.model_id)
             artifact_path = record.get("artifact_path")
             if not artifact_path:

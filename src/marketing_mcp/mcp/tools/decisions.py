@@ -10,9 +10,13 @@ from marketing_mcp.schemas.models import (
     BudgetSimulationInput,
     FlightingOptimizationInput,
 )
+from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
-def register_decisions_tools(mcp, app: Application) -> None:
+def register_decisions_tools(mcp, app: Application, context_provider=None) -> None:
+    from marketing_mcp.mcp.context import stdio_context_provider
+
+    resolve_context = context_provider or stdio_context_provider
     @mcp.tool(
         name="get_channel_contributions",
         description=(
@@ -22,6 +26,7 @@ def register_decisions_tools(mcp, app: Application) -> None:
     )
     async def get_channel_contributions(model_id: str):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("get_channel_contributions")[0])
             r = app.decisions.contributions(model_id)
             return env(
                 summary={"model_id": model_id, "channels": r["channels"]},
@@ -42,6 +47,7 @@ def register_decisions_tools(mcp, app: Application) -> None:
     )
     async def get_incremental_roas(model_id: str):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("get_incremental_roas")[0])
             r = app.decisions.iroas(model_id)
             return env(
                 summary=r,
@@ -58,6 +64,7 @@ def register_decisions_tools(mcp, app: Application) -> None:
     )
     async def get_response_curves(model_id: str):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("get_response_curves")[0])
             r = app.decisions.response_curves(model_id)
             return env(summary=r, provenance=r.get("provenance", {}))
         except DomainError as e:
@@ -73,6 +80,7 @@ def register_decisions_tools(mcp, app: Application) -> None:
     )
     async def simulate_budget(config: BudgetSimulationInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("simulate_budget")[0])
             r = app.decisions.simulate(config)
             return env(
                 summary=r,
@@ -93,6 +101,7 @@ def register_decisions_tools(mcp, app: Application) -> None:
     )
     async def optimize_budget(config: BudgetOptimizationInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("optimize_budget")[0])
             r = app.decisions.optimize(config)
             return env(
                 summary=r,
@@ -112,6 +121,7 @@ def register_decisions_tools(mcp, app: Application) -> None:
     )
     async def recommend_next_measurement(model_id: str):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("recommend_next_measurement")[0])
             return env(summary=app.decisions.recommend_measurement(model_id))
         except DomainError as e:
             return e.to_dict()
@@ -130,6 +140,7 @@ def register_decisions_tools(mcp, app: Application) -> None:
     )
     async def optimize_flighting(config: FlightingOptimizationInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("optimize_flighting")[0])
             r = app.decisions.optimize_flighting(config)
             return env(
                 summary={

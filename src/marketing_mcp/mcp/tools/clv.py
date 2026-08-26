@@ -15,9 +15,13 @@ from marketing_mcp.schemas.models import (
     PredictExpectedSpendInput,
     PredictProbabilityAliveInput,
 )
+from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
-def register_clv_tools(mcp, app: Application) -> None:
+def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
+    from marketing_mcp.mcp.context import stdio_context_provider
+
+    resolve_context = context_provider or stdio_context_provider
     @mcp.tool(
         name="fit_purchase_model",
         description=(
@@ -27,6 +31,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def fit_purchase_model(config: FitPurchaseModelInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("fit_purchase_model")[0])
             r = app.clv.fit_purchase_model(config)
             return env(
                 summary=r.model_dump(),
@@ -46,6 +51,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def fit_value_model(config: FitValueModelInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("fit_value_model")[0])
             r = app.clv.fit_value_model(config)
             return env(
                 summary=r.model_dump(),
@@ -62,6 +68,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def predict_expected_purchases(config: PredictExpectedPurchasesInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("predict_expected_purchases")[0])
             r = app.clv.predict_expected_purchases(config)
             return env(
                 summary={
@@ -84,6 +91,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def predict_probability_alive(config: PredictProbabilityAliveInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("predict_probability_alive")[0])
             r = app.clv.predict_probability_alive(config)
             return env(
                 summary={
@@ -105,6 +113,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def predict_expected_spend(config: PredictExpectedSpendInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("predict_expected_spend")[0])
             r = app.clv.predict_expected_spend(config)
             return env(
                 summary={
@@ -129,6 +138,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def estimate_customer_lifetime_value(config: EstimateCLVInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("estimate_customer_lifetime_value")[0])
             r = app.clv.estimate_customer_lifetime_value(config)
             return env(
                 summary={
@@ -156,6 +166,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def fit_clv_model(config: FitCLVInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("fit_clv_model")[0])
             r = app.clv.fit_clv(config)
             return env(
                 summary=r.model_dump(),
@@ -176,6 +187,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def predict_customer_clv(config: PredictCLVInput):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("predict_customer_clv")[0])
             r = app.clv.predict_clv(config)
             return env(
                 summary={
@@ -201,6 +213,7 @@ def register_clv_tools(mcp, app: Application) -> None:
     )
     async def get_churn_risk_cohorts(model_id: str, threshold_p_alive: float = 0.3):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("get_churn_risk_cohorts")[0])
             r = app.clv.get_churn_risk_cohorts(model_id, threshold=threshold_p_alive)
             return env(
                 summary={

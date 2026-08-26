@@ -28,10 +28,12 @@ TOOL_SCOPES: dict[str, str] = {
     # inspection / status / resources
     "get_model_status": "marketing:read",
     "get_channel_contributions": "marketing:read",
+    "get_posterior_plots": "marketing:read",
     "inspect_dataset": "marketing:read",
     "validate_dataset": "marketing:read",
     "recommend_next_measurement": "marketing:read",
     # modeling lifecycle
+    "register_dataset": "marketing:model",
     "fit_mmm": "marketing:model",
     "diagnose_mmm": "marketing:model",
     "calibrate_mmm": "marketing:model",

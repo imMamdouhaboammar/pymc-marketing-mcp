@@ -8,15 +8,20 @@ from marketing_mcp.app import Application
 from marketing_mcp.errors import DomainError
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.security import safe_ingest_path
+from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
-def register_datasets_tools(mcp, app: Application) -> None:
+def register_datasets_tools(mcp, app: Application, context_provider=None) -> None:
+    from marketing_mcp.mcp.context import stdio_context_provider
+
+    resolve_context = context_provider or stdio_context_provider
     @mcp.tool(
         name="register_dataset",
         description="Register a local CSV or Parquet marketing dataset and return a stable dataset reference.",
     )
     async def register_dataset(path: str):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("register_dataset")[0])
             source = safe_ingest_path(
                 Path(path), app.settings.ingest_dir, app.settings.max_dataset_mb * 1024 * 1024
             )
@@ -39,6 +44,7 @@ def register_datasets_tools(mcp, app: Application) -> None:
     )
     async def inspect_dataset(dataset_id: str):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("inspect_dataset")[0])
             r = app.datasets.inspect(dataset_id)
             return env(
                 summary=r.model_dump(),
@@ -65,6 +71,7 @@ def register_datasets_tools(mcp, app: Application) -> None:
         dims: list[str] | None = None,
     ):
         try:
+            require_scope(resolve_context().principal, scopes_for_tool("validate_dataset")[0])
             r = app.datasets.validate(
                 dataset_id,
                 date_column,
