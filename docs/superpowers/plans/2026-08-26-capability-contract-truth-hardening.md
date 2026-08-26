@@ -4,9 +4,9 @@
 
 **Goal:** Make runtime behavior, capability registry, generated documentation, agent routing, readiness, and release evidence describe the same product semantics with no stale or contradictory claims.
 
-**Architecture:** Treat `src/marketing_mcp/capabilities.py` as the canonical public capability contract, but validate it against actual MCP discovery and behavioral evidence. Derive docs and agent routing metadata from the registry. Add contract tests for decision gates, evidence links, stable/experimental status, deprecations, and readiness semantics.
+**Architecture:** Treat `src/marketing_mcp/capabilities.py` as the canonical public capability contract, but validate it against actual MCP discovery and behavioral evidence. Derive docs and agent skill guidance from the registry. Add contract tests for decision gates, evidence links, stable/experimental status, deprecations, readiness semantics, and skill-to-tool drift.
 
-**Tech Stack:** Python 3.12, Pydantic, MCP discovery, pytest, generated Markdown, existing capability registry and docs-drift scripts
+**Tech Stack:** Python 3.12, Pydantic, MCP discovery, pytest, generated Markdown, `.agents/skills`, existing capability registry and docs-drift scripts
 
 **Spec:** `docs/PRODUCTION-READINESS.md`
 
@@ -17,7 +17,7 @@
 - Experimental capabilities must not be described as verified or release-critical
 - Deprecated capabilities must remain explicit and have a replacement/migration path
 - Generated docs are not manually edited to hide registry drift
-- Agent routing may not invoke capabilities that the registry marks unavailable/deprecated without explicit compatibility intent
+- Agent skills may not instruct clients to call capabilities that the registry marks unavailable/deprecated without explicit compatibility intent
 - Readiness must report dependency truth, not configured optimism
 
 ---
@@ -90,7 +90,7 @@ Stable capabilities require at least one evidence test reference. Experimental c
 
 - [ ] **Step 4: Assert no evidence test path is dead**
 
-Resolve each referenced test path and test node where practical. A renamed/deleted evidence test must fail the contract check.
+Resolve each referenced test path and test node. A renamed/deleted evidence test must fail the contract check.
 
 - [ ] **Step 5: Commit**
 
@@ -235,55 +235,76 @@ git add scripts/render_production_readiness.py scripts/collect_release_evidence.
 git commit -m "fix: derive readiness status from exact-commit evidence"
 ```
 
-## Task 6: Harden agent capability routing against drift
+## Task 6: Harden agent skill capability guidance against drift
 
 **Files:**
-- Modify: current agent/skill router files under the repository's agent package
-- Create: `tests/evals/test_router_capability_truth.py`
-- Modify: existing capability-generation script if routing metadata is generated there
+- Modify: `.agents/skills/pymc-mmm-workflow/SKILL.md`
+- Modify: `.agents/skills/pymc-budget-optimization/SKILL.md`
+- Modify: `.agents/skills/pymc-diagnostics-gate/SKILL.md`
+- Modify: `.agents/skills/pymc-clv-customer-analytics/SKILL.md`
+- Modify: `.agents/skills/pymc-lift-calibration/SKILL.md`
+- Create: `scripts/check_agent_skill_capability_drift.py`
+- Create: `tests/evals/test_agent_skill_capability_truth.py`
 
 **Interfaces:**
-- Consumes: canonical capability registry
-- Produces: router-visible capability set with status and decision-gate metadata
+- Consumes: canonical capability registry and the five installed repository skills
+- Produces: skill guidance that references only valid capability names and preserves maturity/decision-gate rules
 
-- [ ] **Step 1: Write router truth tests**
+- [ ] **Step 1: Write the drift checker test first**
 
-Assert the router cannot select a tool name absent from the current registry and that deprecated capabilities are not selected for new workflows when a supported replacement exists.
+Create fixtures containing a valid tool name, a removed tool name, a deprecated tool used without compatibility context, and an experimental tool described as stable. The checker must accept the valid case and reject the three invalid cases.
 
-- [ ] **Step 2: Include maturity and gate metadata in route candidates**
+- [ ] **Step 2: Implement `check_agent_skill_capability_drift.py`**
 
-The router must distinguish stable, experimental, deprecated, and decision-gated tools.
-
-- [ ] **Step 3: Add negative workflow cases**
-
-Required cases:
+The script must load the canonical registry, scan all `.agents/skills/*/SKILL.md` files for MCP tool/resource references, and fail when it finds:
 
 ```text
-undiganosed model -> do not call optimization
-diagnosed rejected model -> do not call decision-grade tools
-unsupported capability request -> explain unavailable, do not invent tool
-experimental capability -> preserve experimental warning
+unknown capability name
+deprecated capability presented as the preferred route
+experimental capability described as stable/verified
+decision-gated capability guidance that omits diagnostics prerequisite where the skill prescribes the workflow
 ```
 
-- [ ] **Step 4: Run agent evals**
+- [ ] **Step 3: Correct each skill against the registry**
 
-Run: `uv run pytest tests/evals -q`
+For the MMM, budget, diagnostics, CLV, and lift-calibration skills, ensure every named tool exists and that decision-grade sequences preserve diagnostics and warning rules.
+
+- [ ] **Step 4: Add negative workflow eval cases**
+
+`tests/evals/test_agent_skill_capability_truth.py` must cover:
+
+```text
+undiagnosed model -> optimization guidance requires diagnose_mmm first
+diagnosed rejected model -> no decision-grade recommendation
+unsupported capability request -> no invented tool
+experimental capability -> experimental warning is preserved
+deprecated CLV wrapper -> supported replacement is preferred
+```
+
+- [ ] **Step 5: Run drift and eval verification**
+
+Run:
+
+```bash
+uv run python scripts/check_agent_skill_capability_drift.py
+uv run pytest tests/evals/test_agent_skill_capability_truth.py -q
+uv run pytest tests/evals -q
+```
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
-
-Commit the actual router/eval files changed with message:
+- [ ] **Step 6: Commit**
 
 ```bash
-git commit -m "test: bind agent routing to capability truth"
+git add .agents/skills scripts/check_agent_skill_capability_drift.py tests/evals/test_agent_skill_capability_truth.py
+git commit -m "test: bind agent skills to capability truth"
 ```
 
 ## Task 7: Enforce deprecation contracts
 
 **Files:**
 - Modify: `src/marketing_mcp/capabilities.py`
-- Modify: `docs/CAPABILITIES.md` through generation
+- Generate: `docs/CAPABILITIES.md`
 - Test: `tests/contract/test_deprecation_contract.py`
 
 **Interfaces:**
@@ -316,6 +337,7 @@ This plan is complete when:
 - async job stability reflects external-worker evidence, not local async execution
 - decision-grade scope/gate rules are centrally consistent
 - readiness status cannot be green on stale or mismatched evidence
-- agent routing cannot invent or select unavailable capabilities
+- all five installed agent skills pass capability drift verification
+- agent skill guidance cannot invent or prefer unavailable/deprecated capabilities
 - deprecated capabilities have explicit migration metadata
-- `generate_capability_inventory.py --check`, docs drift, contract tests, integration tests, and evals all pass
+- `generate_capability_inventory.py --check`, docs drift, contract tests, integration tests, skill drift checks, and evals all pass
