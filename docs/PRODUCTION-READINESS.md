@@ -131,6 +131,6 @@ Until a generated `<current-sha>.json` and matching summary exist and all requir
 
 ## Release rules
 
-No v0.5.0 release until G0 through G5, H0 through H6 and AQG are green from current-head CI evidence
+No future minor release until G0 through G5, H0 through H6 and AQG are green from current-head CI evidence
 
-No v1.0.0 release until the M5 Decision-Grade requirements in `docs/superpowers/plans/2026-08-23-decision-governance-audit.md` are also proven, including immutable decision records, auditability, recovery and governance evidence
+No future major release until the M5 Decision-Grade requirements in `docs/superpowers/plans/2026-08-23-decision-governance-audit.md` are also proven, including immutable decision records, auditability, recovery and governance evidence
