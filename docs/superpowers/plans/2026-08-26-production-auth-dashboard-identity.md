@@ -6,7 +6,7 @@
 
 **Architecture:** Keep API-key authentication as a supported first-party credential path, but make production bearer-token verification issuer-driven through JWKS/issuer/audience rather than a local HS256-only shortcut. Normalize every successful credential into one `Principal`. The dashboard authenticates to the control plane using the configured external identity provider; issued MCP API keys remain verifier-backed and tenant/scoped.
 
-**Tech Stack:** Starlette middleware, PyJWT/JWKS, MCP auth types, external OIDC/OAuth issuer, existing `RemoteJWTVerifier`, `CredentialService`, dashboard TypeScript client, pytest/httpx/MCP ClientSession
+**Tech Stack:** Starlette middleware, PyJWT/JWKS, MCP auth types, external OIDC/OAuth issuer, existing `RemoteJWTVerifier`, `CredentialService`, dashboard TypeScript client, Bun, Vitest, pytest/httpx/MCP ClientSession
 
 **Spec:** `docs/PRODUCTION-READINESS.md`
 
@@ -151,42 +151,74 @@ git commit -m "fix: remove query credential guidance"
 ## Task 4: Make the dashboard identity provider explicit
 
 **Files:**
-- Modify: `dashboard/src/contexts/useAuth.ts` or current auth context implementation
+- Modify: `dashboard/src/contexts/AuthContext.tsx`
+- Modify: `dashboard/src/contexts/authContextDef.ts`
+- Modify: `dashboard/src/contexts/useAuth.ts`
 - Modify: `dashboard/src/api/credentials.ts`
 - Modify: `dashboard/src/components/ApiKeyManager.tsx`
 - Create: `dashboard/src/config/auth.ts`
-- Test: `dashboard/src/api/credentials.test.ts`
+- Create: `dashboard/src/api/credentials.test.ts`
+- Modify: `dashboard/package.json`
+- Modify: `dashboard/bun.lock`
 
 **Interfaces:**
 - Consumes: external dashboard login token
-- Produces: Authorization bearer token accepted by production control plane
+- Produces: `getControlPlaneToken(): Promise<string>` and Authorization bearer token accepted by production control plane
 
-- [ ] **Step 1: Define dashboard auth configuration**
+- [ ] **Step 1: Add an explicit control-plane token method to auth context**
 
-Expose issuer/audience/client configuration through build/runtime environment without embedding private signing material.
+Add this interface to `authContextDef.ts`:
 
-- [ ] **Step 2: Write API client tests**
+```ts
+getControlPlaneToken: () => Promise<string>
+```
 
-Assert the control-plane request sends only the current external identity token as `Authorization: Bearer ...` and never sends the selected MCP API-key prefix as a control-plane credential.
+`AuthContext.tsx` is the only place that translates the configured identity provider session into this token. `ApiKeyManager` must not call Firebase-specific `getIdToken()` directly.
 
-- [ ] **Step 3: Remove implicit provider assumptions from `ApiKeyManager`**
+- [ ] **Step 2: Define dashboard auth configuration**
 
-The component should request a control-plane access token through the auth abstraction, not assume `getIdToken()` semantics directly.
+Create `dashboard/src/config/auth.ts` with public issuer/audience/client configuration sourced from Vite environment variables. Do not put client secrets or signing keys in browser configuration.
 
-- [ ] **Step 4: Keep newly issued MCP secret in ephemeral component state only**
+- [ ] **Step 3: Add a real dashboard test runner**
 
-After dismiss/navigation/reload, the full secret must be gone. Only public DTO fields/prefixes may be reloaded.
+Add `vitest` to `devDependencies` and add:
 
-- [ ] **Step 5: Run dashboard tests/build**
+```json
+"test": "vitest run"
+```
 
-Run the repository's package-manager test command followed by the production dashboard build command.
+to `dashboard/package.json`, then update `dashboard/bun.lock` with Bun.
 
-Expected: tests and build PASS
+- [ ] **Step 4: Write API client tests**
 
-- [ ] **Step 6: Commit**
+In `dashboard/src/api/credentials.test.ts`, mock `fetch` and assert `fetchCredentials`, `createCredential`, and `revokeCredential` send only the provided control-plane token as `Authorization: Bearer ...`. Assert no selected MCP key prefix is used as a control-plane credential.
+
+- [ ] **Step 5: Remove provider assumptions from `ApiKeyManager`**
+
+Use `const { user, getControlPlaneToken } = useAuth()` and obtain the token only through `getControlPlaneToken()` for credential API calls.
+
+- [ ] **Step 6: Keep newly issued MCP secret in ephemeral component state only**
+
+The full `response.secret` may exist only in React state for the one-time display. Do not write it to localStorage, sessionStorage, IndexedDB, Firestore, URL/query state, or a persisted context. After dismiss/navigation/reload, only public credential DTO data and prefixes may be loaded again.
+
+- [ ] **Step 7: Run dashboard verification**
+
+Run:
 
 ```bash
-git add dashboard/src/config/auth.ts dashboard/src/api/credentials.ts dashboard/src/components/ApiKeyManager.tsx dashboard/src/contexts dashboard/src/api/credentials.test.ts
+cd dashboard
+bun install --frozen-lockfile
+bun run test
+bun run lint
+bun run build
+```
+
+Expected: all commands exit `0`
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add dashboard/src/config/auth.ts dashboard/src/api/credentials.ts dashboard/src/api/credentials.test.ts dashboard/src/components/ApiKeyManager.tsx dashboard/src/contexts/AuthContext.tsx dashboard/src/contexts/authContextDef.ts dashboard/src/contexts/useAuth.ts dashboard/package.json dashboard/bun.lock
 git commit -m "fix: align dashboard control-plane identity with production auth"
 ```
 
@@ -263,9 +295,9 @@ credential salt
 raw secret
 ```
 
-- [ ] **Step 2: Replace detailed foreign-object evidence with caller-safe evidence**
+- [ ] **Step 2: Standardize caller-safe foreign-object errors**
 
-Use stable codes such as `AUTH_FORBIDDEN` or a not-found policy selected consistently by the API contract. Log internal identifiers only through redacted structured operational logging with access controls.
+Use `AUTH_FORBIDDEN` for authenticated cross-tenant/owner denials. Public evidence may include only `resource_type` and attempted `action`; it must not include foreign owner/tenant identity. Preserve detailed identifiers only in access-controlled, redacted operational logs.
 
 - [ ] **Step 3: Commit**
 
