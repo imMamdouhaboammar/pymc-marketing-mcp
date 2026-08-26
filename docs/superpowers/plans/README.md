@@ -1,139 +1,178 @@
 # Production Stabilization and Hardening Plan Index
 
-This directory contains the execution program for moving PyMC Marketing MCP from the current v0.4.x advanced-beta state to a production-grade release candidate, then to a decision-grade v1.0 release.
+This directory coordinates the move from the current v0.4.x advanced-beta/release-candidate implementation to a release-approved production service, followed by a decision-grade v1.0 target
 
-## 2026-08-26 Hardening Amendment
+Plans describe target work. They are not evidence that the work is complete
 
-A current-code review after the first G0/G1 and MCP security work found several runtime integration gaps that must be resolved before continuing the original execution order:
+## Current state after the 2026-08-26 core hardening commit
 
-- HTTP authentication is not yet proven to propagate the real caller principal into tool execution
-- MCP resources do not yet share tool scope/ownership enforcement
-- current persisted records do not carry enough owner/tenant identity to prove cross-principal isolation
-- the dashboard API-key prototype persists raw secrets independently of server authentication
-- readiness status can lag code because status text is not fully generated from CI evidence
-- long-running jobs need a transport-neutral boundary that can later adapt to the MCP Tasks extension without a rewrite
-- agent eval fixtures still contain pre-marked pass evidence
-- upstream compatibility must gate future statistical capability expansion
+The repository now includes more production-oriented primitives than the original 2026-08-23 baseline
 
-The amendment is coordinated by:
+- SQLite migrations
+- persisted job records and async job tools
+- local stale-job recovery
+- security profiles
+- scope policy and ownership helpers
+- query-credential rejection
+- request-safety/redaction helpers
+- structured logging/metrics foundations
+- liveness/readiness foundations
+- additional release/agent tests
 
-1. `2026-08-26-hardening-master-program.md`
-   - H0-H6 gates, priority changes, cross-program invariants and freeze/thaw rule
+The hardening amendment remains necessary because several full-system properties are still unproven or incomplete
 
-2. `2026-08-26-runtime-truth-ci-gates.md` Tasks 1-4
-   - current-head baseline, machine-derived readiness, typing, bounded PR CI
-   - start here before more hardening implementation
+- authenticated HTTP identity is not yet proven to become the principal used by real MCP tool execution
+- MCP resources do not yet use request-scoped scope/ownership authorization
+- ownership helpers need complete lifecycle wiring and E2E tenant evidence
+- dashboard API keys remain a separate raw-secret browser/Firestore prototype
+- current statistical jobs execute inside the API process rather than isolated durable workers
+- production metadata/object-storage adapters and backup/restore evidence are not complete
+- traces, SLOs/alerts/runbooks and required CI/release workflows are not complete
+- agent eval fixtures still require conversion to runtime trace evidence
+- upstream compatibility is not yet a release/feature-admission gate
+- current-head machine-generated release evidence does not yet exist for the hardening branch
 
-3. `2026-08-26-auth-context-resource-isolation.md`
-   - HTTP principal propagation, scope + ownership authorization, resource protection, ownership migration
-   - exit: G3/H1/H2 evidence
+## Authoritative execution order
 
-4. `2026-08-26-dashboard-control-plane-security.md`
-   - backend-issued API keys, verifier-only storage, revocation, credential audit, removal of Firestore/localStorage secret authority
-   - exit: H3
+### 1. Runtime truth baseline: H0
 
-5. Existing `2026-08-23-jobs-storage-recovery.md` plus `2026-08-26-jobs-mcp-task-boundary.md`
-   - durable jobs/storage remain governed by the original plan
-   - amendment keeps the job domain transport-neutral and defines current compatibility tools/future Tasks extension adapter
-   - exit: G2/H4
+Use `2026-08-26-runtime-truth-ci-gates.md`
 
-6. Finish `2026-08-26-runtime-truth-ci-gates.md`, then execute existing resilience/observability plans
-   - CI, canary, release evidence, readiness, API/worker operability
-   - exit: H0/G4/G5
+First establish current-head evidence and make readiness/doc status derive from executed reality rather than assertions
 
-7. Existing `2026-08-23-agent-skills-evals.md` plus `2026-08-26-agent-skill-eval-hardening.md`
-   - executable traces, negative decision/security evals, measurable agent quality
-   - exit: AQG/H5
+### 2. Remote identity and resource isolation: H1 + H2 / G3
 
-8. `2026-08-26-upstream-compatibility-capability-gates.md`
-   - dependency policy, canary, capability admission, freeze/thaw enforcement
-   - exit: H6
+Use `2026-08-26-auth-context-resource-isolation.md` together with the unfinished requirements of `2026-08-23-security-mcp-hardening.md`
 
-Only after H0-H6 and the original release gates are green may new public statistical capability work resume.
+Required outcome
 
-## Original Production Stabilization Execution Order
+```text
+HTTP auth
+  -> Principal
+  -> ExecutionContext
+  -> MCP tool/resource
+  -> scope
+  -> object/tenant authorization
+```
 
-The original plans remain authoritative for work not explicitly amended above.
+### 3. Credential control plane: H3
 
-1. `2026-08-23-production-grade-master-program.md`
-   - program coordination, freeze, release gates, final release candidate review
+Use `2026-08-26-dashboard-control-plane-security.md`
 
-2. `2026-08-23-production-truth-release-discipline.md`
-   - canonical version, capability inventory, documentation drift, release evidence
-   - exit gate: G0
+The dashboard must consume the same credential authority as the MCP server and must not persist raw reusable secrets
 
-3. `2026-08-23-scientific-contract-hardening.md`
-   - channel-specific configuration, model comparison, CLV, flighting, plotting, decision gate
-   - exit gate: G1
+### 4. Durable jobs, storage and recovery: G2 + H4
 
-4. `2026-08-23-security-mcp-hardening.md`
-   - MCP server decomposition, principals, OAuth, scopes, ownership, request safety, deployment security
-   - exit gate: G3 security controls
+Use both
 
-5. `2026-08-23-jobs-storage-recovery.md`
-   - durable jobs, idempotency, Postgres, object storage, restart recovery, backup/restore
-   - exit gate: G2
+- `2026-08-23-jobs-storage-recovery.md`
+- `2026-08-26-jobs-mcp-task-boundary.md`
 
-6. `2026-08-23-performance-resilience-capacity.md`
-   - resource classes, admission control, worker/API separation, backpressure, load, fault injection
-   - required before final operability/release gates
+Current SQLite/in-process jobs are the starting point, not the final production worker model
 
-7. `2026-08-23-observability-ci-release.md`
-   - logs, metrics, traces, health/readiness, SLOs, PR CI, statistical CI, canary, release evidence
-   - exit gates: G4 and G5
+The internal JobService stays transport-neutral. Current custom job tools remain compatibility tools. Future MCP Tasks support, when supported by the selected SDK/runtime, is an adapter over the same job domain
 
-8. `2026-08-23-agent-skills-evals.md`
-   - capability router, truthful skills, executable evals, negative decision-safety tests, tool trace assertions
-   - exit gate: Agent Quality Gate
+### 5. Resilience, observability and release automation: G4 + G5
 
-9. Return to `2026-08-23-production-grade-master-program.md`
-   - execute the v0.5 release-candidate evidence pack and production readiness review
+Use
 
-10. `2026-08-23-decision-governance-audit.md`
-   - append-only audit, decision records, model lifecycle, champion/challenger, freshness, sensitivity, retention
-   - target: M5 Decision-Grade gate for v1.0
+- `2026-08-23-performance-resilience-capacity.md`
+- `2026-08-23-observability-ci-release.md`
+- remaining tasks in `2026-08-26-runtime-truth-ci-gates.md`
 
-## Dependency Rule
+Required outcome includes API/worker capacity separation, traces, dependency readiness, alerts/runbooks, PR/statistical/security/release workflows and machine-generated release evidence
 
-A plan may begin early only when its interfaces do not depend on an unfinished prior plan. It may not be marked complete until all upstream interfaces it consumes are green.
+### 6. Agent quality: AQG + H5
 
-Examples:
+Use
 
-- CI scaffolding can begin before Postgres is complete, but G5 cannot be green until the Postgres/recovery suites are part of CI
-- Skill text cleanup can begin early, but stable capability claims cannot be finalized until G1 is green
-- Observability wrappers can begin after MCP/job interfaces stabilize, but production SLO evidence depends on resilience/capacity tests
-- Decision-governance schema design can start before v0.5, but M5 implementation should consume the stable production persistence, security, and audit interfaces rather than invent parallel ones
-- Dashboard credential work must not invent a second identity store; it consumes the principal/tenant and credential repository contracts from the hardening plans
-- Future MCP Tasks support must adapt the internal JobService; it must not replace or fork the job state model
+- `2026-08-23-agent-skills-evals.md`
+- `2026-08-26-agent-skill-eval-hardening.md`
 
-## Review Rule
+Required outcome is capability-driven routing plus executable tool-trace/negative eval evidence. Committed `passed: true` values are not evidence
 
-Every material implementation task follows:
+### 7. Upstream compatibility and feature admission: H6
+
+Use `2026-08-26-upstream-compatibility-capability-gates.md`
+
+Feature work remains frozen until the locked production lane and latest-allowed canary can prove upstream compatibility for the affected statistical surface
+
+### 8. Release candidate review
+
+Return to `2026-08-23-production-grade-master-program.md`
+
+Build the v0.5 release evidence pack only after the required G/H/AQG gates are actually green from current-head evidence
+
+### 9. Decision-grade v1.0
+
+Use `2026-08-23-decision-governance-audit.md`
+
+M5 adds append-only audit/decision records, lifecycle/governance, freshness and historical reproducibility requirements after the production runtime is stable
+
+## Original 2026-08-23 plans
+
+These remain authoritative for work not explicitly amended by 2026-08-26
+
+- `2026-08-23-production-grade-master-program.md`
+- `2026-08-23-production-truth-release-discipline.md`
+- `2026-08-23-scientific-contract-hardening.md`
+- `2026-08-23-security-mcp-hardening.md`
+- `2026-08-23-jobs-storage-recovery.md`
+- `2026-08-23-performance-resilience-capacity.md`
+- `2026-08-23-observability-ci-release.md`
+- `2026-08-23-agent-skills-evals.md`
+- `2026-08-23-decision-governance-audit.md`
+
+## 2026-08-26 amendment plans
+
+- `2026-08-26-hardening-master-program.md`
+- `2026-08-26-runtime-truth-ci-gates.md`
+- `2026-08-26-auth-context-resource-isolation.md`
+- `2026-08-26-dashboard-control-plane-security.md`
+- `2026-08-26-jobs-mcp-task-boundary.md`
+- `2026-08-26-agent-skill-eval-hardening.md`
+- `2026-08-26-upstream-compatibility-capability-gates.md`
+
+## Dependency rule
+
+A plan may start early only when it does not rely on an unfinished interface
+
+It may not be marked complete merely because code for one sub-property exists
+
+Examples
+
+- scope-policy code can exist before H1, but H1 remains open until the real authenticated HTTP principal reaches tool execution
+- ownership helpers can exist before H2, but H2 remains open until tool and resource E2E tenant tests pass
+- SQLite jobs can exist before G2/H4, but durable compute remains open until worker/process failure recovery is proven
+- logging/metrics can exist before G4, but operability remains open until traces, dependency readiness and runbooks are evidenced
+- release-test files can exist before G5, but G5 remains open until required workflows and artifacts execute for the release commit
+
+## Review rule
+
+Every material implementation task follows
 
 ```text
 Inspect current state
 Select focused skills/workflows
 Write failing test
-Implement minimum change
+Implement minimum correct change
 Run focused tests
 Independent review
 Run wider verification
-Update evidence/docs
+Update capability/docs/evidence
 Commit
 ```
 
-For statistical behavior changes, independent review must include scientific semantics, not only code quality.
+Additional review focus
 
-For security changes, independent review must include authorization bypass, cross-principal access and secret exposure cases.
+- statistical changes: scientific semantics and real-library tests
+- security changes: auth bypass, cross-principal/resource access and secret exposure
+- persistence/jobs: crash/restart, cancellation, partial write and artifact integrity
+- agent changes: tool traces, forbidden calls and warning preservation
+- governance: provenance immutability and historical reproducibility
 
-For persistence changes, independent review must include crash/restart and partial-write cases.
+## Release rule
 
-For decision-governance changes, independent review must verify provenance immutability and historical reproducibility.
+No v0.5.0 release until G0 through G5, H0 through H6 and AQG are green from current-head machine evidence
 
-For agent changes, independent review must inspect tool traces and negative safety cases rather than prose alone.
-
-## Release Rule
-
-No `0.5.0` release until G0 through G5, H0 through H6, and the Agent Quality Gate are green from current-head CI evidence.
-
-No `1.0.0` release until the project also demonstrates repeated restart recovery, backup/restore, fault-injection recovery, compatibility canary stability, decision-grade agent evals, append-only audit evidence, immutable decision records, and the M5 Decision-Grade gate.
+No v1.0.0 release until the M5 Decision-Grade gate is also green
