@@ -35,7 +35,7 @@ class ModelingService:
         self.datasets = datasets
         self.adapter_factory = adapter_factory
 
-    def fit(self, input: FitMMMInput) -> ModelRecord:
+    def fit(self, input: FitMMMInput, principal: Any = None) -> ModelRecord:
         validation = self.datasets.validate(
             input.dataset_id,
             input.date_column,
@@ -62,6 +62,9 @@ class ModelingService:
         adapter = self.adapter_factory()
         versions = adapter.versions()
 
+        owner = principal.subject if principal is not None else "local"
+        tenant_id = principal.tenant_id if principal is not None else None
+
         rec = ModelRecord(
             model_id=model_id,
             parent_model_id=None,
@@ -74,6 +77,8 @@ class ModelingService:
             package_provenance=versions,
             created_at=now,
             updated_at=now,
+            owner=owner,
+            tenant_id=tenant_id,
         )
         self.metadata.put_model(rec.model_dump())
 
@@ -108,20 +113,21 @@ class ModelingService:
         self.metadata.put_model(rec.model_dump())
         return rec
 
-    def calibrate(self, input: CalibrateMMMInput) -> ModelRecord:
+    def calibrate(self, input: CalibrateMMMInput, principal: Any = None) -> ModelRecord:
         base_record = self.status(input.model_id)
         if base_record.status != "completed":
             raise DomainError(
-                "MODEL_NOT_FITTED",
-                "Base model has not completed fitting",
-                evidence={"model_id": input.model_id, "status": base_record.status},
+                "MODEL_NOT_READY",
+                f"Model {input.model_id} must be completed before calibration (current: {base_record.status})",
             )
-
         df_base = self.datasets.load(base_record.dataset_id)
+
         lift_records = []
         for test in input.lift_tests:
             row: dict[str, Any] = {
                 "channel": test.channel,
+                "start": test.start,
+                "end": test.end,
                 "x": test.x,
                 "delta_x": test.delta_x,
                 "delta_y": test.delta_y,
@@ -141,6 +147,9 @@ class ModelingService:
         adapter = self.adapter_factory()
         versions = adapter.versions()
 
+        owner = principal.subject if principal is not None else (getattr(base_record, "owner", None) or "local")
+        tenant_id = principal.tenant_id if principal is not None else getattr(base_record, "tenant_id", None)
+
         rec = ModelRecord(
             model_id=calibrated_model_id,
             parent_model_id=input.model_id,
@@ -153,6 +162,8 @@ class ModelingService:
             package_provenance=versions,
             created_at=now,
             updated_at=now,
+            owner=owner,
+            tenant_id=tenant_id,
         )
         self.metadata.put_model(rec.model_dump())
 

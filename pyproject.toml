@@ -27,12 +27,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "pytest-cov>=6,<8", "pytest-xdist>=3.5", "ruff>=0.12,<1"]
+dev = ["pytest>=8,<10", "pytest-cov>=6,<8", "pytest-xdist>=3.5", "ruff>=0.12,<1", "pyright>=1.1.390"]
 
 [project.scripts]
 marketing-mcp = "marketing_mcp.cli:main"
 marketing-mcp-demo = "marketing_mcp.demo:main"
 marketing-mcp-auth = "marketing_mcp.auth_cli:main"
+marketing-mcp-worker = "marketing_mcp.jobs.worker_cli:main"
 
 
 [tool.hatch.build.targets.wheel]
@@ -54,7 +55,7 @@ include = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 markers = [
   "statistical: requires pymc-marketing and runs sampling",
@@ -63,4 +64,4 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"

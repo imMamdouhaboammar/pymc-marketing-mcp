@@ -25,6 +25,8 @@ class DatasetRegistration(BaseModel):
     format: Literal["csv", "parquet"]
     rows: int
     created_at: str
+    owner: str | None = None
+    tenant_id: str | None = None
 
 
 class DatasetInspection(BaseModel):
@@ -282,6 +284,8 @@ class CLVModelRecord(BaseModel):
     created_at: str
     updated_at: str
     failure: dict[str, Any] | None = None
+    owner: str | None = None
+    tenant_id: str | None = None
 
 
 class ModelRecord(BaseModel):
@@ -302,6 +306,8 @@ class ModelRecord(BaseModel):
     validation_state: str = "not_diagnosed"
     diagnostics: dict[str, Any] | None = None
     override_history: list[dict[str, Any]] = Field(default_factory=list)
+    owner: str | None = None
+    tenant_id: str | None = None
 
 
 class DiagnosticResult(BaseModel):

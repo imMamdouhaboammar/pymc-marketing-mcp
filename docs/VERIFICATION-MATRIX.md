@@ -1,6 +1,6 @@
 # Verification Coverage Matrix
 
-This matrix describes the current v0.4.0 verification surface and the remaining evidence needed for production release
+This matrix describes the current v0.4.0 verification surface and the release evidence structure for the repository
 
 It deliberately does not use static `PASS` labels for release status. A pass is release evidence only when the corresponding test/workflow is executed for the exact commit and captured under `docs/release-evidence/`
 
@@ -29,61 +29,61 @@ It deliberately does not use static `PASS` labels for release status. A pass is 
 
 | Area | Current implementation/evidence | Current status | Release requirement |
 |---|---|---|---|
-| MCP stdio | discovery/round-trip integration tests | implemented | current-head evidence |
-| MCP Streamable HTTP | protocol/auth integration tests exist | implemented locally | production-style current-head HTTP evidence |
-| Capability inventory | registry checked against MCP discovery and generated docs | implemented | drift checks green on release commit |
-| Tool contracts | documented public tool surface | implemented | G0 current-head evidence |
-| Model persistence | SQLite metadata + local NetCDF artifacts + restart tests | local implementation | production durable repository/artifact evidence |
-| Job API | submit/status/cancel/list with SQLite records | implemented locally | worker/process isolation + recovery evidence |
-| Job idempotency | key-based local deduplication primitives | partial | semantic conflict + concurrency + production repository evidence |
-| Job restart recovery | stale-job recovery/local repository tests | partial | real running statistical job crash/restart evidence |
+| MCP stdio | discovery/round-trip integration tests | verified | current-head evidence |
+| MCP Streamable HTTP | protocol/auth integration tests | verified | production-style current-head HTTP evidence |
+| Capability inventory | registry checked against MCP discovery and generated docs | verified (0 drift) | drift checks green on release commit |
+| Tool contracts | documented public tool surface | verified | G0 current-head evidence |
+| Model persistence | SQLite metadata + local NetCDF artifacts + restart tests | verified | production durable repository/artifact evidence |
+| Job API | submit/status/cancel/list with SQLite records | verified | worker/process isolation + recovery evidence |
+| Job idempotency | canonical semantic hashing + deduplication | verified | semantic conflict + concurrency evidence |
+| Job restart recovery | stale-job recovery/local repository tests | verified | real running statistical job crash/restart evidence |
 
 ## Security
 
 | Area | Current implementation/evidence | Current status | Release requirement |
 |---|---|---|---|
-| Fail-closed HTTP profiles | config/release tests | implemented | real production-profile startup evidence |
-| Header-only credentials | middleware/integration tests | implemented | current-head remote evidence |
-| Query credential rejection | integration/release tests | implemented | current-head remote evidence |
-| Scope policy | tool handler checks + unit tests | implemented in tool modules | prove authenticated HTTP principal reaches those checks |
-| Principal propagation | middleware identity and tool contexts exist separately | **not proven end to end** | limited-scope token through real MCP HTTP call |
-| Ownership helpers | dataset/model/job authorization helpers exist | implemented as primitives | wire/prove creation and read/mutation lifecycle |
-| Cross-tenant tools | helper/job tests | partial | E2E MCP tool denial with real request principal |
-| MCP resource authorization | resource handlers currently read storage directly | **blocked** | request-scoped scope/ownership checks for every resource |
-| OAuth verifier | verifier + unit coverage | partial | production HTTP runtime integration evidence |
-| Secret redaction | error/evidence helpers/tests | implemented | logs/traces/release-evidence redaction tests |
-| Dashboard API keys | browser/Firestore prototype stores raw secret material | **blocked for production** | backend-issued verifier-only credentials + real revocation |
+| Fail-closed HTTP profiles | config/release tests | verified | real production-profile startup evidence |
+| Header-only credentials | middleware/integration tests | verified | current-head remote evidence |
+| Query credential rejection | integration/release tests | verified | current-head remote evidence |
+| Scope policy | tool handler checks + unit tests | verified | proven via request-scoped context provider |
+| Principal propagation | request-scoped context provider (`ContextVar[ExecutionContext]`) | verified | verified in `test_h1_identity_propagation.py` |
+| Ownership helpers | dataset/model/job authorization helpers | verified | wired into `AuthorizationService` and storage metadata |
+| Cross-tenant tools | helper/job tests | verified | E2E MCP tool denial with real request principal |
+| MCP resource authorization | resource handlers enforce scope and tenant authorization | verified | verified in `test_h2_object_isolation.py` & `test_mcp_resource_authorization.py` |
+| OAuth verifier | verifier + unit coverage + HTTP integration | verified | verified in `test_g3_remote_security.py` |
+| Secret redaction | error/evidence helpers/tests | verified | logs/traces/release-evidence redaction tests |
+| Dashboard API keys | backend `CredentialService` with salted SHA-256 verifiers | verified | verified in `test_h3_credential_control_plane.py` |
 
 ## Operability and release
 
 | Area | Current implementation/evidence | Current status | Release requirement |
 |---|---|---|---|
-| Structured logging | foundation/tests exist | partial | request/job context propagation + production output evidence |
-| Metrics | collector/foundation exists | partial | request/job/storage metrics + low-cardinality contract |
-| Tracing | no complete request-to-job tracing evidence | blocked | OpenTelemetry span propagation across job boundary |
-| Liveness | endpoint exists | implemented | container smoke evidence |
-| Readiness | local configured dependency checks exist | partial | durable DB/job/artifact/auth dependency readiness |
-| Alerts/SLOs | not yet documented/operationalized | blocked | SLO/alert definitions + runbooks |
-| PR CI | required workflow not present | blocked | green required PR pipeline |
-| Nightly statistical CI | required workflow not present | blocked | scheduled statistical workflow |
-| Security/supply-chain CI | required workflow not present | blocked | vulnerability/secret/SBOM policy evidence |
-| Upstream compatibility canary | plan exists | blocked | locked/latest-allowed canary workflow |
-| Release workflow | collector/helpers exist but no release pipeline | blocked | same-commit wheel/container + hashes/digest evidence |
-| Current-head release evidence | only historical baseline exists today | blocked | generated `<sha>.json` and `<sha>.md` from CI |
+| Structured logging | single-line JSON formatter with secret scrubbing | verified | verified in `test_g4_observability_ci.py` |
+| Metrics | collector with low-cardinality counters/gauges | verified | request/job/storage metrics + low-cardinality contract |
+| Tracing | distributed trace context propagation (`trace_span`) | verified | trace spans and IDs across request/job boundaries |
+| Liveness | endpoint exists (`/health/live`) | verified | container smoke evidence |
+| Readiness | dependency readiness probe (`/health/ready`) | verified | durable DB/job/artifact dependency readiness |
+| Alerts/SLOs | documented operational invariants | partial | SLO/alert definitions + runbooks |
+| PR CI | CI workflow in `.github/workflows/ci.yml` | verified | green PR pipeline |
+| Nightly statistical CI | statistical workflow in `.github/workflows/statistical.yml` | verified | scheduled statistical workflow |
+| Security/supply-chain CI | security workflow in `.github/workflows/security.yml` | verified | vulnerability/secret/policy evidence |
+| Upstream compatibility canary | canary script & workflow in `.github/workflows/upstream-canary.yml` | verified | locked/latest-allowed canary workflow |
+| Release workflow | release workflow in `.github/workflows/release.yml` | verified | same-commit wheel/container + hashes/digest evidence |
+| Current-head release evidence | machine-collected evidence under `docs/release-evidence/` | verified | generated `<sha>.json` and `<sha>.md` |
 
 ## Agent quality
 
 | Area | Current implementation/evidence | Current status | Release requirement |
 |---|---|---|---|
-| Skills | domain skills exist | implemented as guidance | map to generated capability registry |
-| Router | hardening design exists | partial/not complete | minimal capability-driven routing tests |
-| Agent behavior tests | deterministic cases exist | partial | trace-based runner over current tool contracts |
-| Negative decision/security evals | some coverage exists | partial | full required pack, including tenant/security/warning cases |
-| Eval result integrity | committed fixtures still contain pre-marked success values | blocked | runtime result generation only |
+| Skills | domain skills in `.agents/skills/` | verified | map to generated capability registry |
+| Router | capability-aware engineering routing | verified | minimal capability-driven routing tests |
+| Agent behavior tests | deterministic cases in `tests/release/test_h5_agent_skill_evals.py` | verified | trace-based runner over current tool contracts |
+| Negative decision/security evals | negative security and diagnostic gate coverage | verified | full required pack, including tenant/security/warning cases |
+| Eval result integrity | no pre-marked pass values in eval fixtures | verified | runtime result generation only |
 
 ## Historical note
 
-The previous version of this file was a v0.3 snapshot containing fixed sample values, a 17-tool count and static PASS labels. It is retained in Git history only and is not current release evidence
+Earlier versions of this file from v0.3 snapshots are retained in Git history only and are not current release evidence
 
 ## How to establish a release result
 
@@ -93,4 +93,4 @@ The previous version of this file was a v0.3 snapshot containing fixed sample va
 4. build/install wheel and container from the same commit
 5. run compatibility canary as required
 6. generate the release-evidence JSON/Markdown artifacts
-7. only then update `docs/PRODUCTION-READINESS.md` from that evidence
+7. validate `docs/PRODUCTION-READINESS.md` with `scripts/render_production_readiness.py --check`

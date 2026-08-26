@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import Any
 
 from marketing_mcp.app import Application
 from marketing_mcp.errors import DomainError
@@ -15,13 +15,15 @@ from marketing_mcp.schemas.models import (
     GetPosteriorPlotsInput,
     PriorSensitivityInput,
 )
+from marketing_mcp.security.ownership import authorize_dataset, authorize_model
 from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
-def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
+def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> None:
     from marketing_mcp.mcp.context import stdio_context_provider
 
     resolve_context = context_provider or stdio_context_provider
+
     @mcp.tool(
         name="fit_mmm",
         description=(
@@ -35,8 +37,14 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def fit_mmm(config: FitMMMInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("fit_mmm")[0])
-            r = app.models.fit(config)
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("fit_mmm")[0])
+            dataset = app.metadata.get_dataset(config.dataset_id)
+            if not dataset:
+                raise DomainError("DATASET_NOT_FOUND", f"Dataset '{config.dataset_id}' was not found")
+            authorize_dataset(principal, dataset, action="read")
+
+            r = app.models.fit(config, principal=principal)
             return env(
                 summary=r.model_dump(),
                 provenance=r.config.get("provenance", {}),
@@ -45,18 +53,22 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="get_model_status",
         description="Get persisted model fit state, lineage, and safe failure information.",
     )
     async def get_model_status(model_id: str):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("get_model_status")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("get_model_status")[0])
+            model_rec = app.metadata.get_model(model_id)
+            if not model_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
+            authorize_model(principal, model_rec, action="read")
+
             return env(summary=app.models.status(model_id).model_dump())
         except DomainError as e:
             return e.to_dict()
-
 
     @mcp.tool(
         name="diagnose_mmm",
@@ -67,7 +79,13 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def diagnose_mmm(model_id: str):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("diagnose_mmm")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("diagnose_mmm")[0])
+            model_rec = app.metadata.get_model(model_id)
+            if not model_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
+            authorize_model(principal, model_rec, action="read")
+
             r = app.diagnostics.diagnose(model_id)
             next_acts = ["get_channel_contributions", "get_incremental_roas", "get_response_curves"]
             if r.decision_tools_enabled:
@@ -87,7 +105,6 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="cross_validate_mmm",
         description=(
@@ -97,7 +114,13 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def cross_validate_mmm(input: CrossValidateMMMInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("cross_validate_mmm")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("cross_validate_mmm")[0])
+            model_rec = app.metadata.get_model(input.model_id)
+            if not model_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
+            authorize_model(principal, model_rec, action="read")
+
             r = app.diagnostics.cross_validate(input)
             return env(
                 summary=r,
@@ -106,7 +129,6 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
             )
         except DomainError as e:
             return e.to_dict()
-
 
     @mcp.tool(
         name="evaluate_prior_sensitivity",
@@ -117,7 +139,13 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def evaluate_prior_sensitivity(input: PriorSensitivityInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("evaluate_prior_sensitivity")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("evaluate_prior_sensitivity")[0])
+            model_rec = app.metadata.get_model(input.model_id)
+            if not model_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
+            authorize_model(principal, model_rec, action="read")
+
             r = app.diagnostics.prior_sensitivity(input)
             return env(
                 summary=r,
@@ -126,7 +154,6 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
             )
         except DomainError as e:
             return e.to_dict()
-
 
     @mcp.tool(
         name="calibrate_mmm",
@@ -137,8 +164,14 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def calibrate_mmm(input: CalibrateMMMInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("calibrate_mmm")[0])
-            r = app.models.calibrate(input)
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("calibrate_mmm")[0])
+            model_rec = app.metadata.get_model(input.model_id)
+            if not model_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
+            authorize_model(principal, model_rec, action="calibrate")
+
+            r = app.models.calibrate(input, principal=principal)
             return env(
                 summary=r.model_dump(),
                 provenance={"parent_model_id": input.model_id, **r.package_provenance},
@@ -147,19 +180,23 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="archive_model",
         description="Archive a model record and update its lifecycle state.",
     )
     async def archive_model(input: ArchiveModelInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("archive_model")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("archive_model")[0])
+            model_rec = app.metadata.get_model(input.model_id)
+            if not model_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
+            authorize_model(principal, model_rec, action="archive")
+
             r = app.models.archive_model(input.model_id)
             return env(summary=r)
         except DomainError as e:
             return e.to_dict()
-
 
     @mcp.tool(
         name="get_posterior_plots",
@@ -173,8 +210,13 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def get_posterior_plots(config: GetPosteriorPlotsInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("get_posterior_plots")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("get_posterior_plots")[0])
             record = app.metadata.get_model(config.model_id)
+            if not record:
+                return DomainError("MODEL_NOT_FOUND", f"Model {config.model_id} was not found").to_dict()
+            authorize_model(principal, record, action="read")
+
             artifact_path = record.get("artifact_path")
             if not artifact_path:
                 return DomainError(
@@ -182,11 +224,12 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
                     f"No artifact found for model {config.model_id}",
                     next_action="Ensure the model was fitted successfully",
                 ).to_dict()
-            model = app.models.adapter.load(Path(artifact_path))
+            model, _ = app.models.load_model(config.model_id)
+            plot_types: list[str] = [str(pt) for pt in config.plot_types]
             plots = app.plots.generate_all(
                 model,
                 config.model_id,
-                config.plot_types,
+                plot_types,
                 config.format,
             )
             generated = [pt for pt, v in plots.items() if v.get("success")]
@@ -203,7 +246,3 @@ def register_mmm_tools(mcp, app: Application, context_provider=None) -> None:
             )
         except DomainError as e:
             return e.to_dict()
-
-    # -----------------------------------------------------------------------
-    # Phase 3 — Customer Lifetime Value (CLV) Tools
-    # -----------------------------------------------------------------------

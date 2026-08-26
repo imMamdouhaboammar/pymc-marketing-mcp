@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from .adapters.pymc_marketing import PyMCMarketingAdapter
 from .config import Settings
+from .credentials.service import CredentialService
+from .credentials.sqlite_repository import SQLiteCredentialRepository
 from .jobs.repository import SQLiteJobRepository
 from .jobs.service import JobService
 from .services.clv_service import CLVService
@@ -22,6 +24,8 @@ class Application:
         self.job_repo = SQLiteJobRepository(self.metadata.conn)
         self.job_repo.recover_stale_running_jobs()
         self.jobs = JobService(self.job_repo)
+        self.credential_repo = SQLiteCredentialRepository(self.settings.metadata_db)
+        self.credentials = CredentialService(self.credential_repo)
         self.datasets = DatasetService(
             self.metadata, self.settings.data_dir, self.settings.max_dataset_mb
         )

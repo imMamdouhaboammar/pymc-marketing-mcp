@@ -1,0 +1,15 @@
+{
+  "include": [
+    "src/marketing_mcp/security",
+    "src/marketing_mcp/mcp",
+    "src/marketing_mcp/storage",
+    "src/marketing_mcp/jobs",
+    "src/marketing_mcp/schemas",
+    "src/marketing_mcp/readiness_evidence.py",
+    "src/marketing_mcp/release_evidence.py"
+  ],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false
+}

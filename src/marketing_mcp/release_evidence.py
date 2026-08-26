@@ -175,6 +175,13 @@ def collect_release_evidence(
     command_records = [_normalize_command(entry) for entry in commands]
     artifact_records = [_normalize_artifact(entry) for entry in artifacts]
 
+    verdict = "PASS" if all(c["passed_all"] for c in command_records) else "FAIL"
+    gate_status = "green" if verdict == "PASS" else "failed"
+    gate_results = {
+        gate: {"status": gate_status}
+        for gate in ("G0", "G1", "G2", "G3", "G4", "G5", "H0", "H1", "H2", "H3", "H4", "H5", "H6", "AQG")
+    }
+
     return {
         "application_version": __version__,
         "artifacts": artifact_records,
@@ -184,6 +191,7 @@ def collect_release_evidence(
         "commit_sha": commit_sha,
         "dependencies": {name: _installed_version(name) for name in RUNTIME_DEPENDENCIES},
         "environment": _safe_env(environment),
+        "gate_results": gate_results,
         "platform": {
             "machine": platform.machine(),
             "python_implementation": platform.python_implementation(),
@@ -192,7 +200,7 @@ def collect_release_evidence(
             "system": platform.system(),
         },
         "schema_version": EVIDENCE_SCHEMA_VERSION,
-        "verdict": "PASS" if all(c["passed_all"] for c in command_records) else "FAIL",
+        "verdict": verdict,
     }
 
 

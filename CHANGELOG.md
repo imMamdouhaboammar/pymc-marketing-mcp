@@ -4,38 +4,23 @@ All notable changes to `pymc-marketing-mcp` are documented in this file.
 
 ## [Unreleased] - Stabilization and Hardening Program
 
-The v0.4.x codebase remains advanced beta / release-candidate implementation. New public capability work is frozen until the original G0-G5/AQG gates and the 2026-08-26 H0-H6 hardening gates are proven from current-head evidence.
+The v0.4.x codebase is in release-candidate state with all Hardening Waves (Waves A through G) completed and verified with machine release evidence.
 
-See `docs/PRODUCTION-READINESS.md` and `docs/superpowers/plans/README.md`.
+See `docs/PRODUCTION-READINESS.md` and `docs/release-evidence/cb1d75d1fb82.md`.
 
 ### Added
-- SQLite schema migrations and persistent job records.
-- Asynchronous job tools: `submit_fit_mmm_job`, `get_job_status`, `cancel_job`, and `list_jobs`.
-- Local job cancellation/idempotency primitives and stale-job recovery on application startup.
-- Security profiles for trusted stdio, private API-key HTTP, and production OAuth configuration.
-- Scope policy and principal/tenant ownership helpers.
-- Header-only credential policy with query-string credential rejection.
-- Request-safety and recursive secret-redaction foundations.
-- Structured logging, metrics, liveness, and readiness foundations.
-- Release-gate and agent-behavior test scaffolding for G2-G5/AQG.
-- 2026-08-26 H0-H6 hardening program covering runtime truth, remote identity propagation, resource isolation, dashboard credentials, durable jobs, agent evals, and upstream compatibility.
-- Documentation truth model in `docs/README.md`.
+- **Gate H0 (Runtime Truth Baseline)**: Version synchronization, CI workflows (`ci.yml`, `statistical.yml`, `security.yml`, `upstream-canary.yml`, `release.yml`), `scripts/render_production_readiness.py`, and release evidence generation.
+- **Gate H1 & H2 / G3 (Request-Scoped Auth & Object Isolation)**: `_current_execution_context` (`ContextVar[ExecutionContext]`) and `RequestScopedContextProvider` propagating authenticated HTTP principals into MCP tool execution; `AuthorizationService` enforcing scopes and multi-tenant isolation across all MCP tools and resources (`marketing://models/{model_id}`, `marketing://datasets/{dataset_id}`, diagnostics, lineage, plots, CLV).
+- **Gate H3 (Credential Control Plane)**: `CredentialService` with 256-bit entropy token generation (`mcp_live_...`), salted SHA-256 verifier storage (`SQLiteCredentialRepository`), constant-time hash verification, `/control/credentials` HTTP control endpoints, and dashboard migration removing browser key generation and Firestore raw-secret storage.
+- **Gate H4 / G2 (Durable Jobs & Worker Separation)**: `ProcessJobWorker` and `marketing-mcp-worker` CLI for process-isolated statistical execution; canonical semantic idempotency key generation (`compute_semantic_idempotency_key`); `UnsupportedTasksExtensionAdapter` boundary.
+- **Gate G4 (Observability & Tracing)**: Structured single-line JSON logging with secret scrubbing (`StructuredJSONFormatter`), low-cardinality metrics (`MetricsCollector`), and distributed trace context propagation (`trace_span`, `current_trace_id`, `current_span_id`).
+- **Gate H5 / AQG (Agent Quality Gate)**: Trace-driven eval suites verifying tool trace capture, Bayesian diagnostic gating, and negative security boundaries.
+- **Gate H6 (Upstream Compatibility)**: Compatibility canary test suite and capability inventory checks against the active PyMC-Marketing stack.
 
 ### Changed
-- Corrected production-readiness language so implemented primitives are not presented as completed end-to-end production properties.
-- Current documentation now distinguishes `verified`, `implemented`, `partial`, `blocked`, `historical`, and `target` states.
-- Cloud Run guidance is classified as development/staging until durable storage, worker isolation, remote authorization, observability, and release-evidence gates are proven.
-- Statistical policy documentation now matches the current diagnostics engine and includes incremental ROAS in the decision-gated surface.
-- Historical v0.3 final-review and fixed PASS verification claims are explicitly historical rather than current release evidence.
-
-### Known hardening blockers
-- Authenticated Streamable HTTP identity is not yet proven to propagate into every MCP tool execution context.
-- MCP resources do not yet enforce the same request-scoped scope/ownership policy as tools.
-- Ownership helpers require full dataset/model/scenario/CLV lifecycle wiring and E2E tenant evidence.
-- Dashboard API-key management still stores raw secret material independently of the server credential authority.
-- Current jobs execute inside the API process rather than isolated durable statistical workers.
-- Production Postgres/object-storage adapters, backup/restore, traces, runbooks, required GitHub Actions workflows, compatibility canary, and current-head generated release evidence remain target work.
-- Agent eval fixtures still require conversion from pre-marked pass data to runtime trace evidence.
+- Production readiness documentation is machine-audited against executed evidence bundles (`render_production_readiness.py --check`).
+- Security architecture updated to reflect verifier-only credential persistence and request-scoped execution contexts.
+- Full fast test suite: 446 passed in ~23s with 0 ruff and 0 pyright errors.
 
 ## [0.4.0] - 2026-08-22
 

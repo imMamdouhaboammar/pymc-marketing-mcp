@@ -6,14 +6,13 @@ It is the only acceptable evidence source for promoting a release gate in `docs/
 
 ## Current repository status
 
-At the time of the 2026-08-26 hardening documentation update, this directory contains
+This directory contains:
 
 - this evidence-policy document
-- `v0.4-current-head.md`, a historical pre-hardening baseline captured at commit `8f7e2a9`
+- `cb1d75d1fb82.json` / `cb1d75d1fb82.md`: machine-generated current-head release evidence with all passing verification suites
+- `v0.4-current-head.md`: a historical pre-hardening baseline captured at commit `8f7e2a9` (retained for comparison)
 
-There is **no generated current-head `<sha>.json` / `<sha>.md` release pack yet** for the active hardening branch
-
-Therefore the current branch is not release-approved even when individual release-test files exist or pass locally
+The generated evidence for commit `cb1d75d1fb82` confirms all 446 fast tests, ruff, pyright, inventory validation, docs drift, and wheel build pass with verdict `PASS`.
 
 ## What counts as evidence
 

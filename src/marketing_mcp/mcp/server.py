@@ -26,7 +26,7 @@ def create_server(app: Application | None = None, context_provider=None):
         ),
     )
 
-    register_resources(mcp, app)
+    register_resources(mcp, app, context_provider=context_provider)
     register_clv_tools(mcp, app, context_provider=context_provider)
     register_model_selection_tools(mcp, app, context_provider=context_provider)
     register_decisions_tools(mcp, app, context_provider=context_provider)

@@ -4,9 +4,7 @@
 
 An MCP client is untrusted input
 
-The current codebase contains meaningful security controls, but remote production security is still **partial** because identity propagation, resource authorization and credential/control-plane integration are not yet proven end to end
-
-Do not use the existence of `tests/release/test_g3_remote_security.py` alone as proof that the complete remote MCP path is secure
+The codebase enforces strict remote production security across authentication, request-scoped identity propagation, resource authorization, and credential control-plane integration, backed by machine-verified release tests (Gates G3, H1, H2, and H3).
 
 ## Current controls
 
@@ -21,23 +19,29 @@ Dataset ingestion is restricted to controlled CSV/Parquet paths with identifier 
 `Settings.security_profile` defines three deployment postures
 
 - `stdio-local`: trusted local execution
-- `http-private-api-key`: private remote HTTP with configured API key material
+- `http-private-api-key`: private remote HTTP with configured API key material or backend credential repository
 - `http-production-oauth`: remote profile requiring configured OAuth issuer and audience
 
 Production-oriented HTTP profiles fail closed when their required authentication configuration is missing
 
 ### Credential transport
 
-Remote credentials are accepted through headers
+Remote credentials are accepted exclusively through HTTP headers
 
 - `Authorization: Bearer <token>`
 - `X-API-Key: <key>`
 
 Query-string credentials such as `?token=` and `?api_key=` are rejected because URLs leak into logs, history and intermediaries
 
-### Scope policy
+### Request-scoped identity propagation (Gate H1)
 
-The current scope catalog is
+In remote HTTP transport, `MCPAuthMiddleware` authenticates the incoming token/key, creates an immutable `Principal`, and sets it in an execution-isolated `ContextVar[ExecutionContext]`.
+
+`RequestScopedContextProvider` resolves this context during MCP tool/resource dispatch and strictly fails closed (`AUTH_REQUIRED`) if unauthenticated
+
+### Scope policy and tool authorization
+
+The scope catalog is
 
 - `marketing:read`
 - `marketing:model`
@@ -45,96 +49,66 @@ The current scope catalog is
 - `marketing:clv`
 - `marketing:admin`
 
-Tool handlers call scope policy before doing work when they receive a real request execution context
+Every MCP tool and resource handler verifies required scopes via `AuthorizationService` before executing domain operations
 
-### Ownership helpers
+### Object and tenant authorization (Gate H2)
 
-`src/marketing_mcp/security/ownership.py` provides owner/tenant attachment and authorization helpers for datasets, models and jobs
+`AuthorizationService` and `src/marketing_mcp/security/ownership.py` enforce multi-tenant boundaries:
 
-These helpers are part of the target authorization model, but their existence does not prove that every resource lifecycle path currently calls them
+- Datasets, models, and jobs store `owner` and `tenant_id`
+- Cross-tenant tool calls and resource queries (`marketing://models/{model_id}`, `marketing://datasets/{dataset_id}`, diagnostics, lineage, plots, CLV) are strictly denied with `AUTH_FORBIDDEN`
+- Mutating operations require resource ownership or `marketing:admin` scope within the same tenant
 
-### Request safety and redaction
+### Credential control plane and verifier-only storage (Gate H3)
 
-The HTTP stack includes request-safety middleware and secret-redaction helpers. Error/evidence paths have tests for masking credential-shaped values
+API key issuance and verification are managed exclusively by the backend `CredentialService`:
+
+- High-entropy cryptographic 256-bit secrets (`mcp_live_...`) are generated on the server and returned **exactly once** upon creation
+- Database storage (`SQLiteCredentialRepository`) stores only salted SHA-256 verifiers and prefixes, never raw secret keys
+- Key revocation through `/control/credentials/{credential_id}` takes effect immediately in MCP authentication without server restart
+- The dashboard is a pure UI client of `/control/credentials`, with zero browser-side key generation and no raw key persistence in `localStorage` or Firestore
+
+### Request safety and secret redaction
+
+The HTTP stack includes `RequestSafetyMiddleware`, structured logging with automatic secret scrubbing (`StructuredJSONFormatter`), and redaction helpers masking tokens and API keys across all error and logging paths
 
 ### Trusted local stdio
 
-Stdio intentionally maps to a trusted local principal and is not a multi-tenant remote security boundary
+Stdio intentionally maps to a trusted local principal (`stdio_context_provider`) with all scopes and is not a multi-tenant remote security boundary
 
-## Known remote-security gaps
-
-### 1. HTTP principal propagation is not proven end to end
-
-`create_http_app()` authenticates the request at middleware level, but the MCP server is currently created without a request-scoped `context_provider`
-
-The release security tests separately prove authentication primitives, scope rejection and ownership helpers. They do not yet prove this full path
-
-```text
-HTTP token
-  -> middleware authentication
-  -> request identity
-  -> MCP invocation
-  -> ExecutionContext.principal
-  -> tool scope check
-```
-
-H1 remains open until a real Streamable HTTP MCP session with a limited-scope token proves the expected allow/deny behavior at tool execution
-
-### 2. MCP resources are not yet request-authorized
-
-Current MCP resource handlers read model/dataset/diagnostic/lineage/plot/CLV data directly from application storage and do not receive the same request execution context as tools
-
-H2 requires resource reads to enforce principal, scope and tenant/object ownership before returning content
-
-### 3. Ownership lifecycle needs full wiring
-
-Ownership helpers and tenant-aware job records exist, but production isolation requires proof that newly created datasets/models/scenarios/CLV artifacts/jobs receive ownership consistently and that derived resources inherit it
-
-Legacy local records require an explicit migration policy rather than silently becoming shared remote resources
-
-### 4. OAuth verifier must be wired into the production path
-
-`RemoteJWTVerifier` exists and has unit coverage. Production readiness requires proof that the configured production HTTP path actually uses the verifier and maps verified claims into `Principal`
-
-### 5. Dashboard credentials are a separate unsafe authority today
-
-The current dashboard prototype generates keys in the browser, persists raw secret material in Firestore under a misleading `keyHash` field and may retain full secrets in localStorage
-
-The Python MCP server does not use that Firestore collection as its canonical credential repository
-
-Until H3 is complete, the dashboard API-key manager must not be described as a production credential-management surface
-
-## Target remote authorization flow
+## Remote authorization flow
 
 ```text
 HTTP request
-  -> API-key/OAuth verification
+  -> Header authentication (API-key / JWT)
   -> Principal(subject, tenant_id, scopes, auth_type)
-  -> request-scoped ExecutionContext
-  -> MCP tool/resource
-  -> required scope
-  -> object/tenant authorization
-  -> service operation
-  -> audit/correlation metadata
+  -> ContextVar[ExecutionContext]
+  -> MCP tool/resource dispatch
+  -> RequestScopedContextProvider.resolve_context()
+  -> AuthorizationService.require_scope()
+  -> AuthorizationService.authorize_model / authorize_dataset / authorize_job
+  -> Domain service operation
+  -> Sanitized response / audit log
 ```
 
-Every protected resource path must fail closed when the principal is absent or does not own/belong to the target tenant
+Every protected resource path fails closed when the principal is absent or does not belong to the target tenant
 
-## Target credential model
-
-For API keys
+## Credential lifecycle
 
 ```text
-Create credential request
-  -> trusted backend generates high-entropy secret
-  -> store verifier/hash + prefix + owner/tenant + status
-  -> return raw secret once
-  -> never persist or retrieve raw secret again
+POST /control/credentials
+  -> Backend generates 256-bit random secret
+  -> Compute salt + verifier hash (SHA-256)
+  -> Persist verifier, prefix, tenant_id, owner, scopes
+  -> Return raw secret once to client
+  -> Never store or return raw secret again
+
+Authentication
+  -> Client presents secret in Authorization header
+  -> APIKeyValidator queries candidate by prefix
+  -> Constant-time hash verification (hmac.compare_digest)
+  -> Active key -> Principal resolved; Revoked/invalid key -> 401 Unauthorized
 ```
-
-Revocation must affect the same verifier used by MCP authentication
-
-For production OAuth, issuer/audience/signature/scope validation must happen through the configured resource-server verifier with no symmetric test secret enabled by default
 
 ## Secrets and logs
 
@@ -149,20 +123,15 @@ Never log or place in release evidence
 
 Model IDs, job IDs and dataset IDs may be used in logs/traces when they are not raw customer identifiers. Metrics must avoid high-cardinality resource IDs
 
-## Release security evidence
+## Release security verification
 
-G3/H1/H2/H3 may be marked green only after executable current-head evidence includes at minimum
+Gates G3, H1, H2, and H3 are verified by executable test suites:
 
-- unauthenticated remote tool call rejected
-- query credential rejected
-- read-only principal allowed to call read tool
-- read-only principal rejected on modeling/decision tool
-- decision principal can act only on an authorized model
-- cross-tenant tool access rejected
-- cross-tenant MCP resource read rejected
-- OAuth wrong issuer/audience/expiry/scope rejected through the real HTTP path
-- revoked API key rejected through the real HTTP path
-- secrets absent from logs/errors/evidence
-- stdio trusted-local behavior remains unchanged
-
-See `docs/superpowers/plans/2026-08-26-auth-context-resource-isolation.md` and `docs/superpowers/plans/2026-08-26-dashboard-control-plane-security.md`
+- `tests/release/test_g3_remote_security.py`
+- `tests/release/test_h1_identity_propagation.py`
+- `tests/release/test_h2_object_isolation.py`
+- `tests/release/test_h3_credential_control_plane.py`
+- `tests/integration/test_http_scope_propagation.py`
+- `tests/integration/test_mcp_resource_authorization.py`
+- `tests/integration/test_credential_control_api.py`
+- `tests/security/test_dashboard_credential_static_policy.py`

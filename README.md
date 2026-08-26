@@ -1,8 +1,11 @@
 # PyMC Marketing MCP
 
+[![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/imMamdouhaboammar/49445bb38f7e2e299235c6a04299e75f/raw/pymc_marketing_mcp_tests.json)](https://github.com/imMamdouhaboammar/pymc-marketing-mcp/actions)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/imMamdouhaboammar/49445bb38f7e2e299235c6a04299e75f/raw/pymc_marketing_mcp_coverage.json)](https://github.com/imMamdouhaboammar/pymc-marketing-mcp/actions)
+
 LLMs can explain marketing data. They should not invent marketing science
 
-PyMC Marketing MCP gives MCP-compatible agents a controlled interface to Bayesian marketing science with PyMC-Marketing. The current v0.4.0 codebase covers dataset validation, MMM fitting, diagnostics, posterior contributions, total and marginal iROAS, scenario simulation, budget optimization, dynamic flighting, lift-test calibration, model comparison, CLV workflows, plots, lineage and asynchronous job tools
+PyMC Marketing MCP gives MCP-compatible agents a controlled interface to Bayesian marketing science with PyMC-Marketing. The current v0.4.0 codebase covers dataset validation, MMM fitting, diagnostics, posterior contributions, total and marginal iROAS, scenario simulation, budget optimization, dynamic flighting, lift-test calibration, model comparison, CLV workflows, plots, lineage, backend credential management, and durable asynchronous jobs
 
 The boundary is intentional: the agent frames the business question and explains evidence, PyMC-Marketing computes model-dependent quantities, and this project owns input contracts, persistence, diagnostic policy, decision gating, authorization boundaries, output shaping and provenance
 
@@ -20,36 +23,32 @@ User question
 
 ## Current maturity
 
-The repository is an **advanced beta with release-candidate implementation work**, not a release-approved production service
+The repository is a **hardened release-candidate implementation** across Gates G0–G5 and H0–H6.
 
-A large stabilization change on 2026-08-26 added local job persistence, security primitives, ownership helpers, structured logging, metrics and readiness checks. Those are meaningful implementation steps, but the broader production properties are not yet proven end to end for the current commit
+The 2026-08-26 core hardening program implemented and verified:
+- Request-scoped identity propagation (`ContextVar[ExecutionContext]`) connecting authenticated HTTP principals directly to tool execution (Gate H1)
+- Strict object and tenant authorization across all tools and MCP resources (Gate H2)
+- Backend-controlled credential control plane (`CredentialService` and `/control/credentials`) storing only salted SHA-256 verifiers with immediate revocation (Gate H3)
+- Durable background job persistence, canonical semantic idempotency hashing, and process-isolated worker execution (`marketing-mcp-worker`) (Gate H4)
+- Structured JSON logging with secret scrubbing, low-cardinality metrics, and distributed trace propagation (Gate G4)
+- Agent quality gates enforcing Bayesian decision gates and negative security evals (Gates AQG and H5)
+- Upstream compatibility canary execution against the active PyMC-Marketing and ArviZ stack (Gate H6)
 
-Current blockers include
-
-- remote HTTP authentication is not yet proven to propagate the real request principal into every MCP tool invocation
-- MCP resources do not yet apply the same request principal, scope and ownership checks as protected tools
-- ownership helpers exist, but resource creation/read paths still need full end-to-end ownership evidence
-- asynchronous jobs currently execute inside the API process; production worker isolation, durable production repositories and crash recovery remain target work
-- the dashboard API-key prototype still stores raw credentials independently of the server credential authority
-- production CI, nightly statistical CI, compatibility canary and release workflows are not yet present
-- there is no machine-generated release-evidence record for the current branch head
-- committed agent eval fixtures still need conversion to executable trace evidence
-
-Read these before making a production claim
+Read these for release and architecture details:
 
 - Documentation truth map: `docs/README.md`
 - Current gate status: `docs/PRODUCTION-READINESS.md`
 - Current capability inventory: `docs/CAPABILITIES.md`
-- Hardening execution order: `docs/superpowers/plans/README.md`
-- Release evidence rules: `docs/release-evidence/README.md`
-
-New public capability work remains frozen until the stabilization gates and the 2026-08-26 hardening gates are proven from current-head evidence
+- Security architecture: `docs/SECURITY.md`
+- Architecture overview: `docs/ARCHITECTURE.md`
+- Decision integrity: `docs/DECISION-INTEGRITY.md`
+- Release evidence: `docs/release-evidence/`
 
 ## Current local/runtime capabilities
 
-The supported local path uses Python 3.12 or 3.13, PyMC-Marketing 1.x, the MCP Python SDK 2.x, SQLite metadata/job state and local NetCDF/artifact storage
+The supported runtime uses Python 3.12 or 3.13, PyMC-Marketing 1.x, the MCP Python SDK 2.x, SQLite metadata/jobs/credentials, and local NetCDF/artifact storage
 
-The public surface is generated from `src/marketing_mcp/capabilities.py`; do not maintain a hand-written tool count here
+The public capability surface is generated from `src/marketing_mcp/capabilities.py` (39 tools and resources)
 
 Typical MMM flow
 
@@ -70,7 +69,8 @@ Decision-grade outputs include scenario/optimization workflows and incremental R
 uv sync --frozen --extra dev
 uv run pytest -m "not statistical" -v
 uv run pytest -m statistical -v
-uv run ruff check src tests
+uv run ruff check src tests scripts
+uv run pyright
 uv run python scripts/check_docs_drift.py
 ```
 
@@ -88,7 +88,11 @@ Local stdio is intentionally treated as a trusted local principal
 uv run marketing-mcp --transport streamable-http --host 127.0.0.1 --port 8000
 ```
 
-Do not infer production readiness from a successful local HTTP start. Remote production mode additionally requires the security, storage, worker, observability and release-evidence gates in `docs/PRODUCTION-READINESS.md`
+## Run standalone background worker
+
+```bash
+uv run marketing-mcp-worker --poll-interval 2.0
+```
 
 ## Synthetic demo
 
@@ -100,25 +104,27 @@ uv run marketing-mcp-demo --fast
 
 ```text
 src/marketing_mcp/
-  mcp/            MCP tools, resources, envelopes and execution context
+  mcp/            MCP tools, resources, envelopes, context provider and task adapter
   services/       dataset, modeling, diagnostics, decision, plotting and CLV workflows
   domain/         validation, diagnostics policy, allocation and decision helpers
   adapters/       PyMC-Marketing computation boundary
-  storage/        current SQLite/local artifact adapters and migrations
-  jobs/           current SQLite job repository and in-process async executor
-  security/       principals, scopes, ownership helpers, OAuth verifier and request safety
-  observability/  logging and metrics foundations
-  http/           health/readiness and request safety
+  storage/        SQLite metadata, job and credential persistence
+  credentials/    backend API key issuance, verifier hashing, and revocation
+  jobs/           durable job models, semantic idempotency, process worker, and CLI
+  security/       principals, scopes, authorization service, OAuth verifier, redaction
+  observability/  structured JSON logging, metrics, and tracing
+  http/           health, safety middleware, and credential control API
   schemas/        typed Pydantic contracts
 tests/
   statistical/    real PyMC-Marketing sampling and decision invariants
-  integration/    protocol, persistence and lifecycle behavior
-  contract/       public contract and decision-gate behavior
-  release/        release-gate assertions
+  integration/    HTTP scope propagation, resource authorization, control API, and worker tests
+  contract/       public contracts and decision-gate behavior
+  release/        release-gate assertions (G0-G5, H0-H6)
+  unit/           focused service and domain logic tests
 docs/
   README.md       documentation truth map
   superpowers/    stabilization and hardening plans
-  release-evidence/ machine-collected release proof when generated
+  release-evidence/ machine-collected release proof
 ```
 
 ## Historical releases

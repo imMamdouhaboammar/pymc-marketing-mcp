@@ -1,0 +1,35 @@
+name: Secret Scanning (TruffleHog)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run weekly scan on Sunday at midnight UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  trufflehog:
+    name: TruffleHog OSS Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS (Pull Request)
+        if: github.event_name == 'pull_request'
+        uses: trufflesecurity/trufflehog@v3.97.1
+        with:
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+      - name: TruffleHog OSS (Full Scan)
+        if: github.event_name != 'pull_request'
+        uses: trufflesecurity/trufflehog@v3.97.1
+        with:
+          extra_args: --only-verified

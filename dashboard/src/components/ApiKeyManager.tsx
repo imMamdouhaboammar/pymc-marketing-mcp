@@ -1,16 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/useAuth';
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  updateDoc,
-  doc,
-  serverTimestamp
-} from 'firebase/firestore';
-import { db } from '../firebase';
+import { fetchCredentials, createCredential, revokeCredential, type CredentialDTO } from '../api/credentials';
 import type { ApiKeyItem } from '../types';
 import { Plus, Copy, Check, Trash2, RefreshCw } from 'lucide-react';
 
@@ -32,36 +22,24 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
     if (!user) return;
     setLoading(true);
     try {
-      const q = query(collection(db, 'api_keys'), where('ownerUid', '==', user.uid));
-      const querySnapshot = await getDocs(q);
-      const items: ApiKeyItem[] = [];
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        items.push({
-          id: docSnap.id,
-          name: data.name || 'API Key',
-          keyPrefix: data.keyPrefix || 'mcp_live_...',
-          ownerUid: data.ownerUid,
-          ownerEmail: data.ownerEmail,
-          status: data.status || 'active',
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
-          requestCount: data.requestCount || 0,
-        });
-      });
-      setKeys(items);
-      if (items.length > 0 && !selectedKey) {
-        onSelectKey(items[0].keyPrefix);
+      const token = await user.getIdToken?.().catch(() => undefined);
+      const items: CredentialDTO[] = await fetchCredentials(token);
+      const apiKeys: ApiKeyItem[] = items.map((item) => ({
+        id: item.credential_id,
+        name: item.name || 'API Key',
+        keyPrefix: item.prefix ? `${item.prefix}...` : 'mcp_live_...',
+        ownerUid: item.owner_subject,
+        status: item.status,
+        createdAt: item.created_at || new Date().toISOString(),
+        lastUsedAt: item.last_used_at || undefined,
+        scopes: item.scopes,
+      }));
+      setKeys(apiKeys);
+      if (apiKeys.length > 0 && !selectedKey) {
+        onSelectKey(apiKeys[0].keyPrefix);
       }
     } catch (err) {
-      console.warn('Could not fetch from Firestore, checking local storage:', err);
-      const local = localStorage.getItem(`keys_${user.uid}`);
-      if (local) {
-        const parsed = JSON.parse(local);
-        setKeys(parsed);
-        if (parsed.length > 0 && !selectedKey) {
-          onSelectKey(parsed[0].keySecret || parsed[0].keyPrefix);
-        }
-      }
+      console.warn('Could not fetch from backend credentials API:', err);
     } finally {
       setLoading(false);
     }
@@ -71,69 +49,48 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
     fetchKeys();
   }, [fetchKeys]);
 
-
-  const generateRandomKey = (): string => {
-    const array = new Uint8Array(24);
-    window.crypto.getRandomValues(array);
-    const hex = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
-    return `mcp_live_${hex}`;
-  };
-
   const handleCreateKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    const fullSecret = generateRandomKey();
-    const prefix = `${fullSecret.substring(0, 14)}...${fullSecret.substring(fullSecret.length - 4)}`;
-
-    const newItem: ApiKeyItem = {
-      id: `key_${Date.now()}`,
-      name: keyName || 'Developer Key',
-      keySecret: fullSecret,
-      keyPrefix: prefix,
-      ownerUid: user.uid,
-      ownerEmail: user.email || '',
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      requestCount: 0,
-    };
-
     try {
-      const docRef = await addDoc(collection(db, 'api_keys'), {
-        name: newItem.name,
-        keyPrefix: prefix,
-        keyHash: fullSecret,
-        ownerUid: user.uid,
-        ownerEmail: user.email || '',
-        status: 'active',
-        createdAt: serverTimestamp(),
-        requestCount: 0,
-      });
-      newItem.id = docRef.id;
-    } catch (err) {
-      console.warn('Firestore fallback to local storage:', err);
-    }
+      const token = await user.getIdToken?.().catch(() => undefined);
+      const response = await createCredential(
+        keyName || 'Developer Key',
+        ['marketing:read', 'marketing:model', 'marketing:decide'],
+        token
+      );
 
-    const updatedKeys = [newItem, ...keys];
-    setKeys(updatedKeys);
-    localStorage.setItem(`keys_${user.uid}`, JSON.stringify(updatedKeys));
-    setNewlyCreatedKey(fullSecret);
-    onSelectKey(fullSecret);
-    setKeyName('');
-    setIsCreating(false);
+      const newItem: ApiKeyItem = {
+        id: response.credential.credential_id,
+        name: response.credential.name,
+        keyPrefix: `${response.credential.prefix}...`,
+        ownerUid: response.credential.owner_subject,
+        status: 'active',
+        createdAt: response.credential.created_at,
+        scopes: response.credential.scopes,
+      };
+
+      setKeys([newItem, ...keys]);
+      setNewlyCreatedKey(response.secret);
+      onSelectKey(response.secret);
+      setKeyName('');
+      setIsCreating(false);
+    } catch (err) {
+      console.error('Failed to create credential via backend:', err);
+      alert('Failed to issue credential from backend API.');
+    }
   };
 
   const handleRevokeKey = async (keyId: string) => {
     if (!confirm('Revoke this key? Connected clients will lose access immediately.')) return;
     try {
-      await updateDoc(doc(db, 'api_keys', keyId), { status: 'revoked' });
+      const token = await user?.getIdToken?.().catch(() => undefined);
+      await revokeCredential(keyId, token);
+      setKeys(keys.map((k) => (k.id === keyId ? { ...k, status: 'revoked' as const } : k)));
     } catch (err) {
-      console.warn(err);
-    }
-    const updated = keys.map((k) => (k.id === keyId ? { ...k, status: 'revoked' as const } : k));
-    setKeys(updated);
-    if (user) {
-      localStorage.setItem(`keys_${user.uid}`, JSON.stringify(updated));
+      console.error('Failed to revoke credential via backend:', err);
+      alert('Failed to revoke key.');
     }
   };
 
@@ -178,7 +135,7 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
           <div className="flex items-center justify-between text-xs mb-1.5">
             <span className="font-semibold text-emerald-400 flex items-center space-x-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span>New Secret Generated</span>
+              <span>New Secret Generated (Shown Only Once)</span>
             </span>
             <button
               onClick={() => setNewlyCreatedKey(null)}
@@ -187,6 +144,9 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
               Dismiss
             </button>
           </div>
+          <p className="text-[11px] text-zinc-400 mb-2">
+            Copy and store this secret safely. For your security, it cannot be viewed again.
+          </p>
           <div className="flex items-center space-x-2 bg-zinc-900 border border-zinc-800 rounded-md p-1.5">
             <code className="text-xs text-zinc-200 font-mono select-all flex-1 px-1.5 truncate">
               {newlyCreatedKey}
@@ -254,10 +214,10 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
             <thead className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 bg-zinc-950 border-b border-zinc-800">
               <tr>
                 <th className="py-2 px-3.5">Name</th>
-                <th className="py-2 px-3.5 font-mono">Token</th>
+                <th className="py-2 px-3.5 font-mono">Token Prefix</th>
                 <th className="py-2 px-3.5">Status</th>
                 <th className="py-2 px-3.5">Created</th>
-                <th className="py-2 px-3.5">Requests</th>
+                <th className="py-2 px-3.5">Scopes</th>
                 <th className="py-2 px-3.5 text-right">Actions</th>
               </tr>
             </thead>
@@ -265,9 +225,9 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
               {keys.map((item) => (
                 <tr
                   key={item.id}
-                  onClick={() => onSelectKey(item.keySecret || item.keyPrefix)}
+                  onClick={() => onSelectKey(item.keyPrefix)}
                   className={`hover:bg-zinc-800/40 cursor-pointer transition-colors ${
-                    selectedKey === (item.keySecret || item.keyPrefix) ? 'bg-zinc-800/60' : ''
+                    selectedKey === item.keyPrefix ? 'bg-zinc-800/60' : ''
                   }`}
                 >
                   <td className="py-2.5 px-3.5 font-medium text-zinc-200">{item.name}</td>
@@ -290,8 +250,8 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
                   <td className="py-2.5 px-3.5 text-zinc-400 font-mono text-[11px]">
                     {new Date(item.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="py-2.5 px-3.5 font-mono text-zinc-200">
-                    {item.requestCount}
+                  <td className="py-2.5 px-3.5 font-mono text-zinc-400 text-[10px]">
+                    {item.scopes ? item.scopes.join(', ') : 'all'}
                   </td>
                   <td className="py-2.5 px-3.5 text-right">
                     {item.status === 'active' && (

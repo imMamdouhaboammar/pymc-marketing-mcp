@@ -35,7 +35,9 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs" / "release-evidence"
 FAST_COMMANDS = (
     'uv run pytest -n auto -q -m "not statistical"',
     "uv run ruff check src tests scripts",
+    "uv run pyright",
     "uv run python scripts/generate_capability_inventory.py --check",
+    "uv run python scripts/check_docs_drift.py",
 )
 STATISTICAL_COMMANDS = ("uv run pytest -m statistical -q",)
 

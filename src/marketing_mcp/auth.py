@@ -13,6 +13,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from marketing_mcp.mcp.context import (
+    ExecutionContext,
+    reset_current_execution_context,
+    set_current_execution_context,
+)
+from marketing_mcp.security.policy import all_scopes
+from marketing_mcp.security.principal import Principal
+
 
 @dataclass
 class AuthContext:
@@ -20,6 +28,7 @@ class AuthContext:
     client_id: str = "anonymous"
     auth_type: str = "none"  # "api_key" | "jwt" | "none"
     scopes: list[str] = field(default_factory=lambda: ["*"])
+    tenant_id: str | None = None
     error_message: str | None = None
 
 
@@ -34,6 +43,7 @@ def create_jwt_token(
     secret: str,
     client_id: str = "ai-client",
     scopes: list[str] | None = None,
+    tenant_id: str | None = None,
     expires_in_seconds: int = 86400 * 30,  # 30 days default
     issuer: str = "pymc-marketing-mcp",
     audience: str = "mcp-clients",
@@ -48,33 +58,55 @@ def create_jwt_token(
         "aud": audience,
         "scopes": scopes or ["*"],
     }
+    if tenant_id is not None:
+        payload["tenant_id"] = tenant_id
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
 class APIKeyValidator:
-    def __init__(self, valid_keys: list[str] | set[str] | None = None):
+    def __init__(
+        self,
+        valid_keys: list[str] | set[str] | None = None,
+        credential_service: Any = None,
+    ):
         self.valid_keys = {k.strip() for k in (valid_keys or []) if k.strip()}
+        self.credential_service = credential_service
 
     def add_key(self, key: str) -> None:
         if key.strip():
             self.valid_keys.add(key.strip())
 
     def validate(self, candidate_key: str) -> AuthContext | None:
-        if not candidate_key or not self.valid_keys:
+        if not candidate_key:
             return None
         candidate = candidate_key.strip()
-        matched = False
-        for valid_key in self.valid_keys:
-            if secrets.compare_digest(candidate, valid_key):
-                matched = True
-                break
-        if matched:
-            return AuthContext(
-                authenticated=True,
-                client_id="api-key-client",
-                auth_type="api_key",
-                scopes=["*"],
-            )
+
+        # 1. Check dynamic credential service (verifiers & revocations in DB)
+        if self.credential_service is not None:
+            record = self.credential_service.verify(candidate)
+            if record is not None:
+                return AuthContext(
+                    authenticated=True,
+                    client_id=record.owner_subject,
+                    auth_type="api_key",
+                    scopes=list(record.scopes),
+                    tenant_id=record.tenant_id,
+                )
+
+        # 2. Check static in-memory/bootstrap keys
+        if self.valid_keys:
+            matched = False
+            for valid_key in self.valid_keys:
+                if secrets.compare_digest(candidate, valid_key):
+                    matched = True
+                    break
+            if matched:
+                return AuthContext(
+                    authenticated=True,
+                    client_id="api-key-client",
+                    auth_type="api_key",
+                    scopes=["*"],
+                )
         return None
 
 
@@ -105,6 +137,7 @@ class JWTValidator:
                 client_id=payload.get("sub", "jwt-client"),
                 auth_type="jwt",
                 scopes=payload.get("scopes", ["*"]),
+                tenant_id=payload.get("tenant_id") or payload.get("tenant"),
             )
         except jwt.ExpiredSignatureError:
             return AuthContext(
@@ -126,9 +159,11 @@ class AuthManager:
         jwt_issuer: str = "pymc-marketing-mcp",
         jwt_audience: str = "mcp-clients",
         enabled: bool = True,
+        credential_service: Any = None,
     ):
         self.enabled = enabled
-        self.api_key_validator = APIKeyValidator(api_keys)
+        self.credential_service = credential_service
+        self.api_key_validator = APIKeyValidator(api_keys, credential_service=credential_service)
         self.jwt_validator = JWTValidator(
             secret=jwt_secret, issuer=jwt_issuer, audience=jwt_audience
         )
@@ -255,4 +290,23 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 
         # Store auth context in request state for downstream handlers
         request.state.auth = auth_ctx
-        return await call_next(request)
+
+        auth_type: Any = "oauth" if auth_ctx.auth_type == "jwt" else ("api_key" if auth_ctx.auth_type == "api_key" else "stdio")
+        principal_scopes = all_scopes() if "*" in auth_ctx.scopes else frozenset(auth_ctx.scopes)
+        principal = Principal(
+            subject=auth_ctx.client_id,
+            auth_type=auth_type,
+            scopes=principal_scopes,
+            tenant_id=auth_ctx.tenant_id or "default",
+        )
+        req_id = request.headers.get("x-request-id", secrets.token_hex(8))
+        exec_ctx = ExecutionContext(
+            principal=principal,
+            request_id=req_id,
+            transport="http",
+        )
+        token = set_current_execution_context(exec_ctx)
+        try:
+            return await call_next(request)
+        finally:
+            reset_current_execution_context(token)

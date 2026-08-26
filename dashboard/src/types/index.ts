@@ -10,14 +10,14 @@ export interface UserProfile {
 export interface ApiKeyItem {
   id: string;
   name: string;
-  keySecret?: string; // Full secret shown upon creation
   keyPrefix: string;
   ownerUid: string;
-  ownerEmail: string;
+  ownerEmail?: string;
   status: 'active' | 'revoked';
   createdAt: string;
   lastUsedAt?: string;
-  requestCount: number;
+  scopes?: string[];
+  requestCount?: number;
 }
 
 export interface UsageLogItem {
@@ -36,4 +36,3 @@ export const ADMIN_EMAILS = [
   'omar.hassan.gebally@gmail.com',
   'admin@pymc-marketing.com'
 ];
-

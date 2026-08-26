@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from marketing_mcp.app import Application
 from marketing_mcp.errors import DomainError
 from marketing_mcp.mcp.envelope import env
@@ -15,13 +17,15 @@ from marketing_mcp.schemas.models import (
     PredictExpectedSpendInput,
     PredictProbabilityAliveInput,
 )
+from marketing_mcp.security.ownership import authorize_dataset, authorize_resource
 from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
-def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
+def register_clv_tools(mcp, app: Application, context_provider: Any = None) -> None:
     from marketing_mcp.mcp.context import stdio_context_provider
 
     resolve_context = context_provider or stdio_context_provider
+
     @mcp.tool(
         name="fit_purchase_model",
         description=(
@@ -31,7 +35,13 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def fit_purchase_model(config: FitPurchaseModelInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("fit_purchase_model")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("fit_purchase_model")[0])
+            dataset = app.metadata.get_dataset(config.dataset_id)
+            if not dataset:
+                raise DomainError("DATASET_NOT_FOUND", f"Dataset '{config.dataset_id}' was not found")
+            authorize_dataset(principal, dataset, action="read")
+
             r = app.clv.fit_purchase_model(config)
             return env(
                 summary=r.model_dump(),
@@ -40,7 +50,6 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
             )
         except DomainError as e:
             return e.to_dict()
-
 
     @mcp.tool(
         name="fit_value_model",
@@ -51,7 +60,13 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def fit_value_model(config: FitValueModelInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("fit_value_model")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("fit_value_model")[0])
+            dataset = app.metadata.get_dataset(config.dataset_id)
+            if not dataset:
+                raise DomainError("DATASET_NOT_FOUND", f"Dataset '{config.dataset_id}' was not found")
+            authorize_dataset(principal, dataset, action="read")
+
             r = app.clv.fit_value_model(config)
             return env(
                 summary=r.model_dump(),
@@ -61,14 +76,19 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="predict_expected_purchases",
         description="Predict expected future purchase counts per customer from a fitted purchase model (BG/NBD).",
     )
     async def predict_expected_purchases(config: PredictExpectedPurchasesInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("predict_expected_purchases")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("predict_expected_purchases")[0])
+            clv_rec = app.metadata.get_clv_model(config.model_id)
+            if not clv_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"CLV Model '{config.model_id}' was not found")
+            authorize_resource(principal, clv_rec, resource_type="clv_model", action="read")
+
             r = app.clv.predict_expected_purchases(config)
             return env(
                 summary={
@@ -84,14 +104,19 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="predict_probability_alive",
         description="Estimate probability of customer retention/alive from a fitted purchase or churn model.",
     )
     async def predict_probability_alive(config: PredictProbabilityAliveInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("predict_probability_alive")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("predict_probability_alive")[0])
+            clv_rec = app.metadata.get_clv_model(config.model_id)
+            if not clv_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"CLV Model '{config.model_id}' was not found")
+            authorize_resource(principal, clv_rec, resource_type="clv_model", action="read")
+
             r = app.clv.predict_probability_alive(config)
             return env(
                 summary={
@@ -106,14 +131,19 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="predict_expected_spend",
         description="Predict average transaction monetary spend per customer from a fitted Gamma-Gamma value model.",
     )
     async def predict_expected_spend(config: PredictExpectedSpendInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("predict_expected_spend")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("predict_expected_spend")[0])
+            clv_rec = app.metadata.get_clv_model(config.model_id)
+            if not clv_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"CLV Model '{config.model_id}' was not found")
+            authorize_resource(principal, clv_rec, resource_type="clv_model", action="read")
+
             r = app.clv.predict_expected_spend(config)
             return env(
                 summary={
@@ -128,7 +158,6 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="estimate_customer_lifetime_value",
         description=(
@@ -138,7 +167,18 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def estimate_customer_lifetime_value(config: EstimateCLVInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("estimate_customer_lifetime_value")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("estimate_customer_lifetime_value")[0])
+            purch_rec = app.metadata.get_clv_model(config.purchase_model_id)
+            if not purch_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"CLV Purchase Model '{config.purchase_model_id}' was not found")
+            authorize_resource(principal, purch_rec, resource_type="clv_model", action="read")
+
+            val_rec = app.metadata.get_clv_model(config.value_model_id)
+            if not val_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"CLV Value Model '{config.value_model_id}' was not found")
+            authorize_resource(principal, val_rec, resource_type="clv_model", action="read")
+
             r = app.clv.estimate_customer_lifetime_value(config)
             return env(
                 summary={
@@ -156,7 +196,6 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="fit_clv_model",
         description=(
@@ -166,7 +205,13 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def fit_clv_model(config: FitCLVInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("fit_clv_model")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("fit_clv_model")[0])
+            dataset = app.metadata.get_dataset(config.dataset_id)
+            if not dataset:
+                raise DomainError("DATASET_NOT_FOUND", f"Dataset '{config.dataset_id}' was not found")
+            authorize_dataset(principal, dataset, action="read")
+
             r = app.clv.fit_clv(config)
             return env(
                 summary=r.model_dump(),
@@ -177,7 +222,6 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="predict_customer_clv",
         description=(
@@ -187,7 +231,13 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def predict_customer_clv(config: PredictCLVInput):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("predict_customer_clv")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("predict_customer_clv")[0])
+            clv_rec = app.metadata.get_clv_model(config.model_id)
+            if not clv_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"CLV Model '{config.model_id}' was not found")
+            authorize_resource(principal, clv_rec, resource_type="clv_model", action="read")
+
             r = app.clv.predict_clv(config)
             return env(
                 summary={
@@ -202,7 +252,6 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
         except DomainError as e:
             return e.to_dict()
 
-
     @mcp.tool(
         name="get_churn_risk_cohorts",
         description=(
@@ -213,7 +262,13 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
     )
     async def get_churn_risk_cohorts(model_id: str, threshold_p_alive: float = 0.3):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("get_churn_risk_cohorts")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("get_churn_risk_cohorts")[0])
+            clv_rec = app.metadata.get_clv_model(model_id)
+            if not clv_rec:
+                raise DomainError("MODEL_NOT_FOUND", f"CLV Model '{model_id}' was not found")
+            authorize_resource(principal, clv_rec, resource_type="clv_model", action="read")
+
             r = app.clv.get_churn_risk_cohorts(model_id, threshold=threshold_p_alive)
             return env(
                 summary={
@@ -227,7 +282,3 @@ def register_clv_tools(mcp, app: Application, context_provider=None) -> None:
             )
         except DomainError as e:
             return e.to_dict()
-
-    # -----------------------------------------------------------------------
-    # Phase 4 — Dynamic Multi-Period Flighting Optimization
-    # -----------------------------------------------------------------------

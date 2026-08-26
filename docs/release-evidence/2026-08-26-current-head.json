@@ -1,0 +1,143 @@
+{
+  "application_version": "0.4.0",
+  "artifacts": [
+    {
+      "bytes": 125236,
+      "name": "pymc_marketing_mcp-0.4.0-py3-none-any.whl",
+      "sha256": "5f4b3fe036c06b76748dc1c0cac1a0601c3ee1d4414481f8d5a08170507e9b87"
+    },
+    {
+      "bytes": 264230,
+      "name": "pymc_marketing_mcp-0.4.0.tar.gz",
+      "sha256": "be2f22587c33e981983170e581d2a6df31c8972b1428271fe565b95fafd08e9f"
+    }
+  ],
+  "ci": {
+    "is_ci": false,
+    "provider": null,
+    "reported_commit_sha": null,
+    "run_id": null,
+    "workflow": null
+  },
+  "collected_at": "2026-08-26T11:23:48Z",
+  "commands": [
+    {
+      "command": "uv run pytest -n auto -q -m \"not statistical\"",
+      "duration_seconds": 27.71,
+      "exit_code": 0,
+      "passed_all": true,
+      "stdout_tail": "413 passed, 38 warnings in 27.21s",
+      "tests_errors": 0,
+      "tests_failed": 0,
+      "tests_passed": 413,
+      "tests_skipped": 0
+    },
+    {
+      "command": "uv run ruff check src tests scripts",
+      "duration_seconds": 0.11,
+      "exit_code": 0,
+      "passed_all": true,
+      "stdout_tail": "All checks passed!"
+    },
+    {
+      "command": "uv run python scripts/generate_capability_inventory.py --check",
+      "duration_seconds": 0.11,
+      "exit_code": 0,
+      "passed_all": true,
+      "stdout_tail": "/Users/mamdouhaboammar/Downloads/pymc-marketing-mcp-v0.2.0/docs/CAPABILITIES.md matches the capability registry (39 capabilities)"
+    },
+    {
+      "command": "uv build",
+      "duration_seconds": 1.21,
+      "exit_code": 0,
+      "passed_all": true,
+      "stdout_tail": "Successfully built dist/pymc_marketing_mcp-0.4.0-py3-none-any.whl"
+    }
+  ],
+  "commit_sha": "cb1d75d1fb82add77bb17f0c5903b9dab02c54a6",
+  "dependencies": {
+    "arviz": "1.3.0",
+    "h5netcdf": "1.8.1",
+    "mcp": "2.0.0",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "pydantic": "2.12.5",
+    "pymc": "6.0.1",
+    "pymc-marketing": "1.0.0",
+    "xarray": "2026.7.0"
+  },
+  "environment": {
+    "AGENTROUTER_KEY_1": "dummy-token-for-proxy",
+    "AGY_BROWSER_ACTIVE_PORT_FILE": "/Users/mamdouhaboammar/Library/Application Support/Antigravity/DevToolsActivePort",
+    "AGY_BROWSER_WS_URL": "ws://127.0.0.1:50920/devtools/browser/c2f17e41-e357-48b0-a2c5-41f98256d0fd",
+    "ANTHROPIC_VERTEX_PROJECT_ID": "annular-climate-493512-s2",
+    "ANTIGRAVITY_AGENT": "1",
+    "ANTIGRAVITY_AGENTAPI_EXE": "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+    "ANTIGRAVITY_CONVERSATION_ID": "96ec1d92-9066-4343-bfbb-5faa445cdea4",
+    "ANTIGRAVITY_CSRF_TOKEN": "***REDACTED***",
+    "ANTIGRAVITY_LS_ADDRESS": "localhost:50923",
+    "ANTIGRAVITY_LS_VERSION": "hub-2.10.0",
+    "ANTIGRAVITY_PROJECT_ID": "aa3537f8-75b8-48a7-820a-4a2eb136d393",
+    "ANTIGRAVITY_SOURCE_METADATA": "{\"tool\":{\"conversationId\":\"96ec1d92-9066-4343-bfbb-5faa445cdea4\",\"stepIndex\":242,\"toolCall\":{\"id\":\"call_341321\",\"name\":\"run_command\",\"argumentsJson\":\"{\\\"CommandLine\\\":\\\"uv run python scripts/collect_release_evidence.py --skip-statistical --label 2026-08-26-current-head\\\",\\\"Cwd\\\":\\\"/Users/mamdouhaboammar/Downloads/pymc-marketing-mcp-v0.2.0\\\",\\\"IsDaemon\\\":false,\\\"WaitMsBeforeAsync\\\":10000,\\\"toolAction\\\":\\\"Collect release evidence on current head\\\",\\\"toolSummary\\\":\\\"Generate current-head release evidence\\\"}\",\"thinkingSignature\":\"EpYCCpMCARFNMg+qKcdAzpixy7i/NPKddf3V0sClt4GAsYlj8xjInMaZQebcfjKVO9TUvY3WNpBcgk5v8E3C5dQFjYdMlvcat8ADFnkcJOr1++T4ff9eaik9Eit1VauxekfKkP3pGORAV/srpcQaN85dgDCchTiD5GclA/kpHHMpdQ2oKv8ckA+ezdonWqBITkLvVsmaPo/UQ6+v/bfjoeaKEYt6hsyGiz0poswBZb/HOs6DzkAkaLB77hRb1/dxAw86stJZri7JSGhL0GgwQM8ogxlS276PH7EwhAW8l0b9KtlDKZtr2C1TJ9iN6HOJ1CDqPggUgNYQBNnlJ742DwWPWGi+MFwwgfEHTr/23VkboBJlMEZMH88=\"}}}",
+    "ANTIGRAVITY_TRAJECTORY_ID": "9463fc3a-edf7-42b1-b6fe-8990edb0f27c",
+    "API_KEY_21ST": "***REDACTED***",
+    "BUN_INSTALL": "/Users/mamdouhaboammar/.bun",
+    "CHATGPT_WEB_DUMMY_KEY": "dummy-not-needed",
+    "CHROME_DEVTOOLS_MCP_JS": "/Applications/Antigravity.app/Contents/Resources/app.asar.unpacked/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",
+    "CHROME_PROFILE": "Profile 1",
+    "CLAUDE_1_API_KEY": "***REDACTED***",
+    "CLAUDE_CODE_USE_VERTEX": "1",
+    "CLOUD_ML_REGION": "us-east5",
+    "CODEX_SELF_IMPROVEMENT_DATA": "/Users/mamdouhaboammar/.local/state/codex-self-improvement",
+    "CODEX_SELF_IMPROVEMENT_ENABLED": "1",
+    "CODEX_SELF_IMPROVEMENT_ROOT": "/Users/mamdouhaboammar/.local/share/riqor/0.2.0-beta.3/runtime",
+    "COMMAND_MODE": "unix2003",
+    "DEEPSEEK_API_KEY": "***REDACTED***",
+    "DISABLE_AUTO_UPDATE": "true",
+    "GOOGLE_APPLICATION_CREDENTIALS": "***REDACTED***",
+    "GOOGLE_CLOUD_LOCATION": "global",
+    "GOOGLE_CLOUD_PROJECT": "gen-lang-client-0116258162",
+    "GOOGLE_GENAI_USE_VERTEXAI": "true",
+    "HOME": "/Users/mamdouhaboammar",
+    "LANG": "C.UTF-8",
+    "LOGNAME": "mamdouhaboammar",
+    "N8N_MCP_TOKEN": "***REDACTED***",
+    "NVM_BIN": "/Users/mamdouhaboammar/.nvm/versions/node/v24.14.1/bin",
+    "NVM_CD_FLAGS": "-q",
+    "NVM_DIR": "/Users/mamdouhaboammar/.nvm",
+    "NVM_INC": "/Users/mamdouhaboammar/.nvm/versions/node/v24.14.1/include/node",
+    "OLDPWD": "/Users/mamdouhaboammar/Downloads/pymc-marketing-mcp-v0.2.0",
+    "OPENAI_API_KEY": "***REDACTED***",
+    "OSLogRateLimit": "64",
+    "PATH": "/Users/mamdouhaboammar/Downloads/pymc-marketing-mcp-v0.2.0/.venv/bin:/Users/mamdouhaboammar/.config/kaku/zsh/bin:/Users/mamdouhaboammar/.local/bin:/Users/mamdouhaboammar/.local/bin:/Users/mamdouhaboammar/.gemini/antigravity/bin:/Users/mamdouhaboammar/Library/Application Support/Antigravity/bin:/Users/mamdouhaboammar/.local/bin:/Users/mamdouhaboammar/.railway/bin:/Users/mamdouhaboammar/.grok/bin:/Users/mamdouhaboammar/.deno/bin:/Users/mamdouhaboammar/delegate-team/bin:/Users/mamdouhaboammar/bin:/Users/mamdouhaboammar/.nvm/versions/node/v24.14.1/bin:/Users/mamdouhaboammar/.mavis/bin:/Users/mamdouhaboammar/.antigravity-ide/antigravity-ide/bin:/opt/homebrew/bin:/Users/mamdouhaboammar/.bun/bin:/Users/mamdouhaboammar/.opencode/bin:/Users/mamdouhaboammar/.antigravity/antigravity/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Users/mamdouhaboammar/.config/kaku/zsh/bin:/Users/mamdouhaboammar/.lmstudio/bin",
+    "PWD": "/Users/mamdouhaboammar/Downloads/pymc-marketing-mcp-v0.2.0",
+    "RAILWAY_HOME": "/Users/mamdouhaboammar/.railway",
+    "SHELL": "/bin/zsh",
+    "SHLVL": "1",
+    "SSH_AUTH_SOCK": "/var/run/com.apple.launchd.ZssDKM9BpY/Listeners",
+    "STITCH_API_KEY": "***REDACTED***",
+    "TABIAI_KEY_1": "dummy-token-for-proxy",
+    "TMPDIR": "/var/folders/_w/rzz6bs252_15ztt3z4d9hqsr0000gn/T/",
+    "TWENTYFIRST_TOKEN": "***REDACTED***",
+    "USER": "mamdouhaboammar",
+    "UV": "/Users/mamdouhaboammar/.local/bin/uv",
+    "UV_RUN_RECURSION_DEPTH": "1",
+    "VIRTUAL_ENV": "/Users/mamdouhaboammar/Downloads/pymc-marketing-mcp-v0.2.0/.venv",
+    "XPC_FLAGS": "0x0",
+    "XPC_SERVICE_NAME": "0",
+    "ZSH_TMUX_AUTOSTART": "false",
+    "ZSH_TMUX_AUTOSTARTED": "true",
+    "_": "/Users/mamdouhaboammar/.local/bin/uv",
+    "__CFBundleIdentifier": "com.google.antigravity",
+    "__CF_USER_TEXT_ENCODING": "0x1F5:0x0:0x0"
+  },
+  "platform": {
+    "machine": "arm64",
+    "python_implementation": "CPython",
+    "python_version": "3.12.13",
+    "release": "25.5.0",
+    "system": "Darwin"
+  },
+  "schema_version": 1,
+  "verdict": "PASS"
+}

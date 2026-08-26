@@ -3,29 +3,33 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from marketing_mcp.app import Application
 from marketing_mcp.errors import DomainError
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.security import safe_ingest_path
+from marketing_mcp.security.ownership import authorize_dataset
 from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
-def register_datasets_tools(mcp, app: Application, context_provider=None) -> None:
+def register_datasets_tools(mcp, app: Application, context_provider: Any = None) -> None:
     from marketing_mcp.mcp.context import stdio_context_provider
 
     resolve_context = context_provider or stdio_context_provider
+
     @mcp.tool(
         name="register_dataset",
         description="Register a local CSV or Parquet marketing dataset and return a stable dataset reference.",
     )
     async def register_dataset(path: str):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("register_dataset")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("register_dataset")[0])
             source = safe_ingest_path(
                 Path(path), app.settings.ingest_dir, app.settings.max_dataset_mb * 1024 * 1024
             )
-            r = app.datasets.register_file(source)
+            r = app.datasets.register_file(source, principal=principal)
             return env(
                 summary=r.model_dump(),
                 provenance={"fingerprint": r.fingerprint},
@@ -33,7 +37,6 @@ def register_datasets_tools(mcp, app: Application, context_provider=None) -> Non
             )
         except DomainError as e:
             return e.to_dict()
-
 
     @mcp.tool(
         name="inspect_dataset",
@@ -44,7 +47,13 @@ def register_datasets_tools(mcp, app: Application, context_provider=None) -> Non
     )
     async def inspect_dataset(dataset_id: str):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("inspect_dataset")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("inspect_dataset")[0])
+            dataset = app.metadata.get_dataset(dataset_id)
+            if not dataset:
+                raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
+            authorize_dataset(principal, dataset, action="read")
+
             r = app.datasets.inspect(dataset_id)
             return env(
                 summary=r.model_dump(),
@@ -53,7 +62,6 @@ def register_datasets_tools(mcp, app: Application, context_provider=None) -> Non
             )
         except DomainError as e:
             return e.to_dict()
-
 
     @mcp.tool(
         name="validate_dataset",
@@ -71,7 +79,13 @@ def register_datasets_tools(mcp, app: Application, context_provider=None) -> Non
         dims: list[str] | None = None,
     ):
         try:
-            require_scope(resolve_context().principal, scopes_for_tool("validate_dataset")[0])
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("validate_dataset")[0])
+            dataset = app.metadata.get_dataset(dataset_id)
+            if not dataset:
+                raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
+            authorize_dataset(principal, dataset, action="read")
+
             r = app.datasets.validate(
                 dataset_id,
                 date_column,

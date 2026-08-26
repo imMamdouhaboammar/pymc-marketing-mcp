@@ -18,28 +18,30 @@ MCP client
      -> PlottingService
      -> CLVService
      -> JobService
+     -> CredentialService
   -> PyMCMarketingAdapter
   -> PyMC-Marketing + PyMC + ArviZ
 
-Current persistence
+Persistence
   -> SQLiteMetadataStore
-  -> SQLiteJobRepository on the same SQLite connection
+  -> SQLiteJobRepository
+  -> SQLiteCredentialRepository
   -> LocalArtifactStore / NetCDF artifacts
 
-Current job execution
-  -> AsyncioJobExecutor inside the service process
-  -> fit job handler may delegate blocking fit work to the process thread pool
+Job execution & Worker separation
+  -> AsyncioJobExecutor (in-process local execution)
+  -> ProcessJobWorker / marketing-mcp-worker CLI (process-isolated worker loop)
 ```
 
-The current architecture is appropriate for local development and controlled single-process use. It is not yet the target production topology
+## MCP boundary and request-scoped identity
 
-## MCP boundary
+`src/marketing_mcp/mcp/server.py` is composition-only and registers focused tool modules for datasets, MMM, decisions, CLV, model selection and jobs, plus MCP resources.
 
-`src/marketing_mcp/mcp/server.py` is composition-only and registers focused tool modules for datasets, MMM, decisions, CLV, model selection and jobs, plus MCP resources
-
-Tool modules accept an optional execution-context provider and enforce scope policy. Trusted stdio uses a local principal with all known scopes
-
-Remote HTTP still has an open integration requirement: the authenticated request identity must be proven to become the same principal used by every MCP tool invocation. MCP resources also need request-scoped authorization rather than direct metadata reads
+For Streamable HTTP transport:
+- `MCPAuthMiddleware` converts authenticated headers (Bearer JWT / API-key) into an immutable `Principal` and binds it to `_current_execution_context` (`ContextVar[ExecutionContext]`) for the lifetime of the request.
+- `RequestScopedContextProvider` supplies this context to all tool and resource invocations, strictly failing closed (`AUTH_REQUIRED`) on unauthenticated requests.
+- `AuthorizationService` enforces scope policies and tenant/object isolation across all tools and MCP resources (`marketing://models/{model_id}`, `marketing://datasets/{dataset_id}`, diagnostics, lineage, plots, CLV).
+- Trusted stdio uses `stdio_context_provider()` which yields a local principal with all known scopes.
 
 ## Application and statistical domains
 
@@ -50,8 +52,9 @@ Remote HTTP still has an open integration requirement: the authenticated request
 - CLV service: purchase/churn, value and lifetime-value model workflows
 - Plotting service: posterior and model artifacts
 - PyMC adapter: official PyMC-Marketing computation boundary
-- Security domain: principals, scopes, ownership helpers, OAuth verifier and request safety
-- Jobs domain: job records, repository, state transitions, cancellation and current in-process execution
+- Credential service: backend API key generation (256-bit entropy), verifier-only database storage, constant-time verification, and immediate revocation
+- Security domain: principals, scopes, authorization service, OAuth verifiers, request safety, and audit logging
+- Jobs domain: job records, repository, state transitions, canonical semantic idempotency hashing, cancellation, and process worker isolation
 
 ## Diagnostic and decision flow
 
@@ -85,48 +88,25 @@ Historical model inputs
 
 For multidimensional models the allocation domain verifies exact cell coverage before passing the DataArray to PyMC-Marketing
 
-## Current persistence limits
+## Persistence and durability
 
-SQLite and local artifacts are concrete runtime dependencies in `Application` today
+Metadata, job records, and credential verifiers are managed through thread-safe SQLite stores (`SQLiteMetadataStore`, `SQLiteJobRepository`, `SQLiteCredentialRepository`).
 
-Migrations now exist and the jobs table persists job state, but production-grade durability is not established by that alone. The current architecture does not yet provide the planned PostgreSQL metadata/job adapters, production object-store adapter, immutable artifact references, reconciliation or backup/restore workflow
+Crash recovery automatically marks interrupted running jobs as failed on server restart (`recover_stale_running_jobs()`).
 
-## Current job limits
+## Job execution and MCP task boundary
 
-The current job API exposes `submit_fit_mmm_job`, `get_job_status`, `cancel_job` and `list_jobs`
+The job API exposes compatibility tools (`submit_fit_mmm_job`, `get_job_status`, `cancel_job`, `list_jobs`).
 
-Those are project-specific compatibility tools, not an implementation of the MCP Tasks extension
+`UnsupportedTasksExtensionAdapter` ensures the server does not falsely advertise unsupported MCP Tasks extension capabilities, maintaining a clean adapter boundary for future protocol upgrades without altering internal job models.
 
-The current executor uses in-process asyncio tasks. Therefore an API-process crash can terminate active compute even though job records are persisted. The target design keeps `JobService` transport-neutral and moves CPU-heavy statistical execution to isolated workers/processes with durable heartbeats and recovery
+Compute can be run either via in-process async tasks or via the process-isolated `marketing-mcp-worker` CLI.
 
-## Target production topology
+## Observability
 
-```text
-Remote MCP clients
-  -> authenticated Streamable HTTP API
-  -> Principal + tenant context
-  -> scope + object authorization
-  -> application services
-       -> read/control operations
-       -> durable JobService submissions
-
-Control/API service
-  -> production metadata repository
-  -> production artifact store
-  -> metrics/logs/traces
-
-Worker service/process pool
-  -> durable job claim/heartbeat
-  -> PyMC-Marketing sampling
-  -> immutable artifact write
-  -> transactional result/job update
-
-Production storage
-  -> PostgreSQL or equivalent durable metadata/jobs
-  -> object storage for datasets/models/plots
-```
-
-The public MCP contract should not depend on the chosen queue/database/cloud provider
+- Structured logging with single-line JSON formatting and automatic secret redaction (`StructuredJSONFormatter`).
+- Low-cardinality Prometheus-compatible metric counters, histograms, and gauges (`MetricsCollector`).
+- Distributed tracing context propagation with `trace_span`, `current_trace_id`, and `current_span_id`.
 
 ## Compatibility
 
@@ -135,17 +115,3 @@ The project currently declares Python `>=3.12,<3.14`, PyMC-Marketing `>=1.0.0` a
 Exact versions for a verified release come from `uv.lock` plus machine-generated release evidence, not from a hand-maintained architecture statement
 
 See `docs/API-COMPATIBILITY.md`
-
-## Target architectural invariants
-
-Before production release the architecture must prove
-
-- one authenticated principal flows through transport, tools, resources and jobs
-- object ownership and tenant isolation are enforced on every resource path
-- request handling is separated from long-running statistical compute
-- metadata/artifacts survive instance replacement
-- model artifacts are immutable and checksum-addressed
-- jobs are idempotent, cancellable and recoverable
-- observability correlates request, tool, job, model and artifact operations
-- the MCP capability surface remains generated/tested against actual discovery
-- future MCP Tasks support is an adapter over the existing job domain rather than a second job model

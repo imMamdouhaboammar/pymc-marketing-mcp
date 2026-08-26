@@ -1,56 +1,33 @@
-# PyMC Marketing MCP — Phase Upgrade Plan
+# PyMC Marketing MCP — Implementation Plan & Phase Tracking
 
-**Goal:** Evolve `pymc-marketing-mcp` from v0.3.0 into a full-spectrum Bayesian marketing intelligence platform covering adstock/saturation model zoo, visual artifact delivery, CLV analytics, and multi-period dynamic planning.
+**Goal:** Evolve `pymc-marketing-mcp` into a decision-safe, hardened Bayesian marketing science platform with PyMC-Marketing.
 
-**Baseline:** v0.3.0 — 46/46 tests ✅, 96.79s runtime. Canonical tools: 17 MCP tools, 4 MCP resources, NetCDF + SQLite persistence, MCP 2.0 stdio + HTTP, `pytest-xdist` parallel.
-
-**Next Step:** Begin Phase 1 (Adstock & Saturation Zoo)
+**Baseline:** v0.4.0 (Release Candidate) — 446 passing tests, 0 lint/pyright errors, 39 public capabilities, machine-verified release evidence.
 
 ---
 
-## Phases
+## Phases & Hardening Waves
 
-### Phase 1: Adstock & Saturation Zoo + Custom Channel Priors
-- **Status:** completed ✅
-- **Target Version:** v0.4.0
-- **Goal:** Expand from fixed `GeometricAdstock + LogisticSaturation` to the full PyMC-Marketing curve library with per-channel prior control
-- **Owner:** adapter layer + schema layer
+### Core Capability Phases (Completed)
+- **Phase 1: Adstock & Saturation Zoo + Channel Priors** ✅ — Full curve library with per-channel configuration.
+- **Phase 2: Visual Posterior Artifacts** ✅ — Posterior plots, saturation curves, and waterfall contributions.
+- **Phase 3: Customer Lifetime Value (CLV) Analytics** ✅ — BG/NBD, Gamma-Gamma, and sBG customer analytics suite.
+- **Phase 4: Dynamic Flighting & Budget Optimization** ✅ — Multi-period media flighting with carryover dynamics and constraints.
+- **Phase 5: Bayesian Model Comparison** ✅ — PSIS-LOO, WAIC, and Bayesian stacking weights.
 
-### Phase 2: Visual Posterior Artifacts (Charts, Curves, Waterfall)
-- **Status:** completed ✅
-- **Target Version:** v0.4.0
-- **Goal:** MCP tools that produce PNG/SVG plots from posterior samples — saturation curves, contribution waterfall, actual vs predicted
-- **Owner:** new `services/plotting_service.py` + MCP tool registrations
-
-### Phase 3: Customer Lifetime Value (CLV) Analytics
-- **Status:** completed ✅
-- **Target Version:** v0.4.0
-- **Goal:** BG/NBD + GammaGamma and sBG CLV models exposed as a parallel MCP tool suite for customer analytics
-- **Owner:** new `adapters/clv_adapter.py`, `services/clv_service.py`, schema + server tools
-
-### Phase 4: Dynamic Multi-Period Flighting & Profit Optimization
-- **Status:** completed ✅
-- **Target Version:** v0.4.0
-- **Goal:** Optimize weekly media flighting over a full planning horizon with carryover dynamics, target-ROAS constraints, and net-profit objective
-- **Owner:** `domain/decisions/flighting.py`, adapter, schema, server
-
-### Phase 5: Bayesian Model Comparison (LOO-CV / WAIC / BMA Stacking)
-- **Status:** completed ✅
-- **Target Version:** v0.4.0
-- **Goal:** PSIS-LOO and WAIC model selection via ArviZ + Bayesian stacking weights across competing MMM specs
-- **Owner:** `services/modeling_service.py`, adapter, schema, server
+### Hardening Master Program (Waves A–G Completed)
+- **Wave A (Gate H0: Runtime Truth Baseline)** ✅ — Version alignment, CI workflows (`ci.yml`, `statistical.yml`, `security.yml`, `upstream-canary.yml`, `release.yml`), and release evidence framework.
+- **Wave B (Gates H1 + H2 / G3: Request-Scoped Auth & Object Isolation)** ✅ — `ContextVar[ExecutionContext]`, `RequestScopedContextProvider`, `AuthorizationService`, and tenant isolation on all tools/resources.
+- **Wave C (Gate H3: Credential Control Plane Security)** ✅ — `CredentialService`, salted SHA-256 verifier storage (`SQLiteCredentialRepository`), `/control/credentials` HTTP API, and zero browser secret storage.
+- **Wave D (Gates G2 + H4: Durable Jobs & Process Worker)** ✅ — Canonical semantic idempotency hashing, `ProcessJobWorker`, and `marketing-mcp-worker` CLI.
+- **Wave E (Gate G4: Observability & Tracing)** ✅ — Single-line structured JSON logging with secret scrubbing, low-cardinality metrics, and distributed `trace_span` propagation.
+- **Wave F (Gates AQG + H5: Agent Quality Gate & Skill Evals)** ✅ — Dynamic trace-driven agent evaluations and decision-safety assertions.
+- **Wave G (Gate H6: Upstream Compatibility & Admission Gate)** ✅ — Upstream canary test automation against latest PyMC-Marketing and ArviZ.
 
 ---
 
-## Errors Encountered
-| Error | Attempt | Resolution |
-|-------|---------|------------|
-| (none yet) | — | — |
-
-## Decisions Made
-| Decision | Rationale |
-|----------|-----------|
-| Phase 1 before CLV | Adstock zoo extends existing MMM code path with lowest integration risk |
-| Visual artifacts as Phase 2 | Pure additive delivery, no existing behavioral changes |
-| Use `matplotlib`/`arviz.plot_*` | Already transitively installed via ArviZ; no new heavy dep |
-| CLV as separate adapter | CLV and MMM share no model state; clean separation via distinct adapter |
+## Key Architectural Invariants
+1. **Decision Integrity**: Statistical outputs are computed exclusively by PyMC-Marketing/ArviZ; rejected models block decision-grade tools (`DECISION-INTEGRITY.md`).
+2. **Security**: Remote callers use request-scoped authentication; credentials stored exclusively as salted SHA-256 verifiers with immediate revocation.
+3. **Durability**: Background jobs use process-isolated workers and state survives server restarts.
+4. **Documentation**: Zero docs drift across all 11 core documents (`check_docs_drift.py`).

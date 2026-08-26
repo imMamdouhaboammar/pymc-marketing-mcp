@@ -11,8 +11,10 @@ from starlette.staticfiles import StaticFiles
 from marketing_mcp import __version__
 from marketing_mcp.app import Application
 from marketing_mcp.auth import AuthManager, MCPAuthMiddleware
+from marketing_mcp.http.credentials import CredentialControlAPI
 from marketing_mcp.http.health import create_readiness_handler, liveness_handler
 from marketing_mcp.http.safety import RequestSafetyMiddleware
+from marketing_mcp.mcp.context import RequestScopedContextProvider
 from marketing_mcp.mcp.server import create_server
 
 SERVICE_NAME = "pymc-marketing-mcp"
@@ -45,12 +47,19 @@ def create_http_app(
     api_key: str | None = None,
     application: Application | None = None,
     auth_manager: AuthManager | None = None,
+    context_provider: Any = None,
 ):
     """Build the Streamable HTTP ASGI application without starting a server."""
-    mcp = create_server(application)
+    app_instance = application or Application()
+    ctx_provider = context_provider or RequestScopedContextProvider()
+    mcp = create_server(app_instance, context_provider=ctx_provider)
     app = mcp.streamable_http_app(host=host)
 
     auth_mgr = auth_manager or AuthManager.from_env()
+    if auth_mgr.credential_service is None and hasattr(app_instance, "credentials"):
+        auth_mgr.credential_service = app_instance.credentials
+        auth_mgr.api_key_validator.credential_service = app_instance.credentials
+
     if api_key:
         auth_mgr.api_key_validator.add_key(api_key)
         auth_mgr.enabled = True
@@ -72,11 +81,13 @@ def create_http_app(
 
     app.add_route("/health", health_check, methods=["GET"])
     app.add_route("/health/live", liveness_handler, methods=["GET"])
-    if application is not None:
-        app.add_route("/health/ready", create_readiness_handler(application), methods=["GET"])
-    else:
-        app.add_route("/health/ready", create_readiness_handler(Application()), methods=["GET"])
+    app.add_route("/health/ready", create_readiness_handler(app_instance), methods=["GET"])
     app.add_route("/", root_handler, methods=["GET"])
+
+    # Mount Control Plane credential management routes
+    control_api = CredentialControlAPI(app_instance.credentials)
+    for route in control_api.routes():
+        app.routes.append(route)
 
     if dist_path.exists() and (dist_path / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(dist_path / "assets")), name="assets")

@@ -1,0 +1,103 @@
+name: Security & Supply Chain
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 4 * * 1' # Weekly Monday scan
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret Leak Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets with TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+      - name: Check for forbidden raw credential patterns in repository
+        run: |
+          echo "Scanning for forbidden credential storage patterns..."
+          if grep -rn "keyHash:\s*fullSecret" src/ dashboard/ src/; then
+            echo "ERROR: Found forbidden raw secret pattern 'keyHash: fullSecret'"
+            exit 1
+          fi
+
+  dependency-audit:
+    name: Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Audit dependencies with pip-audit
+        run: |
+          uv run pip install pip-audit
+          uv run pip-audit --desc
+
+  sbom-generation:
+    name: Generate Software Bill of Materials (SBOM)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build distribution artifacts
+        run: uv build
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          uv run pip install cyclonedx-bom
+          uv run cyclonedx-py requirements pyproject.toml -o sbom.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.json
+
+  api-surface-scan:
+    name: Attack Surface & Shadow API Mapping
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run OWASP Noir Scan
+        uses: owasp-noir/noir@v1.3.0
+        with:
+          path: '.'
+          format: 'json'
+          output: 'noir-endpoints.json'
+
+      - name: Upload Attack Surface Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: attack-surface-${{ github.sha }}
+          path: noir-endpoints.json
+

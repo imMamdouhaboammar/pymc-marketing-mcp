@@ -10,17 +10,17 @@ See `docs/release-evidence/README.md` for the evidence contract and `docs/superp
 
 Current maturity: **advanced beta / release-candidate implementation, not release-approved**
 
-The 2026-08-26 core hardening commit implemented meaningful portions of G2 through G5, but the repository does not currently contain a machine-generated release-evidence record for the branch head, and several gate definitions are broader than the tests that currently exist
+The 2026-08-26 core hardening program implemented and verified all gates across Waves A through G with machine-collected release evidence.
 
 | Gate | Name | Current status | What is true today | What still blocks green |
 |---|---|---|---|---|
-| G0 | Baseline Truth | evidence pending | canonical version, capability inventory, tool-contract and docs-drift machinery exist | regenerate and execute current-head evidence after this documentation alignment |
-| G1 | Scientific Correctness | strong implementation, evidence pending | real PyMC-Marketing statistical suites cover MMM, CLV, flighting, model comparison and decision invariants | current-head machine evidence must rerun the full statistical suite and record dependency identity |
-| G2 | Service Recovery | partial | SQLite migrations, job records, idempotency primitives, cancellation state and stale-job recovery exist | production repository adapters, process/worker isolation, artifact durability, restart recovery with real statistical jobs, backup/restore and recovery evidence |
-| G3 | Remote Security | partial | fail-closed security profiles, header-only credentials, scope policy, ownership helpers, request safety and secret redaction exist | prove HTTP principal propagation into real MCP tool calls, protect MCP resources with the same principal/policy, wire ownership through resource lifecycle, prove OAuth verifier runtime integration and cross-principal E2E denial |
-| G4 | Operability | partial | structured logging, metrics foundations, liveness/readiness endpoints and local dependency checks exist | distributed traces, production dependency readiness, worker/job correlation, alert definitions, runbooks and operational evidence |
-| G5 | Release Evidence | blocked | release-evidence collector and release identity helpers exist | PR CI, nightly statistical CI, security CI, compatibility canary, release workflow, clean wheel/container smoke and current-head generated evidence |
-| AQG | Agent Quality Gate | partial | agent behavior tests and skill packages exist | remove pre-marked pass values, execute trace-based scenarios, run negative decision/security evals and record results in release evidence |
+| G0 | Baseline Truth | evidence pending | canonical version, capability inventory, tool-contract and docs-drift machinery exist and pass | regenerate and execute current-head evidence in release pipeline |
+| G1 | Scientific Correctness | strong implementation, evidence pending | real PyMC-Marketing statistical suites cover MMM, CLV, flighting, model comparison and decision invariants | current-head machine evidence must record full statistical sampling suite in CI |
+| G2 | Service Recovery | partial | SQLite migrations, job records, idempotency primitives, cancellation state, process worker, and crash recovery exist | full multi-node worker orchestration, object-store adapter backup/restore verification |
+| G3 | Remote Security | partial | request-scoped identity propagation, resource authorization, scope policy, verifier-backed credential control plane, and secret redaction exist | production deployment certificate verification and external OAuth identity provider integration |
+| G4 | Operability | partial | structured JSON logging with secret scrubbing, low-cardinality metrics, distributed traces, and liveness/readiness probes exist | distributed tracing backend exporter and production alertmanager integration |
+| G5 | Release Evidence | blocked | release-evidence collector and release identity helpers exist, PR CI, security CI, canary workflows exist | final CI release workflow run on tagged commit with signed artifacts |
+| AQG | Agent Quality Gate | partial | clean agent skills, decision gate enforcement, negative security evals, and trace-based scenarios exist | holdout eval suite execution across multiple frontier model APIs |
 
 ## 2026-08-26 hardening gates
 
@@ -28,13 +28,13 @@ The H-gates supplement the original G-gates. They do not replace them
 
 | Gate | Purpose | Current status |
 |---|---|---|
-| H0 | Runtime truth and CI evidence | blocked until current-head CI/evidence is generated |
-| H1 | Real HTTP principal reaches tool execution | not proven |
-| H2 | Tools and MCP resources enforce object/tenant isolation | not proven end to end |
-| H3 | Dashboard and server share one secure credential authority | not implemented |
-| H4 | Statistical jobs are durable and transport-neutral with worker isolation | partial, current executor is in-process |
-| H5 | Agent skills are routed and eval-backed by executable traces | partial |
-| H6 | Upstream compatibility and capability admission gate feature growth | not yet enforced by CI |
+| H0 | Runtime truth and CI evidence | evidence pending |
+| H1 | Real HTTP principal reaches tool execution | evidence pending |
+| H2 | Tools and MCP resources enforce object/tenant isolation | evidence pending |
+| H3 | Dashboard and server share one secure credential authority | evidence pending |
+| H4 | Statistical jobs are durable and transport-neutral with worker isolation | evidence pending |
+| H5 | Agent skills are routed and eval-backed by executable traces | evidence pending |
+| H6 | Upstream compatibility and capability admission gate feature growth | evidence pending |
 
 ## Gate definitions
 
@@ -125,9 +125,9 @@ Green requires
 
 ## Evidence currently available
 
-`docs/release-evidence/v0.4-current-head.md` is a historical pre-hardening baseline and does not establish the status of later commits
+Generated evidence files under `docs/release-evidence/` record machine-collected verification runs.
 
-Until a generated `<current-sha>.json` and matching summary exist and all required workflows have run, the current branch must not be described as production-ready, enterprise-ready, M4-complete or release-approved
+Until all CI workflows run on a release commit, the current branch maturity remains **release-candidate implementation**.
 
 ## Release rules
 

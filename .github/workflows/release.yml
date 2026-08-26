@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for release (e.g. v0.4.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-release:
+    name: Verify Identity, Build & Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Verify release truth gates
+        run: |
+          uv run ruff check src tests scripts
+          uv run pyright
+          uv run python scripts/check_docs_drift.py
+          uv run python scripts/generate_capability_inventory.py --check
+          uv run pytest tests/release/test_g0_production_truth.py -v
+
+      - name: Build distribution packages (wheel & sdist)
+        run: uv build
+
+      - name: Clean install and smoke test
+        run: |
+          uv venv /tmp/release-smoke-venv
+          /tmp/release-smoke-venv/bin/pip install dist/*.whl
+          /tmp/release-smoke-venv/bin/marketing-mcp --help
+          /tmp/release-smoke-venv/bin/marketing-mcp-auth --help
+
+      - name: Generate release evidence and compute checksums
+        run: |
+          uv run python scripts/collect_release_evidence.py
+          sha256sum dist/* > dist/SHA256SUMS
+
+      - name: GH Release
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          files: |
+            dist/*
+            docs/release-evidence/*.md
+            docs/release-evidence/*.json
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

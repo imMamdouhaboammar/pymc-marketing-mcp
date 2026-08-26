@@ -1,0 +1,65 @@
+name: Statistical Nightly & Protected Lane
+
+on:
+  schedule:
+    # Run nightly at 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      full_chains:
+        description: 'Run full chains / sample count'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  VECLIB_MAXIMUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
+jobs:
+  statistical-suite:
+    name: PyMC Statistical Suite (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - "MMM Single & Multi-Dim"
+          - "Dynamic Flighting & Budget"
+          - "Customer Lifetime Value (CLV)"
+          - "Model Comparison & Selection"
+          - "Calibration & Lineage"
+          - "Save, Load & Serialization Invariants"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run statistical tests
+        run: |
+          uv run pytest -m statistical -v --durations=20
+
+      - name: Collect statistical evidence
+        run: |
+          uv run python scripts/collect_release_evidence.py --label "statistical-nightly"
+
+      - name: Upload statistical evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: statistical-evidence-${{ github.sha }}
+          path: docs/release-evidence/statistical-nightly.*

@@ -4,6 +4,7 @@ import hashlib
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -28,7 +29,7 @@ class DatasetService:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.max_bytes = max_dataset_mb * 1024 * 1024
 
-    def register_file(self, source: Path) -> DatasetRegistration:
+    def register_file(self, source: Path, principal: Any = None) -> DatasetRegistration:
         source = safe_source_path(Path(source), self.max_bytes)
         raw = source.read_bytes()
         fp = hashlib.sha256(raw).hexdigest()
@@ -38,6 +39,8 @@ class DatasetService:
         if not dest.exists():
             shutil.copy2(source, dest)
         df = self._read(dest)
+        owner = principal.subject if principal is not None else "local"
+        tenant_id = principal.tenant_id if principal is not None else None
         rec = DatasetRegistration(
             dataset_id=dataset_id,
             path=str(dest),
@@ -45,6 +48,8 @@ class DatasetService:
             format=ext[1:],
             rows=len(df),
             created_at=_utc(),
+            owner=owner,
+            tenant_id=tenant_id,
         )
         self.metadata.put_dataset(rec.model_dump())
         return rec
