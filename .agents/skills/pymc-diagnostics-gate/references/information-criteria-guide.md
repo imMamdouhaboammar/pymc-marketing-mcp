@@ -1,38 +1,37 @@
-# Information Criteria & Model Selection Guide
+# Information Criteria & Bayesian Model Comparison Guide
 
-This guide covers out-of-sample predictive accuracy assessment, PSIS-LOO cross-validation, WAIC, and Bayesian Model Averaging (BMA) stacking in PyMC-Marketing.
-
----
-
-## 1. Expected Log Pointwise Predictive Density ($\text{elpd}$)
-
-To compare competing models without overfitting historical in-sample data, we estimate out-of-sample predictive density using Leave-One-Out Cross-Validation ($\text{elpd}_{\text{loo}}$).
-
-$$\text{elpd}_{\text{loo}} = \sum_{i=1}^n \log p(y_i \mid y_{-i})$$
+When multiple model specifications are plausible, PyMC-Marketing provides information-theoretic model comparison via ArviZ.
 
 ---
 
-## 2. PSIS-LOO & Pareto $k$ Diagnostic
+## 1. PSIS-LOO (Pareto Smoothed Importance Sampling LOO)
 
-Calculating exact leave-one-out CV requires fitting $n$ models. Pareto Smoothed Importance Sampling (PSIS) approximates this from a single model fit by re-weighting posterior draws.
+PSIS-LOO approximates exact Leave-One-Out cross-validation without refitting the model $N$ times:
+$$\text{elpd}_{\text{loo}} = \sum_{i=1}^n \ln p(y_i \mid y_{-i})$$
 
-### The Pareto $k$ Diagnostic Scale:
-- **$k \le 0.5$ (Good)**: The importance weights have finite variance; the LOO estimate is extremely reliable.
-- **$0.5 < k \le 0.7$ (OK)**: Practical convergence is acceptable, though variance is slightly elevated.
-- **$k > 0.7$ (Unreliable / Bad)**: The importance sampling distribution has infinite variance. The LOO estimate is untrustworthy for this observation, indicating an extreme outlier or severe model misspecification.
-
-When `select_best_model` reports $k > 0.7$, the agent must inspect the observation dates to see if unmodeled external shocks (e.g. site outage, Black Friday spike) occurred.
+### Pareto $k$ Diagnostic:
+The importance weights $w_i = 1 / p(y_i \mid \theta)$ are fitted with a generalized Pareto distribution.
+- **$k \le 0.5$**: Excellent importance sampling reliability.
+- **$0.5 < k \le 0.7$**: Good / acceptable reliability.
+- **$k > 0.7$**: Unreliable. The posterior is sensitive to observation $i$. PyMC-Marketing flags these observations.
 
 ---
 
-## 3. Stacking & Bayesian Model Averaging (BMA)
+## 2. WAIC (Widely Applicable Information Criterion)
 
-Rather than picking a single "winner" and discarding all other hypotheses, **Bayesian Model Stacking** finds a convex combination of model predictions:
+$$\text{WAIC} = -2 \left( \text{lppd} - p_{\text{waic}} \right)$$
+WAIC provides an asymptotic approximation to out-of-sample predictive accuracy. LOO is generally preferred over WAIC due to superior diagnostic capabilities via Pareto $k$.
 
-$$\hat{y}_{\text{stack}} = \sum_{m=1}^M w_m \hat{y}^{(m)}, \quad \text{where } \sum w_m = 1, \quad w_m \ge 0$$
+---
 
-The weights $w_m$ are optimized to maximize the combined leave-one-out log scoring rule.
+## 3. Bayesian Model Stacking
 
-### Practical Agent Usage:
-- If `select_best_model` returns weights `{"mmm_geometric": 0.65, "mmm_delayed": 0.35}`, it indicates that a mixture of immediate and delayed decay dynamics best describes the empirical data.
-- The agent should explain both perspectives in the final summary.
+Rather than selecting a single "winner", Bayesian stacking finds optimal convex combination weights $w = (w_1, \dots, w_K)$ with $\sum w_k = 1$ that maximize leave-one-out log score:
+$$\max_{w} \sum_{i=1}^N \ln \left( \sum_{k=1}^K w_k \, p(y_i \mid y_{-i}, M_k) \right)$$
+
+### Interpreting Stacking Weights:
+| Model ID | Transform Specification | $\Delta \text{elpd}_{\text{loo}}$ | Weight $w_k$ | Interpretation |
+|---|---|---|---|---|
+| `mmm_v2_delayed` | Delayed adstock + Hill saturation | 0.0 | 0.72 | Primary model; receives 72% predictive weight. |
+| `mmm_v1_geom` | Geometric adstock + Logistic sat | -12.4 | 0.28 | Complementary; captures short-term dynamics. |
+| `mmm_v3_weibull` | Weibull adstock + Tanh sat | -45.8 | 0.00 | Over-parameterized; zero stacking contribution. |

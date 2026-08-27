@@ -1,45 +1,24 @@
-# Media Flighting Strategies & Campaign Scheduling
+# Dynamic Media Flighting Strategies
 
-Media flighting schedules media spend across time (weeks/months) rather than assuming a static constant spend rate.
-
----
-
-## 1. Flighting Patterns Explained
-
-```
-Flat (Continuous):
-Spend │ ── ── ── ── ── ── ── ──
-      └─────────────────────────> Time
-
-Frontloaded (Launch / Push):
-Spend │ ██ ▇▇ ▅▅ ▄▄ ▃▃ ▂▂ ── ──
-      └─────────────────────────> Time
-
-Backloaded (Deadline / Holiday):
-Spend │ ── ── ▂▂ ▃▃ ▄▄ ▅▅ ▇▇ ██
-      └─────────────────────────> Time
-
-Pulsed (Flighting + Hiatus):
-Spend │ ██ ── ██ ── ██ ── ██ ──
-      └─────────────────────────> Time
-```
+Media flighting schedules spend across multi-week planning horizons accounting for adstock memory decay.
 
 ---
 
-## 2. Exploiting Adstock Decay via Pulsing
+## 1. Flighting Patterns
 
-When a media channel has high adstock retention ($\alpha \ge 0.6$ or delayed peak):
-1. **Burst Period**: High spend builds a large pool of effective advertising capital ($\text{Adstock}_t$).
-2. **Hiatus Period (Dark Week)**: Zero or minimal spend occurs, but because $\text{Adstock}_{t+1} = \alpha \cdot \text{Adstock}_t$, customer sales response decays slowly.
-3. **Efficiency Gain**: Pulsing prevents the channel from staying in the severe flat portion of its saturation curve continuously, delivering higher total response per dollar.
+### A. Flat / Continuous Allocation
+- Uniform spend $x_{k, t} = B_k / T$ across all weeks $t \in \{1, \dots, T\}$.
+- Optimal for channels with zero or low carryover ($lpha \approx 0$) such as Brand Search or direct performance retargeting.
 
----
+### B. Pulsed Flighting
+- Alternates high-spend burst weeks with zero or maintenance-spend dark weeks.
+- Exploits high adstock carryover ($lpha > 0.6$):
+  $$\text{Adstock}_t = x_t + \alpha \cdot \text{Adstock}_{t-1}$$
+- While spend $x_t = 0$ in week $t$, effective adstock remains high, delivering continuous brand impact at lower total cost.
 
-## 3. Flighting Strategy Matrix
+### C. Frontloaded Flighting
+- Concentrates $50\%$ of budget in the first $25\%$ of campaign weeks.
+- Best for product launches, brand pivots, or major promotional events.
 
-| Business Goal | Optimal Pattern | Primary Objective | Key Channels |
-|---|---|---|---|
-| **E-Commerce Black Friday / Q4** | `backloaded` | `maximize_net_profit` | Meta, Google Shopping, Affiliate |
-| **New Brand or Product Launch** | `frontloaded` | `maximize_response` | Connected TV, YouTube, PR, Influencers |
-| **B2B SaaS Annual Pipeline** | `flat` with quarterly `pulsed` bursts | `target_roas` | LinkedIn, Google Search, Webinars |
-| **High-Adstock CPG / Auto** | `pulsed` | `maximize_net_profit` | Linear TV, Digital Video, OOH |
+### D. Backloaded Flighting
+- Escalates spend toward end of period (e.g. Q4 holiday peak).

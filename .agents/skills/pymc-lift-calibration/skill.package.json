@@ -1,0 +1,25 @@
+{
+  "name": "pymc-lift-calibration",
+  "version": "2.0.0",
+  "description": "Lift test calibration, incrementality triangulation, and model lineage for PyMC-Marketing",
+  "entrypoint": "SKILL.md",
+  "files": {
+    "references": [
+      "references/experiment-design.md",
+      "references/triangulation-framework.md"
+    ],
+    "templates": [
+      "templates/lift-test-input.json",
+      "templates/calibration-checklist.md"
+    ],
+    "examples": [
+      "examples/tv-geo-experiment-calibration-walkthrough.md"
+    ],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": [
+      "scripts/lift_test_validator.py"
+    ]
+  }
+}

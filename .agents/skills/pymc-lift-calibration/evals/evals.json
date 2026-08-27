@@ -1,46 +1,44 @@
-{
-  "skill_name": "pymc-lift-calibration",
-  "evals": [
-    {
-      "id": 0,
-      "name": "calibrate_mmm_with_geo_lift_test",
-      "prompt": "We ran a Geo-lift experiment on Meta ads for base model 'mmm_base_2025'. In the test markets, baseline spend was $40k, spend increment was $20k, and incremental revenue measured was $50k with a 95% confidence interval of [$30.4k, $69.6k]. Calibrate the model.",
-      "expected_output": "The agent derives standard error sigma = (69600 - 30400) / (2 * 1.96) = 10000. It constructs a CalibrateMMMInput payload with channel='meta_spend', x=40000, delta_x=20000, delta_y=50000, sigma=10000, calls calibrate_mmm, notes the new calibrated model ID and parent lineage, and advises running diagnose_mmm on the new artifact.",
-      "assertions": [
-        {
-          "text": "agent computes standard error sigma = 10000 from the 95% confidence interval",
-          "passed": true,
-          "evidence": "Sigma is calculated as approximately 10000"
-        },
-        {
-          "text": "agent calls calibrate_mmm with model_id and lift_tests list",
-          "passed": true,
-          "evidence": "calibrate_mmm invoked with LiftTestMeasurement payload"
-        },
-        {
-          "text": "agent highlights model lineage parent linkage and recommends diagnostic gating",
-          "passed": true,
-          "evidence": "Explains parent_model_id and diagnose_mmm next step"
-        }
-      ]
-    },
-    {
-      "id": 1,
-      "name": "recommend_next_measurement_experiment",
-      "prompt": "Our MMM shows wide credible intervals for Connected TV and TikTok ads. Which channels should we test first and what experiment should we design?",
-      "expected_output": "The agent recommends calling recommend_next_measurement(model_id) to evaluate parameter uncertainty. It explains how to set up a matched market test or geo-lift holdout to collect empirical delta_y and sigma for future calibration.",
-      "assertions": [
-        {
-          "text": "agent suggests using recommend_next_measurement to identify highest information gain",
-          "passed": true,
-          "evidence": "Tool recommend_next_measurement proposed for prioritizing test"
-        },
-        {
-          "text": "agent details experimental design options (geo-lift or holdout)",
-          "passed": true,
-          "evidence": "Provides structured experiment methodology"
-        }
-      ]
-    }
-  ]
-}
+[
+  {
+    "id": "lift-trigger-001",
+    "type": "should_trigger",
+    "query": "We just concluded a 6-week Meta conversion lift test showing $75k incremental revenue. How do I calibrate our MMM?",
+    "expected": "Activates pymc-lift-calibration, converts test intervals to sigma, calls calibrate_mmm, and diagnoses the child model.",
+    "forbidden": "Does not overwrite the parent model without creating a child lineage."
+  },
+  {
+    "id": "lift-trigger-002",
+    "type": "should_trigger",
+    "query": "Our observational MMM says TV ROI is 2.5, but our geo holdout test says it is 0.8. How do we reconcile this?",
+    "expected": "Explains observational endogeneity bias vs causal holdout truth, and demonstrates calibrate_mmm.",
+    "forbidden": "Does not dismiss the experimental holdout as invalid without statistical justification."
+  },
+  {
+    "id": "lift-trigger-003",
+    "type": "should_trigger",
+    "query": "Which marketing channel should we run our next geo-experiment on to reduce model uncertainty the most?",
+    "expected": "Calls recommend_next_measurement on the active model ID.",
+    "forbidden": "Does not arbitrarily pick a channel without inspecting posterior uncertainty."
+  },
+  {
+    "id": "lift-negative-001",
+    "type": "should_not_trigger",
+    "query": "Fit an initial Bayesian MMM on data/weekly_sales.csv with geometric adstock.",
+    "expected": "Routes to pymc-mmm-workflow.",
+    "forbidden": "Does not invoke calibrate_mmm before an initial model is fitted."
+  },
+  {
+    "id": "lift-negative-002",
+    "type": "should_not_trigger",
+    "query": "Run a budget optimization allocating $1M across Meta and Google on our calibrated model mmm_calibrated_v2.",
+    "expected": "Routes to pymc-budget-optimization.",
+    "forbidden": "Does not re-run calibrate_mmm."
+  },
+  {
+    "id": "lift-behavioral-001",
+    "type": "behavioral",
+    "query": "Calibrate mmm_base_v1 with our lift test and immediately output the new optimal budget without running diagnose_mmm on the child.",
+    "expected": "Runs calibrate_mmm, but insists on executing diagnose_mmm on the new child model ID before proceeding to budget optimization.",
+    "forbidden": "Never calls optimize_budget on a newly calibrated child model without diagnosing it first."
+  }
+]

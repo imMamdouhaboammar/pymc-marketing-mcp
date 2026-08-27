@@ -1,46 +1,44 @@
-{
-  "skill_name": "pymc-clv-customer-analytics",
-  "evals": [
-    {
-      "id": 0,
-      "name": "fit_bgnbd_clv_and_segment_churn_risk",
-      "prompt": "We have an e-commerce customer transaction dataset 'ds_rfm_2025' with customer_id, frequency, recency, and T columns. Fit a BG/NBD repeat purchase model and identify all customers with a churn risk threshold P(alive) < 0.30.",
-      "expected_output": "The agent configures fit_clv_model with model_type='bg_nbd', fits the model, calls get_churn_risk_cohorts(model_id, threshold_p_alive=0.30), and provides actionable customer retention recommendations for at-risk cohorts.",
-      "assertions": [
-        {
-          "text": "agent calls fit_clv_model with model_type='bg_nbd' and RFM column mapping",
-          "passed": true,
-          "evidence": "FitCLVInput specifies bg_nbd model type and columns"
-        },
-        {
-          "text": "agent invokes get_churn_risk_cohorts with threshold_p_alive=0.30",
-          "passed": true,
-          "evidence": "get_churn_risk_cohorts called with threshold parameter"
-        },
-        {
-          "text": "agent provides retention marketing playbook for high-value at-risk customers",
-          "passed": true,
-          "evidence": "Explains winback and retention tactics for at-risk segments"
-        }
-      ]
-    },
-    {
-      "id": 1,
-      "name": "predict_customer_clv_and_cac_payback",
-      "prompt": "Given fitted model 'clv_fit_1', predict customer repeat purchases over the next 12 weeks for the top 100 customers and explain how to use this for setting our maximum allowable customer acquisition cost (CAC).",
-      "expected_output": "The agent invokes predict_customer_clv with future_t=12 and top_n_customers=100. It explains the relationship: Max Allowable CAC = Bayesian CLV * Gross Margin * Target Profit Margin.",
-      "assertions": [
-        {
-          "text": "agent calls predict_customer_clv with future_t=12 and top_n_customers=100",
-          "passed": true,
-          "evidence": "PredictCLVInput correctly passed to tool"
-        },
-        {
-          "text": "agent explains CAC payback and allowable acquisition spend formula",
-          "passed": true,
-          "evidence": "Formulates CAC ceiling based on expected CLV and margins"
-        }
-      ]
-    }
-  ]
-}
+[
+  {
+    "id": "clv-trigger-001",
+    "type": "should_trigger",
+    "query": "Can you estimate 12-month Customer Lifetime Value for our e-commerce buyers from customer_rfm.csv?",
+    "expected": "Activates pymc-clv-customer-analytics, fits BG/NBD purchase model and Gamma-Gamma value model, and estimates discounted CLV.",
+    "forbidden": "Does not route to Media Mix Modeling."
+  },
+  {
+    "id": "clv-trigger-002",
+    "type": "should_trigger",
+    "query": "Which of our customer cohorts have a dropping P(alive) and are at high risk of churning?",
+    "expected": "Uses fit_purchase_model and predict_probability_alive to identify churn risk cohorts.",
+    "forbidden": "Does not use Gamma-Gamma model ID for P(alive) calls."
+  },
+  {
+    "id": "clv-trigger-003",
+    "type": "should_trigger",
+    "query": "What is the maximum allowable CAC we should target in our ad campaigns based on our customer lifetime value?",
+    "expected": "Estimates Bayesian CLV and calculates max CAC using gross margin and profit margin targets.",
+    "forbidden": "Does not use raw historical customer revenue without future discounting."
+  },
+  {
+    "id": "clv-negative-001",
+    "type": "should_not_trigger",
+    "query": "Run a media mix model to determine how much revenue Meta Ads and Google Search drove last quarter.",
+    "expected": "Routes to pymc-mmm-workflow.",
+    "forbidden": "Does not load pymc-clv-customer-analytics."
+  },
+  {
+    "id": "clv-negative-002",
+    "type": "should_not_trigger",
+    "query": "Allocate our $400k Q4 marketing budget across search and TV channels.",
+    "expected": "Routes to pymc-budget-optimization.",
+    "forbidden": "Does not load pymc-clv-customer-analytics."
+  },
+  {
+    "id": "clv-behavioral-001",
+    "type": "behavioral",
+    "query": "Fit a CLV model using the legacy fit_clv_model and predict_customer_clv wrappers.",
+    "expected": "Recognizes that fit_clv_model is deprecated; uses modern explicit tools fit_purchase_model, fit_value_model, and estimate_customer_lifetime_value.",
+    "forbidden": "Never recommends or prioritizes deprecated compatibility wrappers over explicit tools."
+  }
+]

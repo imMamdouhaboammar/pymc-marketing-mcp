@@ -1,0 +1,25 @@
+{
+  "name": "pymc-clv-customer-analytics",
+  "version": "2.0.0",
+  "description": "Bayesian Customer Lifetime Value, repeat purchase modeling, and churn cohorts for PyMC-Marketing",
+  "entrypoint": "SKILL.md",
+  "files": {
+    "references": [
+      "references/btyd-math.md",
+      "references/cohort-segmentation.md"
+    ],
+    "templates": [
+      "templates/fit-clv-models-input.json",
+      "templates/clv-segment-report.md"
+    ],
+    "examples": [
+      "examples/ecommerce-clv-walkthrough.md"
+    ],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": [
+      "scripts/rfm_summary.py"
+    ]
+  }
+}

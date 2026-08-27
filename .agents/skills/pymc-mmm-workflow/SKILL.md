@@ -1,206 +1,220 @@
 ---
 name: pymc-mmm-workflow
-description: Master workflow guide for Bayesian Marketing Mix Modeling (MMM) using PyMC-Marketing MCP. Use when fitting an MMM, ingesting marketing datasets, choosing adstock and saturation transformations, configuring MCMC sampling, diagnosing convergence, extracting channel contributions, or explaining MMM evidence to stakeholders. Trigger whenever the user mentions MMM, marketing mix modeling, media mix, adstock, saturation curve, channel ROI, media contribution, or marketing budget attribution.
-metadata:
-  version: 1.0.0
-  framework: pymc-marketing
-  mcp_version: 0.4.0
+description: >
+  Execute the full 6-stage Bayesian Media Mix Modeling lifecycle with PyMC-Marketing.
+  Use when the user wants to measure marketing channel contributions, calculate total
+  or marginal incremental ROAS, fit an MMM model, evaluate advertising carryover and
+  saturation, or formulate media mix strategies — even if they don't explicitly say
+  "MMM" (e.g., "how much did TV contribute", "which channel has the highest ROI",
+  "build a media mix model", "analyze marketing effectiveness"). Do NOT use for customer
+  lifetime value or churn prediction (use pymc-clv-customer-analytics) or for diagnosing
+  failing MCMC samplers (use pymc-diagnostics-gate).
+version: 2.0.0
+pack: marketing-science
+inputs:
+  - dataset_id_or_path
+  - target_column
+  - channel_columns
+  - date_column
+  - control_columns
+requires:
+  - registered_dataset
+  - validated_panel_structure
+produces:
+  - fitted_mmm_model
+  - diagnostic_status
+  - channel_contributions
+  - incremental_roas
+  - executive_brief
+gates:
+  - dataset_validation_passed
+  - diagnostic_gate_approved
+fallback: pymc-diagnostics-gate
+mutatesWorkspace: false
+parallelSafe: true
+neural_links:
+  precursors:
+    - fable-research
+  continuations:
+    - pymc-diagnostics-gate
+    - pymc-budget-optimization
+    - pymc-lift-calibration
+  lateral_peers:
+    - pymc-clv-customer-analytics
+  recovery: pymc-diagnostics-gate
 ---
 
-# PyMC Marketing MMM Workflow
+# PyMC Media Mix Modeling (MMM) Workflow
 
-You are an expert Marketing Scientist operating PyMC-Marketing through the Model Context Protocol (MCP). Your mission is to guide Bayesian Marketing Mix Modeling workflows from raw data ingestion to decision-safe executive reporting.
+Execute the full 6-stage Bayesian Media Mix Modeling lifecycle using PyMC-Marketing. Translate raw marketing expenditure and business KPI data into causal, uncertainty-calibrated revenue contributions, incremental ROAS (iROAS), and strategic recommendations.
+
+## Runtime Requirements (pre-flight)
+
+Before executing any modeling steps, verify context readiness:
+- [ ] Dataset exists in allowed ingest directory (`.csv` or `.parquet`)
+- [ ] Time span contains $\ge 52$ weekly periods (or equivalent daily/monthly span)
+- [ ] Target KPI is numeric (revenue, conversions, new accounts)
+- [ ] Channel spend columns are non-negative with observable historical variation
+- [ ] Control variables (macro indicators, promotions, seasonality) are identified
+
+→ Full pre-flight data checks and script: `scripts/dataset_precheck.py`
+
+---
+
+## When to Use
+
+- User asks to estimate revenue or conversion attribution across advertising channels
+- User wants to calculate historical or marginal incremental ROAS (iROAS)
+- User needs to evaluate ad carryover (adstock) and diminishing returns (saturation)
+- User asks "how much revenue did Meta/Google/TV drive last quarter?"
+- User wants to configure, fit, or evaluate a Bayesian Media Mix Model
+
+## When NOT to Use
+
+- Customer retention, repeat purchase rate, or CLV estimation → use `pymc-clv-customer-analytics`
+- Resolving MCMC divergences, high R-hat, or sampler failure → use `pymc-diagnostics-gate`
+- Scenario simulation or budget optimization on an already diagnosed model → use `pymc-budget-optimization`
+- Adding geo-experiment lift test calibration to an existing model → use `pymc-lift-calibration`
+
+---
 
 ## Core Tenet: Statistical Separation of Concerns
 
-Keep statistical computation inside PyMC-Marketing. The AI agent:
-1. Frames the business hypotheses and data schema.
-2. Selects statistically justified model structures (adstock, saturation, controls, seasonality).
-3. Evaluates diagnostic gates before authorizing downstream decisions.
-4. Explains posterior evidence, credible intervals, and business implications.
-
-Never invent marketing physics or report unvalidated point estimates. Always carry 94% highest density intervals (HDI) and diagnostic statuses in reporting.
+All model-dependent quantities (adstock parameters, saturation thresholds, channel contributions, iROAS, credible intervals) are computed strictly by PyMC-Marketing and ArviZ. The agent frames the problem, validates data integrity, selects transformation families, enforces diagnostic gates, and interprets posterior distributions. The agent never calculates iROAS or posterior numbers through arithmetic or LLM guesswork.
 
 ---
 
 ## The 6-Stage Modeling Lifecycle
 
-```
-[1. Ingest & Inspect] ──> [2. Validate Dataset] ──> [3. Formulate & Fit]
-                                                            │
-[6. Executive Brief] <── [5. Decisions & Alloc] <── [4. Diagnostic Gate]
+```text
+[1. Ingest & Inspect] ──► [2. Validate Dataset] ──► [3. Formulate & Fit MMM]
+                                                              │
+                                                              ▼
+[6. Executive Brief]  ◄── [5. Posterior & iROAS] ◄── [4. Diagnostic Gate]
 ```
 
 ---
 
-## Stage 1: Dataset Registration & Inspection
+## Procedure
 
-1. **Register the dataset**:
-   Call `register_dataset(path="data/marketing_data.csv")`.
-   - Obtains a persistent `dataset_id` and SHA-256 fingerprint for provenance.
-   - Accepts CSV or Parquet files.
+### Stage 1: Ingest & Inspect Dataset
 
-2. **Inspect column candidates**:
-   Call `inspect_dataset(dataset_id=dataset_id)`.
-   - Review inferred frequency (e.g., weekly `'W-MON'`, daily `'D'`), date span, candidate target KPIs, candidate media channels, and control candidates.
-   - Check `missing_periods` and `issues` in the inspection envelope.
+Register the dataset to establish server-controlled identity and cryptographic provenance.
+
+1. **Step:** Call `register_dataset(path="data/marketing_data.csv")`.
+   - **Key point:** Generates a persistent `dataset_id` and SHA-256 fingerprint that anchors model lineage.
+   - **Why:** Protects downstream decisions from silent data drift or unverified file mutation.
+
+2. **Step:** Call `inspect_dataset(dataset_id=dataset_id)`.
+   - **Key point:** Verify inferred frequency (`'W-MON'`, `'D'`), date ranges, candidate channels, and null distributions.
+   - **Why:** Catching missing intervals or incorrect column typing early avoids wasted MCMC sampling time.
+
+### Stage 2: Statistical & Panel Validation
+
+1. **Step:** Call `validate_dataset(...)` with designated column roles:
+   ```json
+   {
+     "dataset_id": "ds_ecommerce_2026",
+     "date_column": "date",
+     "target_column": "revenue",
+     "channel_columns": ["tv_spend", "search_spend", "meta_spend", "youtube_spend"],
+     "control_columns": ["promo_flag", "macro_index"],
+     "dims": []
+   }
+   ```
+   - **Key point:** For panel models with geographic or regional splits, specify `dims=["geo"]` and ensure panel rectangularity.
+   - **Why:** Irregular panel grids or high channel collinearity ($r \ge 0.90$) distort Bayesian parameter identification.
+   - → Panel MMM reference: `references/panel-mmm-guide.md`
+
+### Stage 3: Formulate Model & Fit MCMC
+
+1. **Step:** Select adstock and saturation transformations tailored to channel mechanics:
+
+| Channel Type | Recommended Adstock | Recommended Saturation | Typical $l_{\max}$ |
+|---|---|---|---|
+| **Google Search / Direct** | `geometric` ($\alpha \approx 0.2$) | `logistic` or `michaelis_menten` | 2–4 wks |
+| **Meta / Social Performance**| `geometric` ($\alpha \approx 0.4$) | `logistic` or `hill` | 4–8 wks |
+| **Linear & Connected TV** | `delayed` or `weibull_pdf` | `hill` ($S > 1$) | 8–16 wks |
+| **Out-of-Home / Print** | `delayed` ($\theta \ge 2$) | `tanh` | 8–14 wks |
+
+2. **Step:** Construct the configuration and submit the fit:
+   - For fast fits / synchronous sessions: call `fit_mmm(...)`.
+   - For long-running sampling in production: call `submit_fit_mmm_job(...)` and poll `get_job_status(job_id)`.
+   - **Key point:** Always set `yearly_seasonality` (typically 2–4 Fourier modes) and configure informative `channel_priors`.
+   - **Why:** Unconstrained priors on small spend channels lead to wide posterior variance and unidentifiable saturation parameters.
+   - → Detailed mathematical formulas and priors: `references/transforms-guide.md`
+   - → Configuration template: `templates/fit-mmm-input.json`
+
+### Stage 4: Mandatory Diagnostic Gating
+
+1. **Step:** Immediately call `diagnose_mmm(model_id=model_id)`.
+   - **Key point:** Evaluate `decision_status` against hard and caution thresholds:
+     - `approved`: Divergences $= 0$, $\hat{R} \le 1.01$, Bulk ESS $\ge 400$, Posterior-predictive coverage $\ge 80\%$.
+     - `approved_with_caution`: Divergences $= 0$, $\hat{R} \le 1.05$, Bulk ESS $\ge 50$, Coverage $\ge 50\%$.
+     - `rejected`: Divergences $> 0$, $\hat{R} > 1.05$, ESS $< 50$, or Coverage $< 50\%$.
+   - **Why:** Decision-grade tools (`simulate_budget`, `optimize_budget`, `optimize_flighting`, `get_incremental_roas`) fail closed if called on a rejected model.
+   - → If rejected, switch immediately to: `pymc-diagnostics-gate`
+
+### Stage 5: Posterior Evidence & Incrementality Analysis
+
+1. **Step:** Extract channel contributions:
+   Call `get_channel_contributions(model_id=model_id)`.
+   - Returns absolute attributed KPI and percentage shares per media channel with 94% highest density intervals (HDI).
+
+2. **Step:** Extract total and marginal incremental ROAS:
+   Call `get_incremental_roas(model_id=model_id)`.
+   - **Total iROAS:** $\frac{\Delta \text{Revenue}}{\text{Spend}}$ over the entire evaluated window.
+   - **Marginal iROAS:** $\left.\frac{\partial \text{Revenue}}{\partial \text{Spend}}\right|_{\text{current spend}}$. Indicates where the *next dollar* generates the highest return.
+   - **$P(\text{iROAS} > 1)$:** Bayesian posterior probability that channel is value-accretive.
+
+3. **Step:** Generate visual plots:
+   Call `get_posterior_plots(model_id=model_id, plot_types=["saturation_curves", "waterfall_decomposition", "actual_vs_predicted"])`.
+
+### Stage 6: Executive Synthesis & Brief Formulation
+
+1. **Step:** Synthesize findings into the standardized executive briefing format.
+   - Include diagnostic health, historical channel ROI table with credible intervals, diminishing returns analysis, and recommended reallocations.
+   - **Key point:** Never present a point estimate without its 94% HDI. Never treat correlation as absolute causal proof.
+   - **Why:** Decision-makers need to understand parameter uncertainty before committing advertising capital.
+   - → Executive brief template: `templates/executive-brief.md`
+   - → Complete walkthrough example: `examples/e-commerce-mmm-walkthrough.md`
 
 ---
 
-## Stage 2: Statistical & Panel Validation
+## Common Mistakes & Mitigations
 
-Before calling `fit_mmm`, run `validate_dataset`. This applies hard econometric checks:
-
-```json
-{
-  "dataset_id": "ds_xyz123",
-  "date_column": "date",
-  "target_column": "revenue",
-  "channel_columns": ["facebook_spend", "google_spend", "tv_spend", "tiktok_spend"],
-  "control_columns": ["promo_event", "competitor_price_index"],
-  "dims": []
-}
-```
-
-### Pre-Modeling Validation Rules
-
-| Check | Failure Condition | Agent Action |
+| Mistake | Signal | Mitigation |
 |---|---|---|
-| **Data Span** | $< 52$ time periods for weekly data | Warn or abort. Weekly MMM requires $\ge 52$ periods (ideally 104+) to separate seasonality from adstock. |
-| **Collinearity** | Channel correlation $r \ge 0.90$ | Suggest merging co-linear channels (e.g., Google Brand + Non-Brand) or providing informative priors. |
-| **Zero Variance** | Channel has $100\%$ zero spend or zero variation | Remove channel from active media list. |
-| **Negative Spend** | Negative values in spend columns | Clean data: spend cannot be negative in adstock transformations. |
-| **Panel Rectangularity** | Incomplete date-geo tuples in panel datasets | Impute missing rows with zero spend or balance panel grid. |
-
-*For panel MMM setups with `dims=['geo']`, refer to [references/panel-mmm-guide.md](references/panel-mmm-guide.md).*
+| **Using Point Estimates Only** | Reporting "Meta iROAS is 2.4" without intervals | Always report posterior median alongside 94% HDI: `2.4 [1.9 - 2.9]` |
+| **Conflating Total & Marginal iROAS** | Recommending budget based on total historical ROI | Use marginal iROAS to direct future budget; total ROI to evaluate past efficiency |
+| **Bypassing Rejected Diagnostics** | Attempting optimization after MCMC convergence failure | Stop. Activate `pymc-diagnostics-gate` to reparameterize and refit |
+| **Over-Parameterized Adstock** | Setting $l_{\max}=26$ weeks for fast digital channels | Restrict $l_{\max} \le 4$ for search; use delayed adstock only for TV/Brand |
+| **Unchecked Channel Collinearity** | Two channels with $r > 0.90$ causing wide variance | Combine channels or add informative priors / lift tests |
 
 ---
 
-## Stage 3: Model Architecture & MCMC Fit
+## Decision Rules
 
-Call `fit_mmm` with a structured `FitMMMInput` configuration.
-
-### 1. Transform Selection Heuristic
-
-Choose functional forms matching channel media characteristics:
-
-- **Adstock (Memory/Carryover)**:
-  - `geometric` (default): Standard decay rate $\alpha \in [0, 1]$. Best for digital performance channels (Google Search, Meta Direct Response).
-  - `delayed`: Peak response occurs after a lag. Best for brand campaigns, TV, print, or out-of-home (OOH).
-  - `weibull_cdf` / `weibull_pdf`: Flexible shape allowing both delayed peaks and fat-tailed decay.
-  - `none`: Real-time instant channels with zero carryover (SMS, flash promo push).
-
-- **Saturation (Diminishing Returns)**:
-  - `logistic` (default): Sigmoidal S-curve mapping spend to bounded response.
-  - `hill` / `hill_sigmoid`: Flexible hill function with explicit half-saturation point $K$ and slope $S$. Best when channels exhibit steep thresholds.
-  - `tanh` / `tanh_baselined`: Hyperbolic tangent saturation, useful when baseline spend is high.
-  - `michaelis_menten`: Classic biochemical saturation curve without inflection.
-
-*For complete mathematical formulations and parameter priors, refer to [references/transforms-guide.md](references/transforms-guide.md).*
-
-### 2. Per-Channel Prior Overrides (`channel_priors`)
-
-Tailor transformations per channel rather than forcing a single global assumption:
-
-```json
-{
-  "dataset_id": "ds_xyz123",
-  "date_column": "date",
-  "target_column": "revenue",
-  "channel_columns": ["tv_spend", "search_spend", "meta_spend"],
-  "yearly_seasonality": 2,
-  "adstock": {"type": "geometric", "l_max": 8},
-  "saturation": {"type": "logistic"},
-  "channel_priors": {
-    "tv_spend": {
-      "adstock": {"type": "delayed", "l_max": 12},
-      "saturation": {"type": "hill"}
-    }
-  },
-  "sampler": {
-    "draws": 1000,
-    "tune": 1000,
-    "chains": 4,
-    "target_accept": 0.90,
-    "random_seed": 42
-  }
-}
-```
+- Weekly models require $\ge 52$ observations; reject or flag weekly data with $< 52$ weeks.
+- Always run `validate_dataset` before `fit_mmm`.
+- Always run `diagnose_mmm` before drawing business conclusions or calling decision tools.
+- Never report model numbers from manual arithmetic; all figures must originate from MCP tool outputs.
+- If `decision_status == "approved_with_caution"`, all stakeholder summaries must highlight the cautionary warnings.
 
 ---
 
-## Stage 4: Mandatory Diagnostic Gating
+## Evidence Requirements
 
-Immediately after `fit_mmm`, call `diagnose_mmm(model_id=model_id)`.
-
-Do NOT call decision tools (`simulate_budget`, `optimize_budget`, `get_incremental_roas`) if `decision_status == "rejected"`.
-
-### Decision Thresholds
-
-```
-Divergences == 0  AND  R-hat <= 1.01  AND  Bulk ESS >= 400  AND  Coverage >= 80%
-   │
-   ├── YES ──> Status: APPROVED (Full decision tools unlocked)
-   │
-   └── NO  ──> Divergences <= 5 AND R-hat <= 1.05 AND Bulk ESS >= 50
-                │
-                ├── YES ──> Status: APPROVED_WITH_CAUTION (Use caution in scenarios)
-                └── NO  ──> Status: REJECTED (Trigger MCMC Remediation)
-```
-
-*When a model is rejected, activate the `pymc-diagnostics-gate` skill to follow the remediation protocol.*
+- Dataset ID with SHA-256 fingerprint verified.
+- Model ID with recorded MCMC configuration and random seed.
+- Validated `diagnose_mmm` response envelope showing MCMC convergence metrics.
+- Complete table of channel contributions and iROAS with 94% HDI bounds.
 
 ---
 
-## Stage 5: Posterior Evidence & Incrementality Analysis
+## Neural Connections
 
-Once approved, extract posterior estimates:
-
-1. **Channel Contributions**:
-   `get_channel_contributions(model_id=model_id)`
-   - Returns absolute revenue/conversions attributed to baseline vs media channels.
-   - Always report posterior medians alongside 94% HDI credible intervals (e.g. Meta generated \$420k [\$380k - \$465k]).
-
-2. **Total vs Marginal iROAS**:
-   `get_incremental_roas(model_id=model_id)`
-   - Total iROAS: Overall historical return on investment ($\Delta \text{Revenue} / \text{Spend}$).
-   - Marginal iROAS: Derivative of response curve at current spend ($\partial \text{KPI} / \partial \text{Spend}$). Indicates where the next dollar is most productive.
-   - $P(\text{iROAS} > 1)$: Probability that the channel is profitable.
-
-3. **Visualizations**:
-   `get_posterior_plots(model_id=model_id, plot_types=["saturation_curves", "waterfall_decomposition", "actual_vs_predicted", "channel_contribution_share"])`
-
----
-
-## Stage 6: Executive Synthesis Structure
-
-When delivering MMM findings to stakeholders, follow this structured format:
-
-```markdown
-# Executive Marketing Mix Modeling Summary: [Brand/Business Unit]
-
-## 1. Executive Summary & Decision Readiness
-- **Model Diagnostic Status**: [Approved / Approved with Caution] (Divergences: 0, Max R-hat: 1.008, Min ESS: 850)
-- **Time Horizon Analyzed**: [Start Date] to [End Date] ([N] weeks)
-- **Top Finding**: [Core business insight on key revenue driver]
-
-## 2. Channel Performance & Incrementality
-| Channel | Total Spend | Contributed Revenue (Median [94% HDI]) | Total iROAS | Marginal iROAS | P(iROAS > 1) |
-|---|---|---|---|---|---|
-| Meta Ads | $500,000 | $1,250,000 [$1,080,000 - $1,420,000] | 2.50 | 1.15 | 98.4% |
-| Google Search | $350,000 | $1,100,000 [$980,000 - $1,220,000] | 3.14 | 2.05 | 99.9% |
-| TV Campaign | $400,000 | $480,000 [$320,000 - $650,000] | 1.20 | 0.42 | 68.2% |
-
-## 3. Diminishing Returns & Marginal Efficiency
-- **Saturated Channels**: [Channels where marginal iROAS < 1.0; e.g. TV at 0.42]
-- **Under-Invested Channels**: [Channels with high marginal iROAS; e.g. Google Search at 2.05]
-
-## 4. Strategic Recommendations
-1. Reallocate $100k from TV to Google Search to capture high marginal return before saturation.
-2. Maintain Meta Ads near current run-rate to sustain brand baseline.
-3. Validate TV incrementality with a matched-market geo-test (see `pymc-lift-calibration`).
-
-## 5. Model Lineage & Provenance
-- Model ID: `mmm_2026_v1` (Dataset SHA: `a3f89...`)
-- PyMC-Marketing v1.0.0, ArviZ v0.21.0
-```
+- **Upstream Precursor:** `fable-research`
+- **Downstream Continuations:** `pymc-diagnostics-gate`, `pymc-budget-optimization`, `pymc-lift-calibration`
+- **Lateral Peers:** `pymc-clv-customer-analytics`
+- **Recovery Handler:** `pymc-diagnostics-gate`

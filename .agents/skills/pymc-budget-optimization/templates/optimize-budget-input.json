@@ -1,0 +1,23 @@
+{
+  "model_id": "mmm_ecommerce_q3_2026",
+  "budget": 750000.0,
+  "planning_periods": 12,
+  "constraints": {
+    "search_nonbrand_spend": {
+      "min": 150000.0,
+      "max": 350000.0
+    },
+    "meta_spend": {
+      "min": 200000.0,
+      "max": 400000.0
+    },
+    "search_brand_spend": {
+      "min": 50000.0,
+      "max": 100000.0
+    },
+    "tv_spend": {
+      "min": 50000.0,
+      "max": 150000.0
+    }
+  }
+}

@@ -1,112 +1,171 @@
 ---
 name: pymc-lift-calibration
-description: Experimental lift test calibration, incrementality triangulation, and model lineage management for PyMC-Marketing MCP. Use when calibrating an MMM with randomized experiment results (Geo-lift, conversion lift, Matched Market tests, holdout studies), adding lift test measurements via calibrate_mmm, tracking model lineage DAGs (parent_model_id), reconciling discrepancies between MMM and multi-touch attribution (MTA), or recommending optimal next incrementality experiments (recommend_next_measurement). Trigger whenever the user mentions lift test, incrementality experiment, geo-experiment, matched market test, calibrating MMM, experimental priors, ground truth calibration, or experiment design.
-metadata:
-  version: 1.0.0
-  framework: pymc-marketing
-  mcp_version: 0.4.0
+description: >
+  Calibrate Bayesian Media Mix Models with experimental lift tests, geo-experiments,
+  and holdout studies in PyMC-Marketing. Use when incorporating randomized experiment
+  results into an observational MMM, reconciling attribution discrepancies between MMM
+  and MTA, managing parent-child model lineage chains, evaluating parameter shifts post-calibration,
+  or recommending optimal next incrementality experiments — even if the user does not
+  explicitly say "calibration" (e.g., "add geo-test results to our MMM", "our TV lift test showed
+  2.3x ROI", "calibrate model with holdout study", "reconcile MMM with incrementality tests").
+  Do NOT use for initial uncalibrated MMM model fitting (use pymc-mmm-workflow) or for MCMC
+  divergence diagnosis (use pymc-diagnostics-gate).
+version: 2.0.0
+pack: marketing-science
+inputs:
+  - model_id
+  - lift_tests
+  - sampler_config
+requires:
+  - fitted_parent_model_id
+  - validated_lift_test_measurements
+produces:
+  - calibrated_child_model_id
+  - model_lineage_record
+  - pre_post_iroas_comparison
+  - parameter_shift_analysis
+gates:
+  - positive_incremental_spend
+  - positive_standard_error
+  - child_model_diagnosed
+fallback: pymc-diagnostics-gate
+mutatesWorkspace: false
+parallelSafe: true
+neural_links:
+  precursors:
+    - pymc-mmm-workflow
+    - pymc-diagnostics-gate
+  continuations:
+    - pymc-diagnostics-gate
+    - pymc-budget-optimization
+  lateral_peers:
+    - pymc-clv-customer-analytics
+  recovery: pymc-diagnostics-gate
 ---
 
 # PyMC Marketing Lift Calibration & Triangulation
 
-You are an expert Experimentation & Econometrics Specialist operating PyMC-Marketing. Your mission is to ground correlational observational MMM models in experimental causal truth using Bayesian calibration.
+Anchor observational Bayesian Media Mix Models in experimental causal ground truth. Incorporate randomized incrementality measurements (Geo-lift tests, conversion holdouts, matched-market experiments) directly into the PyMC-Marketing model likelihood, track immutable parent-child model lineage, and resolve multi-touch attribution (MTA) discrepancies.
+
+## Runtime Requirements (pre-flight)
+
+Before executing model calibration:
+- [ ] A fitted parent model exists with a verified `model_id`
+- [ ] Experimental test has non-negative incremental spend ($\Delta x > 0$)
+- [ ] Measured incremental response ($\Delta y$) and standard error ($\sigma > 0$) are documented
+- [ ] Test duration, target geography, and conversion windows are validated
+
+---
+
+## When to Use
+
+- User wants to calibrate an existing MMM model with results from a geo-lift test or holdout experiment
+- User provides experimental lift numbers (e.g. "We ran a Facebook conversion lift study showing $65k lift")
+- User needs to reconcile differences between observational MMM and platform click attribution
+- User asks which marketing channel to test next using `recommend_next_measurement`
+- User wants to inspect or compare parent vs child model lineage
+
+## When NOT to Use
+
+- Initial uncalibrated dataset inspection and model fitting → use `pymc-mmm-workflow`
+- Allocating budget on an already calibrated and diagnosed model → use `pymc-budget-optimization`
+- Remediating MCMC convergence failures on parent or child models → use `pymc-diagnostics-gate`
+
+---
 
 ## The Triangulation Paradigm
 
-Observational MMM models capture long-term macro trends and cross-channel synergies, but can suffer from confounders and endogeneity (e.g. ad spend scaling during high organic demand).
-Randomized experiments (Geo-lift tests, conversion lift holdouts) measure unbiased causal incrementality.
+Observational MMM captures macro seasonality and cross-channel interactions but can suffer from endogeneity (e.g. ad spend ramping during organic sales surges). Lift experiments provide unbiased local causal truth. Calibration adds experimental evidence into the Bayesian likelihood, shrinking posterior response curves toward experimental truth.
 
-```
-       Observational MMM (Broad Scope, Correlational)
-                          │
-                   CALIBRATION (Bayesian Likelihood Anchor)
-                          ▼
-       Experimental Ground Truth (Causal, Local Incrementality)
-```
-
-PyMC-Marketing implements calibration by adding experimental observations directly into the model likelihood (`add_lift_test_measurements`), pulling the posterior channel parameters toward the experimentally observed causal lift.
-
----
-
-## 1. Lift Test Data Structure
-
-To calibrate a model via `calibrate_mmm`, specify each experiment using `LiftTestMeasurement`:
-
-| Parameter | Type | Meaning | Example |
-|---|---|---|---|
-| `channel` | `str` | Marketing channel tested | `"meta_spend"` |
-| `geo` | `str \| None` | Optional geography identifier | `"dma_501"` (or `None` for national) |
-| `x` | `float` | Baseline media spend/volume in control/pre-test | `50000.0` |
-| `delta_x` | `float` | Incremental spend tested ($\Delta x > 0$) | `25000.0` |
-| `delta_y` | `float` | Measured incremental KPI response ($\Delta y$) | `65000.0` |
-| `sigma` | `float` | Standard error of measured lift ($\sigma > 0$) | `12000.0` |
-| `description`| `str \| None`| Test study identifier | `"Q3 Meta Geo-Lift Study"` |
-
-### Converting Confidence Intervals to $\sigma$:
-If an experiment report states: *"Incremental sales: \$65,000 with a 95% Confidence Interval of [\$41,480, \$88,520]"*:
-
-$$\text{Margin of Error} = \frac{88520 - 41480}{2} = 23520$$
-$$\sigma = \frac{\text{Margin of Error}}{1.96} = \frac{23520}{1.96} = 12000$$
-
----
-
-## 2. Running Calibration (`calibrate_mmm`)
-
-Call `calibrate_mmm` pointing to the base uncalibrated model:
-
-```json
-{
-  "model_id": "mmm_base_v1",
-  "lift_tests": [
-    {
-      "channel": "meta_spend",
-      "x": 50000.0,
-      "delta_x": 25000.0,
-      "delta_y": 65000.0,
-      "sigma": 12000.0,
-      "description": "Meta Geo-Lift Q3 2025"
-    },
-    {
-      "channel": "tv_brand_spend",
-      "x": 100000.0,
-      "delta_x": 50000.0,
-      "delta_y": 30000.0,
-      "sigma": 8000.0,
-      "description": "TV DMA Matched-Market Q2"
-    }
-  ],
-  "sampler": {
-    "draws": 1000,
-    "tune": 1000,
-    "chains": 4,
-    "target_accept": 0.92
-  }
-}
+```text
+  Observational MMM (Broad Scope, Correlational)
+                         │
+                  CALIBRATION (Bayesian Likelihood Anchor)
+                         ▼
+  Experimental Ground Truth (Causal, Local Incrementality)
 ```
 
-### Model Lineage Invariant
-- A new calibrated model is created with `lineage_stage = "calibrated"` and `parent_model_id = "mmm_base_v1"`.
-- Always inspect `marketing://models/{new_model_id}/lineage` to verify parental linkage and parameter shifts.
-- Re-run `diagnose_mmm` on the calibrated model before running decision tools!
+---
+
+## Procedure
+
+### Step 1: Validate Experimental Evidence
+1. **Step:** Convert reported confidence intervals into standard error ($\sigma$):
+   $$	ext{Margin of Error} = rac{	ext{CI}_{	ext{upper}} - 	ext{CI}_{	ext{lower}}}{2}, \quad \sigma = rac{	ext{Margin of Error}}{1.96}$$
+   - **Key point:** Verify that test markets were balanced and uncontaminated by concurrent outlier campaigns.
+   - **Why:** Noisy or biased experiments propagate false certainty into the Bayesian posterior.
+   - → Experiment design guide: `references/experiment-design.md`
+
+### Step 2: Structure Lift Test Input Payload
+1. **Step:** Construct the `LiftTestMeasurement` objects:
+   ```json
+   {
+     "model_id": "mmm_base_v1",
+     "lift_tests": [
+       {
+         "channel": "meta_spend",
+         "x": 50000.0,
+         "delta_x": 25000.0,
+         "delta_y": 65000.0,
+         "sigma": 12000.0,
+         "description": "Meta Geo-Lift Q3 2026"
+       }
+     ],
+     "sampler": {
+       "draws": 1000,
+       "tune": 1000,
+       "chains": 4,
+       "target_accept": 0.92
+     }
+   }
+   ```
+   - → Calibration template: `templates/lift-test-input.json`
+   - → Pre-calibration checklist: `templates/calibration-checklist.md`
+
+### Step 3: Execute Calibration (`calibrate_mmm`)
+1. **Step:** Call `calibrate_mmm(...)`.
+   - **Key point:** Generates a new child model (e.g. `mmm_calibrated_v2`) with `parent_model_id = "mmm_base_v1"`.
+   - **Lineage Invariant:** Calibration never mutates the parent model in place. The parent artifact and provenance remain immutable.
+
+### Step 4: Mandatory Diagnostic Gating of Calibrated Child
+1. **Step:** Immediately call `diagnose_mmm(model_id=new_model_id)`.
+   - **Key point:** Parent diagnostic approval does NOT automatically transfer to the child. The child must pass the gate independently.
+   - **Why:** Adding experimental likelihood terms can alter the posterior geometry, occasionally introducing divergences.
+
+### Step 5: Compare Parent vs Child Lineage
+1. **Step:** Call `compare_models(model_ids=["mmm_base_v1", "mmm_calibrated_v2"])`.
+   - Inspect parameter shifts in saturation half-points ($K$) and iROAS rankings.
+   - Evaluate whether observational over-crediting of high-intent channels has been corrected.
+   - → Complete walkthrough: `examples/tv-geo-experiment-calibration-walkthrough.md`
+
+### Step 6: Recommend Next Incrementality Measurement
+1. **Step:** When asked which channel to experiment on next, call `recommend_next_measurement(model_id=model_id)`.
+   - Identifies channels with the widest posterior saturation uncertainty where experimental evidence will deliver the highest information gain.
 
 ---
 
-## 3. Reconciling MMM vs MTA vs Lift Experiments
+## Common Mistakes & Mitigations
 
-When attribution reports conflict:
-
-| Method | Strengths | Known Biases | Triangulation Rule |
-|---|---|---|---|
-| **Last-Touch / MTA** | Granular user-level clicks | Severe last-click bias, ignores offline/upper funnel, overcredits Brand Search. | Use for tactical creative testing; discount brand search ROI by 30–60%. |
-| **Observational MMM** | Full-funnel, privacy-first, covers offline & baseline | Prone to endogeneity bias where spend follows sales. | Calibrate with lift tests to ground channel saturation asymptotes. |
-| **Lift Experiments** | Gold standard causal truth | Expensive, localized in time and geo. | Use as Bayesian likelihood anchors in MMM. |
+| Mistake | Signal | Mitigation |
+|---|---|---|
+| **Skipping Child Diagnosis** | Proceeding to budget optimization immediately after calibration | Always run `diagnose_mmm` on the child model ID before calling decision tools. |
+| **Negative Delta Spend** | Submitting $\Delta x \le 0$ in lift test payload | Ensure $\Delta x > 0$ representing actual incremental spend tested. |
+| **Confusing Standard Error with Variance** | Entering $\sigma^2$ instead of $\sigma$ in `sigma` field | Double-check formula: $\sigma = 	ext{Standard Error} = 	ext{Margin of Error} / 1.96$. |
+| **Over-Constraining with Tiny $\sigma$** | Artificially setting $\sigma pprox 0$ to force model to match test | Use empirical standard error; zero variance breaks MCMC sampling geometry. |
 
 ---
 
-## 4. Designing Next Optimal Experiments (`recommend_next_measurement`)
+## Decision Rules
 
-Call `recommend_next_measurement(model_id=model_id)` to identify which marketing channel currently has the highest posterior uncertainty or sensitivity.
-- The tool analyzes posterior variance of saturation parameters and potential ROI impact.
-- Prioritizes channels where an experiment would provide the highest information gain.
+- Calibration must preserve parent-child lineage; never attempt to overwrite parent model state.
+- All calibrated models must be independently diagnosed before downstream decision tools are unlocked.
+- Always report pre-calibration vs post-calibration channel iROAS shifts to verify econometric plausibility.
 
-*For complete experiment design rules and math, see [references/experiment-design.md](references/experiment-design.md) and [references/triangulation-framework.md](references/triangulation-framework.md).*
+---
+
+## Neural Connections
+
+- **Upstream Precursors:** `pymc-mmm-workflow`, `pymc-diagnostics-gate`
+- **Downstream Continuations:** `pymc-diagnostics-gate`, `pymc-budget-optimization`
+- **Lateral Peers:** `pymc-clv-customer-analytics`
+- **Recovery Handler:** `pymc-diagnostics-gate`

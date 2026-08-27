@@ -1,0 +1,24 @@
+{
+  "name": "pymc-diagnostics-gate",
+  "version": "2.0.0",
+  "description": "Bayesian MCMC convergence diagnostics and decision quality gate for PyMC-Marketing",
+  "entrypoint": "SKILL.md",
+  "files": {
+    "references": [
+      "references/mcmc-troubleshooting.md",
+      "references/information-criteria-guide.md"
+    ],
+    "templates": [
+      "templates/remediation-checklist.md"
+    ],
+    "examples": [
+      "examples/divergence-remediation-walkthrough.md"
+    ],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": [
+      "scripts/gate_evaluator.py"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "pymc-mmm-workflow",
+  "version": "2.0.0",
+  "description": "Full 6-stage Bayesian Media Mix Modeling lifecycle with PyMC-Marketing",
+  "entrypoint": "SKILL.md",
+  "files": {
+    "references": [
+      "references/transforms-guide.md",
+      "references/panel-mmm-guide.md"
+    ],
+    "templates": [
+      "templates/fit-mmm-input.json",
+      "templates/executive-brief.md"
+    ],
+    "examples": [
+      "examples/e-commerce-mmm-walkthrough.md"
+    ],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": [
+      "scripts/dataset_precheck.py"
+    ]
+  }
+}

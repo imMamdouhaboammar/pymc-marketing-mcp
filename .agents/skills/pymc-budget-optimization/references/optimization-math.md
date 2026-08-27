@@ -1,52 +1,41 @@
-# Optimization & Diminishing Returns Mathematics
+# Optimization Mathematics & Marginal Return Theorems
 
-This guide outlines the mathematical formulation of non-linear budget optimization in PyMC-Marketing.
-
----
-
-## 1. Problem Formulation
-
-Let $K$ be the number of marketing channels, $B$ be the total available budget, and $x = [x_1, x_2, \dots, x_K]^T$ be the vector of channel spend allocations.
-
-$$\max_{x} \quad \sum_{k=1}^K f_k(x_k)$$
-
-Subject to:
-$$\sum_{k=1}^K x_k \le B$$
-$$L_k \le x_k \le U_k, \quad \forall k \in \{1, \dots, K\}$$
-
-Where:
-- $f_k(x_k)$ is the posterior expected response function for channel $k$ (integrating adstock decay and non-linear saturation).
-- $L_k$ and $U_k$ are the lower and upper bounds for channel $k$.
+This document establishes the mathematical foundations of constrained media budget allocation and dynamic flighting in PyMC-Marketing.
 
 ---
 
-## 2. Karush-Kuhn-Tucker (KKT) Optimality Conditions
+## 1. The Multi-Channel Allocation Problem
 
-Form the Lagrangian:
+Let $K$ be the number of media channels, $B$ be the total available budget, and $f_k(x_k)$ be the Bayesian posterior expectation of the saturation response function for channel $k$.
 
-$$\mathcal{L}(x, \lambda, \mu, \nu) = \sum_{k=1}^K f_k(x_k) - \lambda \left(\sum_{k=1}^K x_k - B\right) + \sum_{k=1}^K \mu_k (x_k - L_k) - \sum_{k=1}^K \nu_k (x_k - U_k)$$
+$$\max_{x_1, \dots, x_K} \sum_{k=1}^K f_k(x_k)$$
+subject to:
+$$\sum_{k=1}^K x_k = B, \quad L_k \le x_k \le U_k \quad \forall k \in \{1, \dots, K\}$$
 
-Stationarity condition:
+### Karush-Kuhn-Tucker (KKT) Optimality Conditions:
+At the optimal allocation $x^*$, the Lagrangian is:
+$$\mathcal{L}(x, \lambda, \mu_L, \mu_U) = \sum_{k=1}^K f_k(x_k) - \lambda \left( \sum_{k=1}^K x_k - B \right) + \sum_{k=1}^K \mu_{L, k}(x_k - L_k) + \sum_{k=1}^K \mu_{U, k}(U_k - x_k)$$
 
-$$\frac{\partial \mathcal{L}}{\partial x_k} = f'_k(x_k) - \lambda + \mu_k - \nu_k = 0$$
-
-For any unconstrained interior channel ($L_k < x_k < U_k$, where $\mu_k = \nu_k = 0$):
-
-$$f'_k(x_k) = \frac{\partial f_k}{\partial x_k} = \lambda$$
-
-### The Economic Takeaway:
-At optimality, the marginal return $f'_k(x_k)$ must be identical across all unconstrained channels. If Channel 1 has marginal return \$2.50 and Channel 2 has marginal return \$1.10, moving \$1 from Channel 2 to Channel 1 increases total portfolio return by $+\$1.40$.
+For all channels strictly inside their bounds ($L_k < x_k^* < U_k$), the marginal returns are equal:
+$$f_1'(x_1^*) = f_2'(x_2^*) = \dots = f_m'(x_m^*) = \lambda$$
 
 ---
 
-## 3. Net Profit Objective Formulation
+## 2. Marginal iROAS vs Total iROAS
 
-When optimizing for net profit with revenue margin $m \in (0, 1]$:
+- **Total iROAS**: Average return across all historical spend:
+  $$\text{Total iROAS}_k = \frac{f_k(x_k)}{x_k}$$
+- **Marginal iROAS**: Instantaneous derivative representing the incremental return of the next dollar:
+  $$\text{Marginal iROAS}_k = \left.\frac{d f_k}{d x}\right|_{x = x_k}$$
 
-$$\max_{x} \quad \left( m \cdot \sum_{k=1}^K f_k(x_k) \right) - \sum_{k=1}^K x_k$$
+Because saturation curves are concave ($f''(x) < 0$), Total iROAS is always strictly greater than Marginal iROAS for non-zero spend. Allocating budget by Total iROAS over-allocates to saturated channels.
 
-The marginal condition becomes:
+---
 
-$$m \cdot f'_k(x_k) = 1 \implies f'_k(x_k) = \frac{1}{m}$$
+## 3. Extrapolation Risk Boundary
 
-If gross margin is 40% ($m = 0.40$), optimal allocation continues spending on a channel until its marginal iROAS drops to $\frac{1}{0.40} = 2.50$. Any spend beyond that yields negative net profit.
+When a proposed allocation $x_k$ satisfies:
+$$x_k > 1.5 \times \text{Quantile}_{0.95}(\text{Historical Spend}_k)$$
+The evaluation region lies outside empirical support. In PyMC-Marketing, posterior predictive variance widens exponentially:
+$$\text{Var}(f_k(x_k) \mid \mathcal{D}) \gg \text{Var}(f_k(x_{\text{obs}}) \mid \mathcal{D})$$
+The system flags `EXTRAPOLATION_RISK` and recommends boundary testing.

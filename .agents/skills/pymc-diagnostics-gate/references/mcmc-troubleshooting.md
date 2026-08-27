@@ -1,58 +1,55 @@
-# MCMC Troubleshooting & Convergence Guide
+# MCMC Diagnostics & Troubleshooting Guide
 
-This reference provides exact diagnosis and remediation procedures for MCMC sampling pathologies in PyMC-Marketing.
-
----
-
-## 1. Hamiltonian Divergences
-
-### Root Cause
-A divergence occurs when the numerical leapfrog integrator encounters regions of extreme curvature in the continuous posterior geometry. The simulated trajectory departs from the true energy surface. Even a small number of divergences indicates that the Markov chain cannot reliably explore that portion of the parameter space, biasing posterior estimates.
-
-### Geometry in MMMs
-In Marketing Mix Models, divergences frequently occur in:
-1. **Adstock Boundary Funnels**: When retention $\alpha \to 1.0$ or $\alpha \to 0.0$.
-2. **Hill Saturation Valleys**: High interaction between half-saturation $K$ and slope $S$. When spend is low, $K$ is unidentifiable, creating a flat plateau with a steep canyon.
-
-### Remediation Steps
-1. **Increase `target_accept`**:
-   - Default: `0.90`
-   - Remediation: `0.95` or `0.98`
-   - Mechanism: Reduces the leapfrog step size $\epsilon$, allowing the integrator to make smaller, more accurate steps.
-2. **Increase Warmup / `tune`**:
-   - Step from `tune=1000` to `tune=2000`. Gives dual averaging more steps to estimate the mass matrix metric.
-3. **Re-parameterize Priors**:
-   - Switch from unconstrained `hill` saturation to `logistic` saturation.
-   - Constrain `l_max` to realistic business bounds (e.g. 4 to 8 weeks for digital channels instead of 26 weeks).
+This guide details the statistical theory, numerical mechanics, and systematic remediation protocols for No-U-Turn Sampler (NUTS) diagnostics in PyMC-Marketing.
 
 ---
 
-## 2. Gelman-Rubin $\hat{R}$ Diagnostic
+## 1. Divergences: Detection & Anatomy
 
-### Root Cause
-$\hat{R}$ (potential scale reduction factor) compares the variance between independent chains to the variance within each chain.
-- $\hat{R} \approx 1.00$: Chains are well-mixed and exploring the same stationary distribution.
-- $\hat{R} > 1.01$: Minor non-stationarity or slow mixing.
-- $\hat{R} > 1.05$: Definite convergence failure. Chains are stuck in distinct local modes or have not traversed the distribution.
+### What is a Divergence?
+In Hamiltonian Monte Carlo (HMC) and NUTS, a virtual particle simulates Hamiltonian dynamics across the negative log-posterior energy landscape using numerical leapfrog integration:
+$$\theta(t + \epsilon) = \theta(t) + \epsilon \cdot M^{-1} p(t + \epsilon/2)$$
+A **divergent transition** occurs when the simulated trajectory encounters a region of extreme posterior curvature where the Taylor series approximation of the gradient breaks down, causing the simulated energy $H(\theta, p)$ to diverge from the initial Hamiltonian $H(\theta_0, p_0)$:
+$$|H(\theta^*, p^*) - H(\theta_0, p_0)| > \Delta_{\text{threshold}}$$
 
-### Remediation Steps
-1. **Collinear Channels**:
-   - If two channels are colinear ($r \ge 0.90$), chain 1 may attribute 80% to Channel A and 20% to Channel B, while chain 2 attributes 20% to Channel A and 80% to Channel B.
-   - Fix: Combine channels into a unified channel group or add an informative prior / experimental lift calibration on one of them.
-2. **Over-parameterized Controls**:
-   - Having too many control variables relative to sample size creates flat likelihood ridges.
-   - Fix: Remove non-significant controls or apply regularizing priors.
-3. **Chain Count**:
-   - Always run at least 4 chains (`chains=4`) with independent random initialization to ensure multimodal detection.
+### Root Causes in Marketing Mix Models:
+1. **Neal's Funnel in Hierarchical Parameters**: Group-level standard deviations $\sigma_g \to 0$ create a steep narrow funnel that leapfrog steps overshoot.
+2. **Hill Saturation Slope Parameters**: When Hill slope $S > 3$ with wide prior bounds, the gradient near the threshold inflection point is nearly infinite.
+3. **Collinear Spend Regressors**: Correlated channels produce an elongated, diagonal ridge in posterior space.
+
+### Remediation Steps:
+1. **Increase `target_accept`**: Elevate from 0.90 to 0.95 (or 0.98). This forces NUTS to adapt a smaller step size $\epsilon$:
+   $$\epsilon_{\text{new}} < \epsilon_{\text{old}}$$
+2. **Increase Warmup `tune`**: Extend warmup iterations to 2000 to improve dense mass-matrix adaptation.
+3. **Reparameterize / Constrain Priors**: Replace unconstrained Hill saturation with Logistic saturation, or place informative Gamma/HalfNormal priors on saturation parameters.
+
+---
+
+## 2. Gelman-Rubin Diagnostic ($\hat{R}$)
+
+$\hat{R}$ (potential scale reduction factor) compares the variance between independent MCMC chains to the variance within each chain:
+$$\hat{R} = \sqrt{\frac{W + \frac{1}{N}(B - W)}{W}}$$
+where $B/N$ is between-chain variance and $W$ is mean within-chain variance.
+
+- **$\hat{R} \le 1.01$**: Clean convergence. Chains have mixed thoroughly and reached the same stationary posterior distribution.
+- **$1.01 < \hat{R} \le 1.05$**: Mild non-convergence (Caution zone).
+- **$\hat{R} > 1.05$**: Hard failure (Rejected). Chains are exploring distinct local modes or have not finished warmup.
 
 ---
 
 ## 3. Effective Sample Size (ESS)
 
-### Bulk ESS vs Tail ESS
-- **Bulk ESS**: Evaluates the precision of mean and median estimates. Target $\ge 400$.
-- **Tail ESS**: Evaluates the precision of extreme quantiles (e.g. 3rd and 97th percentiles used in 94% HDI intervals). Target $\ge 400$.
+MCMC samples are serially autocorrelated. ESS estimates the number of independent samples with equivalent statistical precision:
+$$\text{ESS} = \frac{N}{1 + 2 \sum_{k=1}^{\infty} \rho_k}$$
 
-### Low ESS Recovery
-- If ESS $< 50$, posterior draws have severe autocorrelation.
-- Remediation: Double total draws (`draws=2000`) and investigate whether high adstock lags are causing slow autocorrelation decay in the Markov chain.
+- **Bulk ESS**: Measures precision of central tendency (mean, median). Bulk ESS $\ge 400$ guarantees standard error of the mean $< 2.5\%$ of posterior standard deviation.
+- **Tail ESS**: Measures precision in the distribution tails (2.5% and 97.5% quantiles). Essential for reliable 94% HDI credible intervals.
+
+---
+
+## 4. Posterior Predictive Coverage
+
+Checks whether observed actuals $y_{\text{obs}}$ fall inside the model's posterior predictive distribution interval:
+$$\text{Coverage} = \frac{1}{T} \sum_{t=1}^T \mathbb{I}\left( y_t \in [\text{HDI}_{94\%, \text{lower}}, \text{HDI}_{94\%, \text{upper}}] \right)$$
+- $\text{Coverage} \ge 80\%$: Well-calibrated likelihood error model.
+- $\text{Coverage} < 50\%$: Severe under-dispersion or model misspecification.

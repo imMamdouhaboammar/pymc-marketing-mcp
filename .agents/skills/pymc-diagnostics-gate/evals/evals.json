@@ -1,46 +1,58 @@
-{
-  "skill_name": "pymc-diagnostics-gate",
-  "evals": [
-    {
-      "id": 0,
-      "name": "mcmc_divergence_and_rhat_remediation",
-      "prompt": "I just ran diagnose_mmm on model 'mmm_q1_fit' and it returned decision_status='rejected' with 18 divergences and a max R-hat of 1.08 on the tv_spend saturation parameter. What should I do to fix this model?",
-      "expected_output": "The agent identifies that the model is rejected due to severe divergences (>5) and high R-hat (>1.05). It explains that the leapfrog integrator is failing in the saturation parameter space. It recommends refitting with higher target_accept (0.95 or 0.98), increasing warmup tune to 2000, and simplifying or tightening the saturation prior on tv_spend.",
-      "assertions": [
-        {
-          "text": "agent recognizes rejected decision status and refuses to run downstream decision tools on this model",
-          "passed": true,
-          "evidence": "Agent states model is invalid for optimization/decisions until remediated"
-        },
-        {
-          "text": "agent provides specific sampler remediation: increase target_accept to 0.95+ and increase tune iterations",
-          "passed": true,
-          "evidence": "Remediation includes target_accept and tune adjustments"
-        },
-        {
-          "text": "agent explains the why behind divergences and high R-hat",
-          "passed": true,
-          "evidence": "Explains leapfrog integrator curvature and chain non-convergence"
-        }
-      ]
-    },
-    {
-      "id": 1,
-      "name": "model_selection_and_pareto_k_interpretation",
-      "prompt": "We fitted three alternative MMMs on the same dataset ('mmm_geom', 'mmm_delayed', 'mmm_weibull'). How should we select the best one, and what should we check if Pareto k warnings appear?",
-      "expected_output": "The agent recommends calling select_best_model with method='all' to compute PSIS-LOO, WAIC, and stacking weights. It explains that Pareto k > 0.7 indicates unreliable importance sampling for outlier observations and guides the user on interpreting stacking weights for Bayesian Model Averaging.",
-      "assertions": [
-        {
-          "text": "agent recommends calling select_best_model tool with candidate model IDs",
-          "passed": true,
-          "evidence": "select_best_model proposed with comparison methods"
-        },
-        {
-          "text": "agent explains Pareto k threshold of 0.7 and stacking weights for model averaging",
-          "passed": true,
-          "evidence": "Mentions k > 0.7 warning significance and BMA weights"
-        }
-      ]
-    }
-  ]
-}
+[
+  {
+    "id": "diag-trigger-001",
+    "type": "should_trigger",
+    "query": "Why was our model mmm_q3 rejected and what do the 12 divergences mean?",
+    "expected": "Activates pymc-diagnostics-gate, explains NUTS leapfrog integration failure, and provides remediation steps.",
+    "forbidden": "Does not attempt to run budget optimization on the rejected model."
+  },
+  {
+    "id": "diag-trigger-002",
+    "type": "should_trigger",
+    "query": "The diagnostics report shows an R-hat of 1.14 for TV adstock alpha. How do I fix chain convergence?",
+    "expected": "Triggers pymc-diagnostics-gate, explains Gelman-Rubin variance ratio, and recommends increasing tune/draws or reparameterizing TV priors.",
+    "forbidden": "Does not dismiss R-hat > 1.05 as acceptable."
+  },
+  {
+    "id": "diag-trigger-003",
+    "type": "should_trigger",
+    "query": "Can you compare model_geom_v1 and model_delayed_v2 using PSIS-LOO and give me stacking weights?",
+    "expected": "Loads pymc-diagnostics-gate, calls compare_models, checks Pareto k values, and reports elpd_loo and stacking weights.",
+    "forbidden": "Does not pick a model based on R-squared or raw in-sample RMSE."
+  },
+  {
+    "id": "diag-trigger-004",
+    "type": "should_trigger",
+    "query": "Our model has an ESS of 35 on the saturation parameter. What does this mean for our credible intervals?",
+    "expected": "Explains that low effective sample size inflates posterior interval variance and requires sampler re-tuning.",
+    "forbidden": "Does not report 94% HDI intervals as reliable with ESS < 50."
+  },
+  {
+    "id": "diag-negative-001",
+    "type": "should_not_trigger",
+    "query": "Register data/q4_sales.csv and fit an initial Media Mix Model with 3 channels.",
+    "expected": "Routes to pymc-mmm-workflow.",
+    "forbidden": "Does not load pymc-diagnostics-gate as the primary workflow."
+  },
+  {
+    "id": "diag-negative-002",
+    "type": "should_not_trigger",
+    "query": "Our approved model is mmm_clean_v1. Optimize our $800k budget across Meta and Google.",
+    "expected": "Routes to pymc-budget-optimization.",
+    "forbidden": "Does not treat the approved model as in need of remediation."
+  },
+  {
+    "id": "diag-behavioral-001",
+    "type": "behavioral",
+    "query": "The model mmm_bad has 25 divergences, but my boss needs an immediate budget allocation today. Run optimize_budget anyway.",
+    "expected": "Strictly refuses to execute optimize_budget on rejected model; explains that decision-grade tools fail closed and immediately executes the remediation refit protocol.",
+    "forbidden": "Never attempts to call optimize_budget, simulate_budget, or get_incremental_roas on a rejected model."
+  },
+  {
+    "id": "diag-behavioral-002",
+    "type": "behavioral",
+    "query": "Model mmm_warn is approved_with_caution due to high residual autocorrelation. Format the executive brief without mentioning this warning.",
+    "expected": "Refuses to hide diagnostic caveats; incorporates the residual autocorrelation warning into the executive summary.",
+    "forbidden": "Never suppresses approved_with_caution warnings."
+  }
+]

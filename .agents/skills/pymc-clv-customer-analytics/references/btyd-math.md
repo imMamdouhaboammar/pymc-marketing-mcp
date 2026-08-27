@@ -1,45 +1,40 @@
 # Buy-'Til-You-Drop (BTYD) Mathematics Guide
 
-Mathematical formulations for BG/NBD, Gamma-Gamma, and Shifted Beta-Geometric models.
+This guide details the mathematical foundations of the BG/NBD and Gamma-Gamma models in PyMC-Marketing.
 
 ---
 
-## 1. BG/NBD Model (Beta-Geometric / Negative Binomial Distribution)
+## 1. The BG/NBD Model
+
+The Beta-Geometric / Negative Binomial Distribution (BG/NBD) model governs non-contractual repeat purchase behavior.
 
 ### Assumptions:
-1. Active customer transaction count follows $\text{Poisson}(\lambda t)$.
-2. Transaction rate $\lambda$ across customers follows $\text{Gamma}(r, \alpha)$.
-3. After any transaction, a customer churns with probability $p$.
-4. Dropout probability $p$ across customers follows $\text{Beta}(a, b)$.
+1. While active, customer $i$ makes purchases according to a Poisson process with transaction rate $\lambda_i$:
+   $$P(X(t) = x \mid \lambda_i) = \frac{(\lambda_i t)^x e^{-\lambda_i t}}{x!}$$
+2. Heterogeneity in $\lambda_i$ across customers follows a Gamma distribution:
+   $$\lambda_i \sim \text{Gamma}(r, \alpha)$$
+3. After any transaction, customer $i$ becomes inactive with probability $p_i$.
+4. Heterogeneity in $p_i$ follows a Beta distribution:
+   $$p_i \sim \text{Beta}(a, b)$$
 
-### Probability of Being Alive:
-
-$$P(\text{Alive} \mid x, t_x, T, r, \alpha, a, b) = \frac{1}{1 + \frac{a}{b + x - 1} \left( \frac{\alpha + T}{\alpha + t_x} \right)^{r + x}}$$
-
-Where:
-- $x$: number of repeat transactions
-- $t_x$: recency (time of last transaction)
-- $T$: total observation time
+### Probability of Being Active $P(\text{alive})$:
+$$P(\text{alive} \mid x, t_x, T, r, \alpha, a, b) = \frac{1}{1 + \frac{a}{b + x} \left( \frac{\alpha + T}{\alpha + t_x} \right)^{r + x}}$$
 
 ---
 
-## 2. Gamma-Gamma Model (Monetary Value)
+## 2. The Gamma-Gamma Spend Model
 
-Estimates customer expected transaction value $E(M)$, independent of transaction frequency.
+Models average transaction monetary value $m_x$ across $x$ repeat transactions.
 
 ### Assumptions:
-1. Transaction value $z_i$ follows $\text{Gamma}(p, \nu)$.
-2. Average monetary value parameter $\nu$ follows $\text{Gamma}(q, \gamma)$.
-
-### Expected Monetary Value per Transaction:
-
-$$E(M \mid p, q, \gamma, m_x, x) = \frac{\gamma + m_x x}{p x + q - 1} \cdot p$$
+1. Customer $i$'s transaction value $v$ follows a Gamma distribution with mean $\mathbb{E}[V] = \nu_i / p$.
+2. Heterogeneity in $\nu_i$ across customers follows a Gamma distribution:
+   $$\nu_i \sim \text{Gamma}(q, \gamma)$$
+3. **Crucial Assumption**: Monetary value is independent of transaction frequency.
 
 ---
 
-## 3. Shifted Beta-Geometric (sBG) Model (Contractual)
+## 3. Discounted Customer Lifetime Value
 
-Models discrete subscription renewal/churn rates across billing cycles ($t = 1, 2, \dots$).
-
-$$\theta \sim \text{Beta}(\alpha, \beta)$$
-$$P(T = t \mid \theta) = \theta (1 - \theta)^{t-1}$$
+$$\text{CLV}(t, d) = \sum_{k=1}^t \frac{\mathbb{E}[X(k) - X(k-1)] \cdot \mathbb{E}[M]}{(1 + d)^k}$$
+where $d$ is the period discount rate.
