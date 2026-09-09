@@ -34,6 +34,11 @@ class JobRecord:
     payload: dict[str, Any] = field(default_factory=dict)
     result: dict[str, Any] | None = None
     error: dict[str, Any] | None = None
+    lease_owner: str | None = None
+    lease_expires_at: str | None = None
+    fence_token: int = 0
+    attempts: int = 0
+    max_attempts: int = 3
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

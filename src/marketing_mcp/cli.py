@@ -11,6 +11,7 @@ from starlette.staticfiles import StaticFiles
 from marketing_mcp import __version__
 from marketing_mcp.app import Application
 from marketing_mcp.auth import AuthManager, MCPAuthMiddleware
+from marketing_mcp.config import Settings
 from marketing_mcp.http.credentials import CredentialControlAPI
 from marketing_mcp.http.health import create_readiness_handler, liveness_handler
 from marketing_mcp.http.safety import RequestSafetyMiddleware
@@ -48,14 +49,15 @@ def create_http_app(
     application: Application | None = None,
     auth_manager: AuthManager | None = None,
     context_provider: Any = None,
+    settings: Settings | None = None,
 ):
     """Build the Streamable HTTP ASGI application without starting a server."""
-    app_instance = application or Application()
+    app_instance = application or Application(settings)
     ctx_provider = context_provider or RequestScopedContextProvider()
     mcp = create_server(app_instance, context_provider=ctx_provider)
     app = mcp.streamable_http_app(host=host)
 
-    auth_mgr = auth_manager or AuthManager.from_env()
+    auth_mgr = auth_manager or AuthManager.from_settings(settings or Settings.from_env())
     if auth_mgr.credential_service is None and hasattr(app_instance, "credentials"):
         auth_mgr.credential_service = app_instance.credentials
         auth_mgr.api_key_validator.credential_service = app_instance.credentials
@@ -125,7 +127,6 @@ def main():
 
     # Fail closed BEFORE Uvicorn starts: validate the security posture of the
     # HTTP deployment against its profile.
-    from marketing_mcp.config import Settings
     from marketing_mcp.errors import DomainError
 
     try:
@@ -134,7 +135,7 @@ def main():
             host=args.host,
             auth_enabled=bool(args.api_key) or settings.auth_enabled,
         )
-        app = create_http_app(host=args.host, api_key=args.api_key)
+        app = create_http_app(host=args.host, api_key=args.api_key, settings=settings)
     except DomainError as exc:
         import sys
 

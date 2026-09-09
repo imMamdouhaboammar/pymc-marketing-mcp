@@ -109,21 +109,17 @@ class TestGateG2JobsPersistence:
         assert exc.value.code == "AUTH_FORBIDDEN"
         app.metadata.close()
 
-    def test_crash_recovery_resets_interrupted_jobs_on_boot(self, tmp_path):
+    def test_api_restart_does_not_fail_an_active_worker_lease(self, tmp_path):
         app = _app(tmp_path)
-        # Directly insert a stalled running job into SQLite
-        record = JobRecord(
-            job_id="job-interrupted",
-            job_type="fit_mmm",
-            status=JobStatus.RUNNING,
-            owner="local",
+        app.job_repo.create_job(
+            JobRecord(job_id="job-active", job_type="fit_mmm", owner="local")
         )
-        app.job_repo.create_job(record)
+        claimed = app.job_repo.claim_next_job(worker_id="worker-a", lease_seconds=60)
+        assert claimed is not None and claimed.status == JobStatus.RUNNING
         app.metadata.close()
 
-        # Reopen app - crash recovery runs in __init__
         reopened_app = _app(tmp_path)
-        recovered = reopened_app.jobs.get_job("job-interrupted")
-        assert recovered.status == JobStatus.FAILED
-        assert recovered.error["code"] == "WORKER_CRASHED"
+        still_running = reopened_app.jobs.get_job("job-active")
+        assert still_running.status == JobStatus.RUNNING
+        assert still_running.lease_owner == "worker-a"
         reopened_app.metadata.close()

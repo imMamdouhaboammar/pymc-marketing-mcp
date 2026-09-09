@@ -27,6 +27,7 @@ class DatasetRegistration(BaseModel):
     created_at: str
     owner: str | None = None
     tenant_id: str | None = None
+    blob: dict[str, Any] | None = None
 
 
 class DatasetInspection(BaseModel):
@@ -279,6 +280,7 @@ class CLVModelRecord(BaseModel):
     dataset_id: str
     status: ModelStatus
     artifact_path: str | None = None
+    artifact_ref: dict[str, Any] | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     package_provenance: dict[str, str] = Field(default_factory=dict)
     created_at: str
@@ -298,6 +300,7 @@ class ModelRecord(BaseModel):
     status: ModelStatus = "completed"
     model_type: str = "MMM"
     artifact_path: str | None = None
+    artifact_ref: dict[str, Any] | None = None
     config: dict[str, Any]
     package_provenance: dict[str, str] = Field(default_factory=dict)
     created_at: str

@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv and setup Python
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
           enable-cache: true
@@ -34,10 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv and setup Python
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
           enable-cache: true
@@ -50,3 +50,29 @@ jobs:
 
       - name: Run canary contract tests on upgraded dependencies
         run: uv run pytest tests/integration/test_upstream_canary_contract.py -v
+
+  future-major-lane:
+    name: Canary - Future PyMC-Marketing Major (Advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv and setup Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install project dependencies without changing the lock
+        run: uv sync --frozen --extra dev
+
+      - name: Override PyMC-Marketing with the future major
+        run: uv pip install --upgrade --prerelease=allow "pymc-marketing>=2,<3"
+
+      - name: Run compatibility canary against the future major
+        run: uv run --no-sync python scripts/compatibility_canary.py
+
+      - name: Run canary contract tests against the future major
+        run: uv run --no-sync pytest tests/integration/test_upstream_canary_contract.py -v

@@ -105,14 +105,20 @@ class TestJobRepositoryAndService:
         job2 = service.submit_job("fit", {}, dummy_worker, idempotency_key="fit-request-abc")
         assert job1.job_id == job2.job_id
 
-    def test_crash_recovery_marks_stale_jobs_as_failed(self, job_repo):
-        # Insert a stalled running job as if server crashed mid-run
-        record = JobRecord(job_id="job-crashed", job_type="fit_mmm", status=JobStatus.RUNNING)
+    def test_crash_recovery_fails_only_expired_exhausted_lease(self, job_repo):
+        record = JobRecord(job_id="job-crashed", job_type="fit_mmm", max_attempts=1)
         job_repo.create_job(record)
+        claimed = job_repo.claim_next_job(worker_id="dead-worker", lease_seconds=60)
+        assert claimed is not None
+        job_repo.conn.execute(
+            "UPDATE jobs SET lease_expires_at = ? WHERE job_id = ?",
+            ("2000-01-01T00:00:00+00:00", claimed.job_id),
+        )
+        job_repo.conn.commit()
 
         recovered_count = job_repo.recover_stale_running_jobs()
         assert recovered_count == 1
 
         recovered = job_repo.get_job("job-crashed")
         assert recovered.status == JobStatus.FAILED
-        assert recovered.error["code"] == "WORKER_CRASHED"
+        assert recovered.error["code"] == "WORKER_ATTEMPTS_EXHAUSTED"

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,6 +22,17 @@ from marketing_mcp.readiness_evidence import validate_readiness_doc
 
 DEFAULT_DOC = REPO_ROOT / "docs" / "PRODUCTION-READINESS.md"
 DEFAULT_EVIDENCE_DIR = REPO_ROOT / "docs" / "release-evidence"
+
+
+def _git_commit_sha() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() or "unknown"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -36,17 +48,22 @@ def main(argv: list[str] | None = None) -> int:
 
     doc_text = args.doc.read_text(encoding="utf-8")
 
+    assessed_commit_sha = _git_commit_sha()
     evidence_file = args.evidence
     if evidence_file is None:
-        json_files = sorted(DEFAULT_EVIDENCE_DIR.glob("*.json"))
-        if json_files:
-            evidence_file = json_files[-1]
+        candidate = DEFAULT_EVIDENCE_DIR / f"{assessed_commit_sha[:12]}.json"
+        if candidate.exists():
+            evidence_file = candidate
 
     evidence_bundle = {}
     if evidence_file and evidence_file.exists():
         evidence_bundle = json.loads(evidence_file.read_text(encoding="utf-8"))
 
-    findings = validate_readiness_doc(doc_text, evidence_bundle)
+    findings = validate_readiness_doc(
+        doc_text,
+        evidence_bundle,
+        expected_commit_sha=assessed_commit_sha if evidence_bundle else None,
+    )
     if findings:
         print("Readiness validation findings:", file=sys.stderr)
         for f in findings:

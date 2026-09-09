@@ -29,6 +29,12 @@ class SQLiteCredentialRepository(CredentialRepository):
             self._local.conn = conn
         return self._local.conn
 
+    def close(self) -> None:
+        connection = getattr(self._local, "conn", None)
+        if connection is not None:
+            connection.close()
+            self._local.conn = None
+
     def _init_schema(self) -> None:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = self._get_conn()

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import hashlib
-import shutil
+from dataclasses import asdict
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from marketing_mcp.domain.datasets.validation import validate_mmm_dataset
+from marketing_mcp.repositories.models import ArtifactRef
 from marketing_mcp.schemas.models import (
     DatasetInspection,
     DatasetRegistration,
@@ -16,6 +18,7 @@ from marketing_mcp.schemas.models import (
     Finding,
 )
 from marketing_mcp.security import safe_source_path
+from marketing_mcp.storage.artifacts import LocalArtifactStore
 
 
 def _utc():
@@ -23,43 +26,61 @@ def _utc():
 
 
 class DatasetService:
-    def __init__(self, metadata, data_dir: Path, max_dataset_mb: int = 100):
+    def __init__(
+        self, metadata, storage: LocalArtifactStore | Path, max_dataset_mb: int = 100
+    ):
         self.metadata = metadata
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.blobs = storage if isinstance(storage, LocalArtifactStore) else LocalArtifactStore(storage)
         self.max_bytes = max_dataset_mb * 1024 * 1024
 
     def register_file(self, source: Path, principal: Any = None) -> DatasetRegistration:
         source = safe_source_path(Path(source), self.max_bytes)
         raw = source.read_bytes()
-        fp = hashlib.sha256(raw).hexdigest()
-        dataset_id = f"dataset_{fp[:12]}"
-        ext = source.suffix.lower()
-        dest = self.data_dir / f"{dataset_id}{ext}"
-        if not dest.exists():
-            shutil.copy2(source, dest)
-        df = self._read(dest)
+        fingerprint = hashlib.sha256(raw).hexdigest()
         owner = principal.subject if principal is not None else "local"
         tenant_id = principal.tenant_id if principal is not None else None
-        rec = DatasetRegistration(
-            dataset_id=dataset_id,
-            path=str(dest),
-            fingerprint=fp,
-            format=ext[1:],
-            rows=len(df),
-            created_at=_utc(),
+        identity = f"{tenant_id or 'local'}\0{owner}\0{fingerprint}".encode()
+        dataset_id = f"dataset_{hashlib.sha256(identity).hexdigest()[:12]}"
+        extension = source.suffix.lower()
+        frame = self._read_bytes(raw, extension)
+        ref = self.blobs.put_bytes(
+            raw,
+            content_type="text/csv" if extension == ".csv" else "application/x-parquet",
             owner=owner,
             tenant_id=tenant_id,
         )
-        self.metadata.put_dataset(rec.model_dump())
-        return rec
+        record = DatasetRegistration(
+            dataset_id=dataset_id,
+            path=ref.uri,
+            fingerprint=fingerprint,
+            format="csv" if extension == ".csv" else "parquet",
+            rows=len(frame),
+            created_at=_utc(),
+            owner=owner,
+            tenant_id=tenant_id,
+            blob=asdict(ref),
+        )
+        self.metadata.put_dataset(record.model_dump())
+        return record
 
-    def _read(self, path: Path):
-        return pd.read_csv(path) if path.suffix.lower() == ".csv" else pd.read_parquet(path)
+    @staticmethod
+    def _read_bytes(data: bytes, extension: str):
+        buffer = BytesIO(data)
+        return pd.read_csv(buffer) if extension == ".csv" else pd.read_parquet(buffer)
 
     def load(self, dataset_id: str):
-        rec = self.metadata.get_dataset(dataset_id)
-        return self._read(Path(rec["path"]))
+        record = self.metadata.get_dataset(dataset_id)
+        blob = record.get("blob")
+        if blob is None:
+            path = Path(record["path"])
+            return pd.read_csv(path) if path.suffix.lower() == ".csv" else pd.read_parquet(path)
+        ref = ArtifactRef(**blob)
+        data = self.blobs.read_bytes(
+            ref,
+            owner=record.get("owner") or "local",
+            tenant_id=record.get("tenant_id"),
+        )
+        return self._read_bytes(data, f".{record['format']}")
 
     def inspect(self, dataset_id: str) -> DatasetInspection:
         df = self.load(dataset_id)

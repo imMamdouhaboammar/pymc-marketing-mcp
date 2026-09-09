@@ -89,4 +89,30 @@ class TestGateG4Observability:
         data_ready = res_ready.json()
         assert data_ready["status"] == "ready"
         assert data_ready["checks"]["database"]["status"] == "ok"
+        assert "job_executor" not in data_ready["checks"]
+        app.metadata.close()
+
+    def test_dependency_outage_is_unready_but_live_and_sanitized(self, tmp_path, monkeypatch):
+        app = Application(
+            Settings(
+                data_dir=tmp_path / "data",
+                artifact_dir=tmp_path / "artifacts",
+                metadata_db=tmp_path / "metadata.db",
+                ingest_dir=tmp_path,
+            )
+        )
+
+        def unavailable():
+            raise RuntimeError("postgresql://operator:secret@private-host/database")
+
+        monkeypatch.setattr(app.persistence, "probe", unavailable)
+        client = TestClient(create_http_app(application=app))
+        assert client.get("/health/live").status_code == 200
+        response = client.get("/health/ready")
+        assert response.status_code == 503
+        assert "secret" not in response.text
+        assert response.json()["checks"]["database"] == {
+            "status": "error",
+            "code": "DEPENDENCY_UNAVAILABLE",
+        }
         app.metadata.close()

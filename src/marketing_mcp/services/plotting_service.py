@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import base64
 import io
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from marketing_mcp.errors import DomainError
+from marketing_mcp.repositories.models import ArtifactRef
+from marketing_mcp.storage.artifacts import LocalArtifactStore
 
 # Supported plot types and their human-readable descriptions
 SUPPORTED_PLOT_TYPES: dict[str, str] = {
@@ -34,8 +37,19 @@ class PlottingService:
     is kept in-memory via BytesIO to avoid path traversal surface.
     """
 
-    def __init__(self, artifacts_dir: Path):
-        self.plots_dir = artifacts_dir / "plots"
+    def __init__(
+        self,
+        artifact_storage: LocalArtifactStore | Path,
+        *,
+        metadata=None,
+    ):
+        self.artifacts = (
+            artifact_storage
+            if isinstance(artifact_storage, LocalArtifactStore)
+            else LocalArtifactStore(artifact_storage)
+        )
+        self.metadata = metadata
+        self.plots_dir = self.artifacts.root / "plots"
         self.plots_dir.mkdir(parents=True, exist_ok=True)
         self._ensure_agg_backend()
 
@@ -101,11 +115,22 @@ class PlottingService:
                 next_action="Ensure the model was fitted with posterior predictive samples",
             ) from e
 
-        # Cache to disk for MCP resource serving
-        cache_dir = self.plots_dir / model_id
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_path = cache_dir / f"{plot_type}.{fmt}"
-        cache_path.write_bytes(img_bytes)
+        if self.metadata is not None:
+            record = self.metadata.get_model(model_id)
+            ref = self.artifacts.put_bytes(
+                img_bytes,
+                content_type="image/png" if fmt == "png" else "image/svg+xml",
+                owner=record.get("owner") or "local",
+                tenant_id=record.get("tenant_id"),
+            )
+            refs = dict(record.get("plot_refs") or {})
+            refs[f"{plot_type}.{fmt}"] = asdict(ref)
+            record["plot_refs"] = refs
+            self.metadata.put_model(record)
+        else:
+            cache_dir = self.plots_dir / model_id
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / f"{plot_type}.{fmt}").write_bytes(img_bytes)
 
         return img_bytes
 
@@ -116,10 +141,22 @@ class PlottingService:
         safe_identifier(model_id, "model")
         if fmt not in {"png", "svg"}:
             return None
+        if self.metadata is not None:
+            try:
+                record = self.metadata.get_model(model_id)
+            except DomainError:
+                return None
+            raw_ref = (record.get("plot_refs") or {}).get(f"{plot_type}.{fmt}")
+            if raw_ref is None:
+                return None
+            ref = ArtifactRef(**raw_ref)
+            return self.artifacts.read_bytes(
+                ref,
+                owner=record.get("owner") or "local",
+                tenant_id=record.get("tenant_id"),
+            )
         cache_path = self.plots_dir / model_id / f"{plot_type}.{fmt}"
-        if cache_path.exists():
-            return cache_path.read_bytes()
-        return None
+        return cache_path.read_bytes() if cache_path.exists() else None
 
     def generate_all(
         self,
@@ -297,7 +334,7 @@ class PlottingService:
                 if obs_ds is not None and hasattr(obs_ds, "data_vars")
                 else None
             )
-            if obs_var is not None:
+            if obs_ds is not None and obs_var is not None:
                 ax.fill_between(t, lower, upper, alpha=0.3, label="94% HDI")
                 ax.plot(t, median, label="Predicted median", linewidth=1.5)
                 ax.plot(

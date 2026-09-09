@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import base64
-import os
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -13,11 +13,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from marketing_mcp.config import SecurityProfile, Settings
 from marketing_mcp.mcp.context import (
     ExecutionContext,
     reset_current_execution_context,
     set_current_execution_context,
 )
+from marketing_mcp.security.oauth import RemoteJWTVerifier
 from marketing_mcp.security.policy import all_scopes
 from marketing_mcp.security.principal import Principal
 
@@ -160,38 +162,48 @@ class AuthManager:
         jwt_audience: str = "mcp-clients",
         enabled: bool = True,
         credential_service: Any = None,
+        bearer_token_verifier: Any = None,
     ):
         self.enabled = enabled
         self.credential_service = credential_service
+        self.bearer_token_verifier = bearer_token_verifier
         self.api_key_validator = APIKeyValidator(api_keys, credential_service=credential_service)
         self.jwt_validator = JWTValidator(
             secret=jwt_secret, issuer=jwt_issuer, audience=jwt_audience
         )
 
     @classmethod
-    def from_env(cls) -> AuthManager:
-        api_key_env = os.getenv("MARKETING_MCP_API_KEY", "").strip()
-        api_keys_list = [k.strip() for k in api_key_env.split(",") if k.strip()]
-        jwt_secret = os.getenv("MARKETING_MCP_JWT_SECRET", "").strip() or None
-        jwt_issuer = os.getenv("MARKETING_MCP_JWT_ISSUER", "pymc-marketing-mcp")
-        jwt_audience = os.getenv("MARKETING_MCP_JWT_AUDIENCE", "mcp-clients")
+    def from_settings(cls, settings: Settings) -> AuthManager:
+        api_keys = list(settings.api_keys)
+        if settings.api_key and settings.api_key not in api_keys:
+            api_keys.append(settings.api_key)
 
-        # Explicit toggle or inferred from presence of keys
-        auth_enabled_str = os.getenv("MARKETING_MCP_AUTH_ENABLED", "").strip().lower()
-        if auth_enabled_str in ("1", "true", "yes"):
-            enabled = True
-        elif auth_enabled_str in ("0", "false", "no"):
-            enabled = False
-        else:
-            enabled = bool(api_keys_list or jwt_secret)
+        bearer_token_verifier = None
+        jwt_secret = settings.jwt_secret
+        if settings.security_profile is SecurityProfile.HTTP_PRODUCTION_OAUTH:
+            bearer_token_verifier = RemoteJWTVerifier(
+                issuer=settings.oauth_issuer or "",
+                audience=settings.oauth_audience or "",
+                required_scopes=settings.oauth_required_scopes,
+                jwks_url=settings.oauth_jwks_url,
+                algorithms=settings.oauth_algorithms,
+                tenant_claim=settings.oauth_tenant_claim,
+                require_tenant=settings.oauth_require_tenant,
+            )
+            jwt_secret = None
 
         return cls(
-            api_keys=api_keys_list,
+            api_keys=api_keys,
             jwt_secret=jwt_secret,
-            jwt_issuer=jwt_issuer,
-            jwt_audience=jwt_audience,
-            enabled=enabled,
+            jwt_issuer=settings.jwt_issuer,
+            jwt_audience=settings.jwt_audience,
+            enabled=settings.auth_enabled,
+            bearer_token_verifier=bearer_token_verifier,
         )
+
+    @classmethod
+    def from_env(cls) -> AuthManager:
+        return cls.from_settings(Settings.from_env())
 
     def extract_token(self, headers: Headers, query_params: QueryParams) -> str | None:
         """Extract credentials from headers only.
@@ -230,7 +242,26 @@ class AuthManager:
         if api_ctx and api_ctx.authenticated:
             return api_ctx
 
-        # Try JWT validation
+        # Production bearer tokens are accepted only after trusted remote verification.
+        if self.bearer_token_verifier is not None:
+            access_token = self.bearer_token_verifier.verify(token)
+            if access_token is None or not access_token.subject:
+                return AuthContext(
+                    authenticated=False,
+                    error_message="Invalid OAuth bearer token.",
+                )
+            claims = access_token.claims or {}
+            tenant_claim = self.bearer_token_verifier.tenant_claim
+            tenant_id = claims.get(tenant_claim)
+            return AuthContext(
+                authenticated=True,
+                client_id=access_token.subject,
+                auth_type="jwt",
+                scopes=list(access_token.scopes),
+                tenant_id=str(tenant_id) if tenant_id is not None else None,
+            )
+
+        # Local/private JWT compatibility path.
         jwt_ctx = self.jwt_validator.validate(token)
         if jwt_ctx:
             return jwt_ctx
@@ -266,7 +297,12 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 
 
         # 3. Authenticate request
-        auth_ctx = self.auth_manager.authenticate(request.headers, request.query_params)
+        if self.auth_manager.bearer_token_verifier is not None:
+            auth_ctx = await asyncio.to_thread(
+                self.auth_manager.authenticate, request.headers, request.query_params
+            )
+        else:
+            auth_ctx = self.auth_manager.authenticate(request.headers, request.query_params)
         if not auth_ctx.authenticated:
             return JSONResponse(
                 status_code=401,

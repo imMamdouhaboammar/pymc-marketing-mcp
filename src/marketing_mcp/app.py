@@ -3,9 +3,9 @@ from __future__ import annotations
 from .adapters.pymc_marketing import PyMCMarketingAdapter
 from .config import Settings
 from .credentials.service import CredentialService
-from .credentials.sqlite_repository import SQLiteCredentialRepository
-from .jobs.repository import SQLiteJobRepository
+from .jobs.executor import EnqueueOnlyJobExecutor
 from .jobs.service import JobService
+from .persistence import PersistenceBackend, build_persistence
 from .services.clv_service import CLVService
 from .services.dataset_service import DatasetService
 from .services.decision_service import DecisionService
@@ -13,26 +13,33 @@ from .services.diagnostics_service import DiagnosticsService
 from .services.modeling_service import ModelingService
 from .services.plotting_service import PlottingService
 from .storage.artifacts import LocalArtifactStore
-from .storage.metadata import SQLiteMetadataStore
 
 
 class Application:
-    def __init__(self, settings: Settings | None = None):
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        persistence: PersistenceBackend | None = None,
+    ):
         self.settings = settings or Settings.from_env()
-        self.metadata = SQLiteMetadataStore(self.settings.metadata_db)
+        self.persistence = persistence or build_persistence(self.settings)
+        self.metadata = self.persistence.metadata
         self.artifacts = LocalArtifactStore(self.settings.artifact_dir)
-        self.job_repo = SQLiteJobRepository(self.metadata.conn)
+        self.job_repo = self.persistence.jobs
         self.job_repo.recover_stale_running_jobs()
-        self.jobs = JobService(self.job_repo)
-        self.credential_repo = SQLiteCredentialRepository(self.settings.metadata_db)
+        job_executor = (
+            EnqueueOnlyJobExecutor() if self.settings.job_execution_mode == "enqueue-only" else None
+        )
+        self.jobs = JobService(self.job_repo, executor=job_executor)
+        self.credential_repo = self.persistence.credentials
         self.credentials = CredentialService(self.credential_repo)
         self.datasets = DatasetService(
-            self.metadata, self.settings.data_dir, self.settings.max_dataset_mb
+            self.metadata, self.artifacts, self.settings.max_dataset_mb
         )
         self.models = ModelingService(
             self.metadata, self.artifacts, self.datasets, PyMCMarketingAdapter
         )
         self.diagnostics = DiagnosticsService(self.metadata, self.models)
         self.decisions = DecisionService(self.metadata, self.models)
-        self.plots = PlottingService(self.settings.artifact_dir)
-        self.clv = CLVService(self.metadata, self.settings.artifact_dir)
+        self.plots = PlottingService(self.artifacts, metadata=self.metadata)
+        self.clv = CLVService(self.metadata, self.artifacts, datasets=self.datasets)

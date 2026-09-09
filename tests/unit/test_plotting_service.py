@@ -14,6 +14,8 @@ import pytest
 
 from marketing_mcp.errors import DomainError
 from marketing_mcp.services.plotting_service import SUPPORTED_PLOT_TYPES, PlottingService
+from marketing_mcp.storage.artifacts import LocalArtifactStore
+from marketing_mcp.storage.metadata import SQLiteMetadataStore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -140,6 +142,27 @@ class TestPlottingServiceOutput:
         svc = PlottingService(tmp_path)
         result = svc.get_cached_plot("nonexistent_model", "saturation_curves")
         assert result is None
+
+    def test_shared_plot_ref_is_readable_by_another_instance(self, tmp_path):
+        metadata = SQLiteMetadataStore(tmp_path / "metadata.db")
+        metadata.put_model(
+            {
+                "model_id": "model_shared",
+                "owner": "analyst",
+                "tenant_id": "tenant-a",
+                "plot_refs": {},
+            }
+        )
+        blobs = LocalArtifactStore(tmp_path / "objects")
+        first = PlottingService(blobs, metadata=metadata)
+        generated = first.generate_plot(
+            _make_fake_model(), "model_shared", "actual_vs_predicted", fmt="png"
+        )
+        stored = metadata.get_model("model_shared")
+        assert stored["plot_refs"]["actual_vs_predicted.png"]["sha256"]
+
+        second = PlottingService(LocalArtifactStore(tmp_path / "objects"), metadata=metadata)
+        assert second.get_cached_plot("model_shared", "actual_vs_predicted", fmt="png") == generated
 
 
 # ---------------------------------------------------------------------------

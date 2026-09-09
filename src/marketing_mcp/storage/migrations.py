@@ -67,6 +67,22 @@ def migrate_002_jobs(conn: sqlite3.Connection):
     )
 
 
+@migration(3, "add_job_leases_and_fencing")
+def migrate_003_job_leases(conn: sqlite3.Connection):
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    additions = {
+        "lease_owner": "TEXT",
+        "lease_expires_at": "TEXT",
+        "fence_token": "INTEGER NOT NULL DEFAULT 0",
+        "attempts": "INTEGER NOT NULL DEFAULT 0",
+        "max_attempts": "INTEGER NOT NULL DEFAULT 3",
+    }
+    for name, declaration in additions.items():
+        if name not in columns:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {declaration}")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_lease ON jobs(status, lease_expires_at)")
+
+
 class MigrationRunner:
     """Applies ordered migrations and tracks schema version."""
 

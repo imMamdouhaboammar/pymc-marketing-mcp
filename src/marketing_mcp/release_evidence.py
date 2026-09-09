@@ -23,8 +23,39 @@ from marketing_mcp import (
     _installed_version,
 )
 
-EVIDENCE_SCHEMA_VERSION = 1
+EVIDENCE_SCHEMA_VERSION = 2
 REDACTION = "***REDACTED***"
+
+GATE_PROOFS: dict[str, frozenset[str]] = {
+    "G0": frozenset({"g0-truth"}),
+    "G1": frozenset({"g1-statistical"}),
+    "G2": frozenset({"g2-recovery"}),
+    "G3": frozenset({"g3-security"}),
+    "G4": frozenset({"g4-operability"}),
+    "G5": frozenset({"g5-artifacts"}),
+    "H0": frozenset({"h0-runtime"}),
+    "H1": frozenset({"h1-http-identity"}),
+    "H2": frozenset({"h2-isolation"}),
+    "H3": frozenset({"h3-credentials"}),
+    "H4": frozenset({"h4-worker"}),
+    "H5": frozenset({"h5-agent-evals"}),
+    "H6": frozenset({"h6-upstream"}),
+    "AQG": frozenset({"aqg-agent-quality"}),
+}
+_ALLOWED_PROOFS = frozenset().union(*GATE_PROOFS.values())
+_SAFE_ENV_KEYS = frozenset(
+    {
+        "CI",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "PYTHONHASHSEED",
+        "RUNNER_ARCH",
+        "RUNNER_OS",
+    }
+)
 
 #: Environment variable names whose values must never be recorded.
 SECRET_ENV_PATTERN = re.compile(
@@ -111,6 +142,15 @@ def _normalize_command(entry: Mapping[str, Any]) -> dict[str, Any]:
         record["tests_failed"] = 0
     if "duration_seconds" in entry:
         record["duration_seconds"] = entry["duration_seconds"]
+
+    proofs = entry.get("proofs", ())
+    if isinstance(proofs, (str, bytes)) or not isinstance(proofs, Iterable):
+        raise TypeError(f"proofs for {entry['command']!r} must be an iterable of proof ids")
+    normalized_proofs = sorted({str(proof) for proof in proofs})
+    unknown_proofs = set(normalized_proofs) - _ALLOWED_PROOFS
+    if unknown_proofs:
+        raise ValueError(f"unknown release proof ids: {sorted(unknown_proofs)}")
+    record["proofs"] = normalized_proofs
     return record
 
 
@@ -125,29 +165,35 @@ def _normalize_artifact(entry: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _ci_provenance(env: Mapping[str, str]) -> dict[str, Any]:
+def _ci_provenance(env: Mapping[str, str], commit_sha: str) -> dict[str, Any]:
     for flag, provider, (run_id_key, workflow_key, sha_key) in _CI_PROVIDERS:
         if env.get(flag, "").strip().lower() in {"true", "1", "yes"}:
+            reported_sha = env.get(sha_key) or None
             return {
                 "is_ci": True,
                 "provider": provider,
                 "run_id": env.get(run_id_key) or None,
+                "run_attempt": env.get("GITHUB_RUN_ATTEMPT") or None,
                 "workflow": env.get(workflow_key) or None,
-                "reported_commit_sha": env.get(sha_key) or None,
+                "reported_commit_sha": reported_sha,
+                "candidate_matches": bool(reported_sha and reported_sha == commit_sha),
             }
     return {
         "is_ci": False,
         "provider": None,
         "run_id": None,
+        "run_attempt": None,
         "workflow": None,
         "reported_commit_sha": None,
+        "candidate_matches": False,
     }
 
 
 def _safe_env(env: Mapping[str, str]) -> dict[str, str]:
     return {
-        key: (REDACTION if SECRET_ENV_PATTERN.search(key) else redact_secrets(str(value)))
+        key: redact_secrets(str(value))
         for key, value in sorted(env.items())
+        if key in _SAFE_ENV_KEYS and not SECRET_ENV_PATTERN.search(key)
     }
 
 
@@ -175,23 +221,43 @@ def collect_release_evidence(
     command_records = [_normalize_command(entry) for entry in commands]
     artifact_records = [_normalize_artifact(entry) for entry in artifacts]
 
-    verdict = "PASS" if all(c["passed_all"] for c in command_records) else "FAIL"
-    gate_status = "green" if verdict == "PASS" else "failed"
-    gate_results = {
-        gate: {"status": gate_status}
-        for gate in ("G0", "G1", "G2", "G3", "G4", "G5", "H0", "H1", "H2", "H3", "H4", "H5", "H6", "AQG")
+    verdict = (
+        "PASS" if command_records and all(c["passed_all"] for c in command_records) else "FAIL"
+    )
+    ci = _ci_provenance(environment, commit_sha)
+    successful_proofs = {
+        proof
+        for command in command_records
+        if command["passed_all"]
+        for proof in command["proofs"]
     }
+    gate_results = {
+        gate: {
+            "status": (
+                "green"
+                if verdict == "PASS"
+                and ci["candidate_matches"]
+                and required_proofs <= successful_proofs
+                else "not_proven"
+            ),
+            "required_proofs": sorted(required_proofs),
+            "observed_proofs": sorted(required_proofs & successful_proofs),
+        }
+        for gate, required_proofs in GATE_PROOFS.items()
+    }
+    release_authorized = all(result["status"] == "green" for result in gate_results.values())
 
     return {
         "application_version": __version__,
         "artifacts": artifact_records,
-        "ci": _ci_provenance(environment),
+        "ci": ci,
         "collected_at": collected_at,
         "commands": command_records,
         "commit_sha": commit_sha,
         "dependencies": {name: _installed_version(name) for name in RUNTIME_DEPENDENCIES},
         "environment": _safe_env(environment),
         "gate_results": gate_results,
+        "release_authorized": release_authorized,
         "platform": {
             "machine": platform.machine(),
             "python_implementation": platform.python_implementation(),
@@ -224,7 +290,8 @@ def render_release_evidence_markdown(evidence: Mapping[str, Any]) -> str:
             "release evidence."
         ),
         "",
-        f"- **Verdict:** {evidence['verdict']}",
+        f"- **Command verdict:** {evidence['verdict']}",
+        f"- **Release authorized:** {'YES' if evidence.get('release_authorized') else 'NO'}",
         f"- **Commit:** `{evidence['commit_sha']}`",
         f"- **Collected at:** {evidence['collected_at']}",
         f"- **Collected on:** {origin}",
@@ -243,6 +310,18 @@ def render_release_evidence_markdown(evidence: Mapping[str, Any]) -> str:
     ]
     for name, version in evidence["dependencies"].items():
         lines.append(f"| `{name}` | {version or 'not installed'} |")
+
+    lines += [
+        "",
+        "## Gate proofs",
+        "",
+        "| Gate | Status | Required proofs | Observed proofs |",
+        "|---|---|---|---|",
+    ]
+    for gate, result in evidence["gate_results"].items():
+        required = ", ".join(result.get("required_proofs", ())) or "-"
+        observed = ", ".join(result.get("observed_proofs", ())) or "-"
+        lines.append(f"| {gate} | {result['status']} | {required} | {observed} |")
 
     lines += [
         "",

@@ -24,6 +24,21 @@ class JobExecutor(Protocol):
     def cancel(self, job_id: str) -> bool: ...
 
 
+class EnqueueOnlyJobExecutor:
+    """Persist jobs for execution by a separate worker process."""
+
+    def submit(
+        self,
+        job: JobRecord,
+        coro_fn: Callable[[JobRecord, asyncio.Event], Coroutine[Any, Any, dict[str, Any]]],
+    ) -> None:
+        del job, coro_fn
+
+    def cancel(self, job_id: str) -> bool:
+        del job_id
+        return False
+
+
 class AsyncioJobExecutor:
     """In-process asynchronous job executor using asyncio Tasks."""
 

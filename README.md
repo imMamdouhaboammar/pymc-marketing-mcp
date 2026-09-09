@@ -46,7 +46,9 @@ Read these for release and architecture details:
 
 ## Current local/runtime capabilities
 
-The supported runtime uses Python 3.12 or 3.13, PyMC-Marketing 1.x, the MCP Python SDK 2.x, SQLite metadata/jobs/credentials, and local NetCDF/artifact storage
+The supported runtime uses Python 3.12 or 3.13, PyMC-Marketing 1.x (`>=1.0.0,<2`), the MCP Python SDK 2.x, SQLite metadata/jobs/credentials, and local NetCDF/artifact storage. Locked and release installs stay within this supported range. The upstream canary separately upgrades to the latest supported 1.x dependencies and probes the future 2.x major as an allowed-to-fail signal; neither lane changes the committed release lock or widens package metadata.
+
+Support for PyMC-Marketing 2.x will be considered only after the adapter, statistical, plotting, optimization, calibration, and persisted-artifact suites pass against it and any intentional contract or artifact migration is documented.
 
 The public capability surface is generated from `src/marketing_mcp/capabilities.py` (39 tools and resources)
 

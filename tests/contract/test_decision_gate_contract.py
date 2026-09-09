@@ -55,7 +55,10 @@ class FakeAdapter:
         return {"curves": []}
 
     def optimize_budget(self, model, budget, planning_periods, constraints, cell_constraints):
-        return {"recommended_allocation": {ch: budget / len(CHANNELS) for ch in CHANNELS}}
+        return {
+            "optimizer_success": True,
+            "recommended_allocation": {ch: budget / len(CHANNELS) for ch in CHANNELS},
+        }
 
     def simulate_budget(self, model, baseline_allocation, scenario_allocation, planning_periods):
         return {

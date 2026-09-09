@@ -99,18 +99,28 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="run only this command (repeatable); replaces the default verification set",
     )
+    parser.add_argument(
+        "--proof",
+        action="append",
+        default=[],
+        help="approved proof id produced by one explicit --command (repeatable)",
+    )
     parser.add_argument("--skip-statistical", action="store_true")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--label", default=None, help="output file stem (default: commit SHA)")
     args = parser.parse_args(argv)
 
     commands = list(args.command) if args.command else list(FAST_COMMANDS)
+    if args.proof and (not args.command or len(commands) != 1):
+        parser.error("--proof requires exactly one explicit --command")
     if not args.command and not args.skip_statistical:
         commands += list(STATISTICAL_COMMANDS)
     if not args.command and not args.skip_build:
         commands.append("uv build")
 
     results = [_run(command) for command in commands]
+    if args.proof:
+        results[0]["proofs"] = args.proof
     artifacts = [] if args.command or args.skip_build else _hash_artifacts(REPO_ROOT / "dist")
 
     commit_sha = _git_commit_sha()

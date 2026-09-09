@@ -110,6 +110,16 @@ class DecisionService:
             },
             [constraint.model_dump(exclude_none=True) for constraint in input.cell_constraints],
         )
+        if result.get("optimizer_success") is not True:
+            raise DomainError(
+                "OPTIMIZATION_FAILED",
+                "Budget optimizer failed to produce a trustworthy allocation",
+                evidence={
+                    "optimizer_message": str(result.get("optimizer_message", ""))[:500],
+                    "optimizer_success": result.get("optimizer_success"),
+                },
+                next_action="Review budget bounds and optimizer convergence diagnostics",
+            )
         allocation = result.get("recommended_allocation")
         if allocation is None:
             raise DomainError(

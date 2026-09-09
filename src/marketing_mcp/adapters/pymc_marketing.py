@@ -589,10 +589,33 @@ class PyMCMarketingAdapter:
             constraints,
             cell_constraints or [],
         )
-        allocation, result = wrapper.optimize_budget(
-            budget=budget,
-            budget_bounds=bounds,
-        )
+        try:
+            allocation, result = wrapper.optimize_budget(
+                budget=budget,
+                budget_bounds=bounds,
+            )
+        except Exception as e:
+            raise DomainError(
+                "OPTIMIZATION_FAILED",
+                "Budget optimizer failed to produce a trustworthy allocation",
+                evidence={
+                    "optimizer_message": str(e)[:500],
+                    "optimizer_status": "exception",
+                    "type": type(e).__name__,
+                },
+                next_action="Review budget bounds and fitted model state before retrying",
+            ) from e
+        optimizer_success = getattr(result, "success", None)
+        if optimizer_success is not True:
+            raise DomainError(
+                "OPTIMIZATION_FAILED",
+                "Budget optimizer failed to produce a trustworthy allocation",
+                evidence={
+                    "optimizer_message": str(getattr(result, "message", ""))[:500],
+                    "optimizer_success": optimizer_success,
+                },
+                next_action="Review budget bounds and optimizer convergence diagnostics",
+            )
         recommended = allocation_from_xarray(model, allocation)
         baseline = historical_allocation(
             model,
@@ -624,7 +647,7 @@ class PyMCMarketingAdapter:
                 alternative_label="recommended",
             ),
             "response_variable": "total_media_contribution_original_scale",
-            "optimizer_success": bool(getattr(result, "success", True)),
+            "optimizer_success": True,
             "optimizer_message": str(getattr(result, "message", ""))[:500],
             "planning_start": str(dates.min().date()),
             "planning_end": str(dates.max().date()),

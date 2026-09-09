@@ -16,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Set up Python
         run: uv python install 3.12
@@ -51,7 +51,7 @@ jobs:
 
       - name: Dynamic Badge - Test Status
         if: env.GIST_SECRET != ''
-        uses: Schneegans/dynamic-badges-action@v1.9.0
+        uses: Schneegans/dynamic-badges-action@28b0fa8bdeb46170ac397105ece0c1fe58f68910 # v1.9.0
         env:
           GIST_SECRET: ${{ secrets.GIST_SECRET }}
         with:
@@ -65,7 +65,7 @@ jobs:
 
       - name: Dynamic Badge - Code Coverage
         if: env.GIST_SECRET != ''
-        uses: Schneegans/dynamic-badges-action@v1.9.0
+        uses: Schneegans/dynamic-badges-action@28b0fa8bdeb46170ac397105ece0c1fe58f68910 # v1.9.0
         env:
           GIST_SECRET: ${{ secrets.GIST_SECRET }}
         with:

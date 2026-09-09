@@ -1,7 +1,8 @@
-"""Health and readiness probe handlers (Wave 6 Task 4)."""
+"""Health and readiness probe handlers."""
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from starlette.requests import Request
@@ -11,43 +12,30 @@ from marketing_mcp import __version__
 from marketing_mcp.app import Application
 
 SERVICE_NAME = "pymc-marketing-mcp"
+logger = logging.getLogger(__name__)
+
+
+def _dependency_check(checks: dict[str, Any], name: str, probe) -> bool:
+    try:
+        probe()
+    except Exception:
+        logger.exception("Readiness dependency failed: %s", name)
+        checks[name] = {"status": "error", "code": "DEPENDENCY_UNAVAILABLE"}
+        return False
+    checks[name] = {"status": "ok"}
+    return True
 
 
 def check_readiness(app: Application) -> tuple[bool, dict[str, Any]]:
-    """Verify that all core dependencies are operational."""
-    checks = {}
-    all_ok = True
-
-    # 1. Database check
-    try:
-        cursor = app.metadata.conn.cursor()
-        cursor.execute("SELECT 1")
-        checks["database"] = {"status": "ok"}
-    except Exception as e:  # noqa: BLE001
-        checks["database"] = {"status": "error", "message": str(e)}
-        all_ok = False
-
-    # 2. Artifact storage write check
-    try:
-        import uuid
-
-        app.artifacts.root.mkdir(parents=True, exist_ok=True)
-        test_file = app.artifacts.root / f".health_check_{uuid.uuid4().hex}"
-        test_file.touch()
-        test_file.unlink()
-        checks["artifact_storage"] = {"status": "ok"}
-    except Exception as e:  # noqa: BLE001
-        checks["artifact_storage"] = {"status": "error", "message": str(e)}
-        all_ok = False
-
-    # 3. Job subsystem
-    checks["job_executor"] = {"status": "ok"}
-
-    return all_ok, checks
+    """Probe configured backends without exposing implementation details."""
+    checks: dict[str, Any] = {}
+    database_ok = _dependency_check(checks, "database", app.persistence.probe)
+    artifacts_ok = _dependency_check(checks, "artifact_storage", app.artifacts.probe)
+    return database_ok and artifacts_ok, checks
 
 
 async def liveness_handler(_request: Request) -> JSONResponse:
-    """Lightweight liveness probe."""
+    """Report process liveness independently from dependency readiness."""
     return JSONResponse(
         {
             "status": "alive",
@@ -58,11 +46,10 @@ async def liveness_handler(_request: Request) -> JSONResponse:
 
 
 def create_readiness_handler(application: Application):
-    """Factory for readiness probe handler."""
+    """Create the dependency-readiness endpoint."""
 
     async def readiness_handler(_request: Request) -> JSONResponse:
         is_ready, checks = check_readiness(application)
-        status_code = 200 if is_ready else 503
         return JSONResponse(
             {
                 "status": "ready" if is_ready else "unready",
@@ -70,7 +57,7 @@ def create_readiness_handler(application: Application):
                 "version": __version__,
                 "checks": checks,
             },
-            status_code=status_code,
+            status_code=200 if is_ready else 503,
         )
 
     return readiness_handler

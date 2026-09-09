@@ -75,6 +75,38 @@ def test_validate_readiness_doc_rejects_unbacked_green_gates():
     assert any("G0 marked green" in f for f in findings)
 
 
+def test_green_gate_requires_matching_ci_candidate_provenance():
+    doc_text = """
+| Gate | Name | Current status | What is true today | What still blocks green |
+|---|---|---|---|---|
+| G0 | Baseline Truth | green | all good | none |
+"""
+    evidence_bundle = {
+        "commit_sha": "a" * 40,
+        "verdict": "PASS",
+        "ci": {"is_ci": True, "candidate_matches": False},
+        "gate_results": {"G0": {"status": "green"}},
+    }
+    findings = validate_readiness_doc(doc_text, evidence_bundle, expected_commit_sha="a" * 40)
+    assert any("trusted CI candidate" in finding for finding in findings)
+
+
+def test_green_gate_rejects_stale_evidence_commit():
+    doc_text = """
+| Gate | Name | Current status | What is true today | What still blocks green |
+|---|---|---|---|---|
+| G0 | Baseline Truth | green | all good | none |
+"""
+    evidence_bundle = {
+        "commit_sha": "b" * 40,
+        "verdict": "PASS",
+        "ci": {"is_ci": True, "candidate_matches": True},
+        "gate_results": {"G0": {"status": "green"}},
+    }
+    findings = validate_readiness_doc(doc_text, evidence_bundle, expected_commit_sha="a" * 40)
+    assert any("does not match assessed commit" in finding for finding in findings)
+
+
 def test_parse_readiness_from_doc_extracts_all_gates():
     doc_text = """
 | Gate | Name | Current status | What is true today | What still blocks green |

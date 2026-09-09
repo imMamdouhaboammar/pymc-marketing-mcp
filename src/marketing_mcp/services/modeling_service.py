@@ -3,13 +3,18 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from contextlib import contextmanager
+from dataclasses import asdict
 from datetime import UTC, datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import pandas as pd
 
 from marketing_mcp.domain.model_selection import compare_information_criteria
 from marketing_mcp.errors import DomainError
+from marketing_mcp.repositories.models import ArtifactRef
 from marketing_mcp.schemas.models import (
     CalibrateMMMInput,
     FitMMMInput,
@@ -29,11 +34,31 @@ def _config_hash(config: dict[str, Any]) -> str:
 
 
 class ModelingService:
-    def __init__(self, metadata, artifacts, datasets, adapter_factory):
+    def __init__(self, metadata, artifacts, datasets, adapter_factory: Any):
         self.metadata = metadata
         self.artifacts = artifacts
         self.datasets = datasets
         self.adapter_factory = adapter_factory
+
+    def _fit_to_blob(
+        self,
+        adapter,
+        dataframe,
+        config: dict[str, Any],
+        *,
+        owner: str,
+        tenant_id: str | None,
+        lift_df=None,
+    ) -> ArtifactRef:
+        with TemporaryDirectory(prefix="marketing-mcp-fit-") as directory:
+            path = Path(directory) / "model.nc"
+            adapter.fit(dataframe, config, path, lift_df=lift_df)
+            return self.artifacts.put_file(
+                path,
+                content_type="application/x-netcdf",
+                owner=owner,
+                tenant_id=tenant_id,
+            )
 
     def fit(self, input: FitMMMInput, principal: Any = None) -> ModelRecord:
         validation = self.datasets.validate(
@@ -83,10 +108,16 @@ class ModelingService:
         self.metadata.put_model(rec.model_dump())
 
         try:
-            path = self.artifacts.model_path(model_id)
-            adapter.fit(self.datasets.load(input.dataset_id), config, path)
+            artifact_ref = self._fit_to_blob(
+                adapter,
+                self.datasets.load(input.dataset_id),
+                config,
+                owner=owner,
+                tenant_id=tenant_id,
+            )
             rec.status = "completed"
-            rec.artifact_path = str(path)
+            rec.artifact_path = artifact_ref.uri
+            rec.artifact_ref = asdict(artifact_ref)
             rec.updated_at = _utc()
             rec.config["provenance"] = versions
         except DomainError as e:
@@ -126,8 +157,6 @@ class ModelingService:
         for test in input.lift_tests:
             row: dict[str, Any] = {
                 "channel": test.channel,
-                "start": test.start,
-                "end": test.end,
                 "x": test.x,
                 "delta_x": test.delta_x,
                 "delta_y": test.delta_y,
@@ -168,10 +197,17 @@ class ModelingService:
         self.metadata.put_model(rec.model_dump())
 
         try:
-            path = self.artifacts.model_path(calibrated_model_id)
-            adapter.fit(df_base, config, path, lift_df=lift_df)
+            artifact_ref = self._fit_to_blob(
+                adapter,
+                df_base,
+                config,
+                owner=owner,
+                tenant_id=tenant_id,
+                lift_df=lift_df,
+            )
             rec.status = "completed"
-            rec.artifact_path = str(path)
+            rec.artifact_path = artifact_ref.uri
+            rec.artifact_ref = asdict(artifact_ref)
             rec.updated_at = _utc()
             rec.config["provenance"] = versions
         except DomainError as e:
@@ -242,7 +278,8 @@ class ModelingService:
             raise DomainError("MODEL_NOT_FOUND", f"Model {model_id} was not found")
         return ModelRecord(**data)
 
-    def load_model(self, model_id: str):
+    @contextmanager
+    def materialized_model(self, model_id: str):
         rec = self.status(model_id)
         if rec.status != "completed":
             raise DomainError(
@@ -250,7 +287,22 @@ class ModelingService:
                 "Model fitting has not completed",
                 evidence={"status": rec.status},
             )
-        return self.adapter_factory().load(self.artifacts.require(model_id)), rec
+        if rec.artifact_ref is None:
+            yield self.adapter_factory().load(self.artifacts.require(model_id)), rec
+            return
+        ref = ArtifactRef(**rec.artifact_ref)
+        with self.artifacts.materialize(
+            ref,
+            owner=rec.owner or "local",
+            tenant_id=rec.tenant_id,
+            suffix=".nc",
+        ) as path:
+            yield self.adapter_factory().load(path), rec
+
+    def load_model(self, model_id: str):
+        """Compatibility load; consumers with lazy models should use materialized_model."""
+        with self.materialized_model(model_id) as loaded:
+            return loaded
 
     def select_best_model(self, input: ModelComparisonInput) -> dict[str, Any]:
         records = [self.status(mid) for mid in input.model_ids]

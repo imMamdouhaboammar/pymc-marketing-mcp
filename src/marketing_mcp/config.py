@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -50,6 +51,8 @@ class Settings(BaseModel):
     auth_enabled: bool = False
     api_key: str | None = None
     jwt_secret: str | None = None
+    jwt_issuer: str = "pymc-marketing-mcp"
+    jwt_audience: str = "mcp-clients"
 
     # --- Wave 3 Task 4: security profiles ---------------------------------
     security_profile: SecurityProfile = SecurityProfile.STDIO_LOCAL
@@ -57,11 +60,40 @@ class Settings(BaseModel):
     enforce_transport_security: bool = False
     oauth_issuer: str | None = None
     oauth_audience: str | None = None
+    oauth_jwks_url: str | None = None
     oauth_required_scope: str = "marketing:read"
+    oauth_required_scopes: list[str] = Field(default_factory=lambda: ["marketing:read"])
+    oauth_algorithms: list[str] = Field(default_factory=lambda: ["RS256"])
+    oauth_tenant_claim: str = "tenant_id"
+    oauth_require_tenant: bool = True
+    job_execution_mode: str | None = None
+    persistence_backend: str = "sqlite"
+    shared_sql_url: str | None = None
 
     @model_validator(mode="after")
     def _validate_security_posture(self) -> Settings:
         profile = self.security_profile
+        if self.persistence_backend not in {"sqlite", "shared-sql"}:
+            raise DomainError(
+                "CONFIG_INVALID", "persistence_backend must be 'sqlite' or 'shared-sql'"
+            )
+        if self.persistence_backend == "shared-sql" and not self.shared_sql_url:
+            raise DomainError(
+                "CONFIG_INVALID", "shared-sql persistence requires shared_sql_url"
+            )
+        if self.persistence_backend == "sqlite" and self.shared_sql_url:
+            raise DomainError(
+                "CONFIG_INVALID", "shared_sql_url cannot be ignored by sqlite persistence"
+            )
+        if self.job_execution_mode not in {None, "in-process", "enqueue-only"}:
+            raise DomainError(
+                "CONFIG_INVALID",
+                "job_execution_mode must be 'in-process' or 'enqueue-only'",
+            )
+        if profile is SecurityProfile.HTTP_PRODUCTION_OAUTH:
+            self.job_execution_mode = "enqueue-only"
+        elif self.job_execution_mode is None:
+            self.job_execution_mode = "in-process"
 
         if profile is SecurityProfile.HTTP_PRODUCTION_OAUTH:
             if not self.oauth_issuer or not self.oauth_audience:
@@ -74,6 +106,33 @@ class Settings(BaseModel):
                     },
                     next_action="Configure the OAuth issuer and audience before startup",
                 )
+            allowed_algorithms = {
+                "RS256",
+                "RS384",
+                "RS512",
+                "PS256",
+                "PS384",
+                "PS512",
+                "ES256",
+                "ES384",
+                "ES512",
+                "EdDSA",
+            }
+            if not self.oauth_algorithms or not set(self.oauth_algorithms) <= allowed_algorithms:
+                raise DomainError(
+                    "CONFIG_INVALID",
+                    "Production OAuth requires explicitly allowed asymmetric signing algorithms",
+                    evidence={"oauth_algorithms": self.oauth_algorithms},
+                    next_action="Configure one or more asymmetric OAuth signing algorithms",
+                )
+            if not self.oauth_required_scopes or not self.oauth_tenant_claim.strip():
+                raise DomainError(
+                    "CONFIG_INVALID",
+                    "Production OAuth requires scopes and a trusted tenant claim mapping",
+                    next_action="Configure OAuth required scopes and tenant claim name",
+                )
+            if self.oauth_jwks_url is None:
+                self.oauth_jwks_url = f"{self.oauth_issuer.rstrip('/')}/.well-known/jwks.json"
             self.auth_enabled = True
             return self
 
@@ -112,8 +171,24 @@ class Settings(BaseModel):
 
         profile_raw = os.getenv("MARKETING_MCP_SECURITY_PROFILE", "").strip()
         profile = SecurityProfile(profile_raw) if profile_raw else None
+        api_keys = [value.strip() for value in (api_key or "").split(",") if value.strip()]
+        oauth_required_scopes = [
+            value.strip()
+            for value in os.getenv(
+                "MARKETING_MCP_OAUTH_REQUIRED_SCOPES", "marketing:read"
+            ).split(",")
+            if value.strip()
+        ]
+        oauth_algorithms = [
+            value.strip()
+            for value in os.getenv("MARKETING_MCP_OAUTH_ALGORITHMS", "RS256").split(",")
+            if value.strip()
+        ]
+        oauth_require_tenant = os.getenv(
+            "MARKETING_MCP_OAUTH_REQUIRE_TENANT", "true"
+        ).strip().lower() in ("1", "true", "yes")
 
-        base: dict[str, object] = {
+        base: dict[str, Any] = {
             "data_dir": Path(os.getenv("MARKETING_MCP_DATA_DIR", "data")),
             "ingest_dir": Path(os.getenv("MARKETING_MCP_INGEST_DIR", "inbox")),
             "artifact_dir": Path(os.getenv("MARKETING_MCP_ARTIFACT_DIR", "artifacts")),
@@ -122,9 +197,28 @@ class Settings(BaseModel):
             "log_level": os.getenv("MARKETING_MCP_LOG_LEVEL", "INFO"),
             "host": os.getenv("MARKETING_MCP_HOST", os.getenv("HOST", "127.0.0.1")),
             "port": int(os.getenv("MARKETING_MCP_PORT", os.getenv("PORT", "8000"))),
+            "transport": os.getenv("MARKETING_MCP_TRANSPORT", "stdio"),
             "auth_enabled": auth_enabled,
             "api_key": api_key,
+            "api_keys": api_keys,
             "jwt_secret": jwt_secret,
+            "jwt_issuer": os.getenv("MARKETING_MCP_JWT_ISSUER", "pymc-marketing-mcp"),
+            "jwt_audience": os.getenv("MARKETING_MCP_JWT_AUDIENCE", "mcp-clients"),
+            "oauth_issuer": os.getenv("MARKETING_MCP_OAUTH_ISSUER", "").strip() or None,
+            "oauth_audience": os.getenv("MARKETING_MCP_OAUTH_AUDIENCE", "").strip() or None,
+            "oauth_jwks_url": os.getenv("MARKETING_MCP_OAUTH_JWKS_URL", "").strip() or None,
+            "oauth_required_scopes": oauth_required_scopes,
+            "oauth_algorithms": oauth_algorithms,
+            "oauth_tenant_claim": os.getenv(
+                "MARKETING_MCP_OAUTH_TENANT_CLAIM", "tenant_id"
+            ).strip(),
+            "oauth_require_tenant": oauth_require_tenant,
+            "job_execution_mode": os.getenv("MARKETING_MCP_JOB_EXECUTION_MODE", "").strip()
+            or None,
+            "persistence_backend": os.getenv(
+                "MARKETING_MCP_PERSISTENCE_BACKEND", "sqlite"
+            ).strip(),
+            "shared_sql_url": os.getenv("MARKETING_MCP_SHARED_SQL_URL", "").strip() or None,
         }
         if profile is not None:
             base["security_profile"] = profile

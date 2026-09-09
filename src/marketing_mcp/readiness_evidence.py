@@ -85,7 +85,10 @@ def parse_readiness_from_doc(doc_text: str) -> list[GateEvidence]:
 
 
 def validate_readiness_doc(
-    doc_text: str, evidence_bundle: Mapping[str, Any]
+    doc_text: str,
+    evidence_bundle: Mapping[str, Any],
+    *,
+    expected_commit_sha: str | None = None,
 ) -> list[str]:
     """Audit markdown readiness doc against executed evidence bundle.
 
@@ -95,6 +98,14 @@ def validate_readiness_doc(
     doc_gates = parse_readiness_from_doc(doc_text)
     gate_results = evidence_bundle.get("gate_results", {})
     bundle_verdict = evidence_bundle.get("verdict", "FAIL")
+    bundle_commit_sha = evidence_bundle.get("commit_sha")
+    ci = evidence_bundle.get("ci", {})
+
+    if expected_commit_sha and bundle_commit_sha != expected_commit_sha:
+        findings.append(
+            f"Evidence commit {bundle_commit_sha!r} does not match assessed commit "
+            f"{expected_commit_sha!r}"
+        )
 
     for g in doc_gates:
         norm_status = g.status.lower().replace(" ", "_")
@@ -104,6 +115,10 @@ def validate_readiness_doc(
             if gate_status != "green" or bundle_verdict != "PASS":
                 findings.append(
                     f"Gate {g.gate} marked green in document, but evidence bundle reports status={gate_status!r} and verdict={bundle_verdict!r}"
+                )
+            if not ci.get("is_ci") or not ci.get("candidate_matches"):
+                findings.append(
+                    f"Gate {g.gate} marked green without proof from the trusted CI candidate"
                 )
 
     return findings

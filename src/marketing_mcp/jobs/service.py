@@ -59,8 +59,11 @@ class JobService:
     def cancel_job(self, job_id: str, principal: Principal | None = None) -> JobRecord:
         record = self.repo.get_job(job_id)
         authorize_job(principal, record.to_dict(), action="write")
-        self.executor.cancel(job_id)
-        return self.repo.update_job(job_id, JobStatus.CANCELLED)
+        cancelled_in_process = self.executor.cancel(job_id)
+        requested = self.repo.request_cancellation(job_id)
+        if cancelled_in_process and requested.status is JobStatus.CANCELLING:
+            return self.repo.update_job(job_id, JobStatus.CANCELLED)
+        return requested
 
     def list_jobs(
         self, principal: Principal | None = None, status: JobStatus | None = None, limit: int = 50

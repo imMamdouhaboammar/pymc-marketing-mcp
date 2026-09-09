@@ -133,7 +133,7 @@ def test_secret_environment_values_are_redacted():
     recorded = evidence_to_json(evidence)
     assert "super-secret-key" not in recorded
     assert "jwt-secret-value" not in recorded
-    assert "12345" in recorded
+    assert "12345" not in recorded, "provider fields are recorded only for an identified CI run"
 
 
 @pytest.mark.parametrize(
@@ -170,6 +170,8 @@ def test_markdown_summary_is_generated_from_the_evidence_object():
     assert "179" in markdown
     assert "pymc_marketing_mcp-0.4.0-py3-none-any.whl" in markdown
     assert "machine-collected" in markdown.lower()
+    assert "Release authorized:** NO" in markdown
+    assert "G0" in markdown
 
 
 def test_markdown_summary_reports_overall_verdict():
@@ -246,6 +248,75 @@ def test_collector_script_records_real_command_outcomes(tmp_path):
     assert "machine-collected" in (tmp_path / "smoke.md").read_text(encoding="utf-8").lower()
 
 
+def test_empty_command_set_fails_closed_and_marks_no_gate_green():
+    evidence = _evidence(commands=[])
+    assert evidence["verdict"] == "FAIL"
+    assert evidence["release_authorized"] is False
+    assert {gate["status"] for gate in evidence["gate_results"].values()} == {"not_proven"}
+
+
+def test_unknown_environment_keys_are_not_persisted():
+    evidence = _evidence(
+        env={
+            "CI": "true",
+            "HOME": "/private/home",
+            "DSH_SESSION_ID": "session-sensitive",
+            "ARBITRARY_SENTINEL": "must-not-be-recorded",
+        }
+    )
+    recorded = evidence_to_json(evidence)
+    assert "must-not-be-recorded" not in recorded
+    assert "/private/home" not in recorded
+    assert "session-sensitive" not in recorded
+    assert evidence["environment"] == {"CI": "true"}
+
+
+def test_ci_commit_mismatch_denies_gate_proofs():
+    evidence = _evidence(
+        commands=[
+            {
+                "command": "uv run pytest tests/release/test_g0_production_truth.py",
+                "exit_code": 0,
+                "stdout_tail": "7 passed in 0.01s",
+                "proofs": ["g0-truth"],
+            }
+        ],
+        env={
+            "GITHUB_ACTIONS": "true",
+            "GITHUB_RUN_ID": "987654",
+            "GITHUB_RUN_ATTEMPT": "2",
+            "GITHUB_WORKFLOW": "Release",
+            "GITHUB_SHA": "f" * 40,
+        },
+    )
+    assert evidence["ci"]["candidate_matches"] is False
+    assert evidence["gate_results"]["G0"]["status"] == "not_proven"
+    assert evidence["release_authorized"] is False
+
+
+def test_only_explicit_complete_proof_marks_its_gate_green():
+    evidence = _evidence(
+        commands=[
+            {
+                "command": "uv run pytest tests/release/test_g0_production_truth.py",
+                "exit_code": 0,
+                "stdout_tail": "7 passed in 0.01s",
+                "proofs": ["g0-truth"],
+            }
+        ],
+        env={
+            "GITHUB_ACTIONS": "true",
+            "GITHUB_RUN_ID": "987654",
+            "GITHUB_RUN_ATTEMPT": "1",
+            "GITHUB_WORKFLOW": "Release",
+            "GITHUB_SHA": COMMIT,
+        },
+    )
+    assert evidence["gate_results"]["G0"]["status"] == "green"
+    assert evidence["gate_results"]["G1"]["status"] == "not_proven"
+    assert evidence["release_authorized"] is False
+
+
 def test_collector_script_reports_failure_verdict(tmp_path):
     import subprocess
     import sys
@@ -273,3 +344,44 @@ def test_collector_script_reports_failure_verdict(tmp_path):
     evidence = json.loads((tmp_path / "failing.json").read_text(encoding="utf-8"))
     assert evidence["verdict"] == "FAIL"
     assert evidence["commands"][0]["exit_code"] == 3
+
+
+def test_collector_proof_requires_one_explicit_command_and_is_persisted(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    script = repo_root / "scripts" / "collect_release_evidence.py"
+    output_dir = tmp_path / "valid"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "proof",
+            "--command",
+            f'{sys.executable} -c "print(\'1 passed in 0.01s\')"',
+            "--proof",
+            "g0-truth",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    evidence = json.loads((output_dir / "proof.json").read_text(encoding="utf-8"))
+    assert evidence["commands"][0]["proofs"] == ["g0-truth"]
+
+    invalid = subprocess.run(
+        [sys.executable, str(script), "--output-dir", str(tmp_path / "invalid"), "--proof", "g0-truth"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid.returncode == 2
+    assert "--proof requires exactly one explicit --command" in invalid.stderr

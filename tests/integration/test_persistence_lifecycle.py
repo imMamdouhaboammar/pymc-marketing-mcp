@@ -45,6 +45,13 @@ def test_full_persistence_lifecycle_across_restarts(tmp_path):
     )
     diag1 = app1.diagnostics.diagnose(model.model_id)
     assert diag1.decision_tools_enabled is True
+    optimization_input = BudgetOptimizationInput(
+        model_id=model.model_id,
+        budget=150_000.0,
+        planning_periods=4,
+    )
+    opt_before_reload = app1.decisions.optimize(optimization_input)
+    assert opt_before_reload["optimizer_success"] is True
 
     # 2. Instance 2: Restart application with same storage
     app2 = Application(settings)
@@ -66,14 +73,13 @@ def test_full_persistence_lifecycle_across_restarts(tmp_path):
     )
     assert "comparison" in sim
 
-    opt = app2.decisions.optimize(
-        BudgetOptimizationInput(
-            model_id=model.model_id,
-            budget=150_000.0,
-            planning_periods=4,
-        )
-    )
-    assert opt["optimizer_success"] is True
+    opt_after_reload = app2.decisions.optimize(optimization_input)
+    assert opt_after_reload["optimizer_success"] is True
+    before = opt_before_reload["recommended_allocation"]
+    after = opt_after_reload["recommended_allocation"]
+    assert sum(before.values()) == pytest.approx(optimization_input.budget)
+    assert sum(after.values()) == pytest.approx(optimization_input.budget)
+    assert after == pytest.approx(before, rel=1e-6)
 
 
 def test_persistence_corrupt_or_missing_artifact(tmp_path):

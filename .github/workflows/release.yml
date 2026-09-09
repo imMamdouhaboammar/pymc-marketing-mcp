@@ -7,31 +7,60 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for release (e.g. v0.4.0)'
+        description: 'Immutable release tag (for example v0.4.0)'
         required: true
         type: string
+      publish:
+        description: 'Publish already verified artifacts'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  verify-and-release:
-    name: Verify Identity, Build & Release
+  verify-candidate:
+    name: Verify Candidate & Exact Artifacts
     runs-on: ubuntu-latest
+    env:
+      TARGET_TAG: ${{ inputs.tag_name || github.ref_name }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Validate requested tag shape
+        shell: bash
+        run: |
+          [[ "${TARGET_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || {
+            echo "Invalid release tag: ${TARGET_TAG}" >&2
+            exit 1
+          }
+
+      - name: Checkout immutable candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.TARGET_TAG }}
           fetch-depth: 0
 
       - name: Install uv and setup Python
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
           enable-cache: true
 
-      - name: Install dependencies
+      - name: Install frozen dependencies
         run: uv sync --frozen --extra dev
+
+      - name: Bind tag, version, and checkout SHA
+        id: candidate
+        shell: bash
+        run: |
+          TAG_SHA=$(git rev-parse "${TARGET_TAG}^{commit}")
+          CANDIDATE_SHA=$(git rev-parse HEAD)
+          APP_VERSION=$(uv run python -c 'from marketing_mcp import __version__; print(__version__)')
+          test "${TAG_SHA}" = "${CANDIDATE_SHA}"
+          test "${TARGET_TAG}" = "v${APP_VERSION}"
+          echo "sha=${CANDIDATE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "version=${APP_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "image=pymc-marketing-mcp:${APP_VERSION}-g${CANDIDATE_SHA:0:12}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify release truth gates
         run: |
@@ -41,32 +70,114 @@ jobs:
           uv run python scripts/generate_capability_inventory.py --check
           uv run pytest tests/release/test_g0_production_truth.py -v
 
-      - name: Build distribution packages (wheel & sdist)
+      - name: Build distribution packages once
         run: uv build
 
-      - name: Clean install and smoke test
+      - name: Build container once
+        env:
+          APP_VERSION: ${{ steps.candidate.outputs.version }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+          IMAGE: ${{ steps.candidate.outputs.image }}
         run: |
-          uv venv /tmp/release-smoke-venv
-          /tmp/release-smoke-venv/bin/pip install dist/*.whl
-          /tmp/release-smoke-venv/bin/marketing-mcp --help
-          /tmp/release-smoke-venv/bin/marketing-mcp-auth --help
-          /tmp/release-smoke-venv/bin/marketing-mcp-worker --help
+          docker build \
+            --build-arg "APP_VERSION=${APP_VERSION}" \
+            --build-arg "GIT_COMMIT=${CANDIDATE_SHA}" \
+            --tag "${IMAGE}" .
+          docker save --output dist/pymc-marketing-mcp-container.tar "${IMAGE}"
 
-      - name: Generate release evidence and compute checksums
+      - name: Record artifact checksums
+        run: sha256sum dist/* > dist/SHA256SUMS
+
+      - name: Smoke exact wheel and source distribution
+        shell: bash
         run: |
-          uv run python scripts/collect_release_evidence.py
-          sha256sum dist/* > dist/SHA256SUMS
+          wheel=(dist/*.whl)
+          sdist=(dist/*.tar.gz)
+          test "${#wheel[@]}" -eq 1
+          test "${#sdist[@]}" -eq 1
+          uv venv --seed /tmp/release-wheel-venv
+          uv pip install --python /tmp/release-wheel-venv/bin/python "${wheel[0]}"
+          /tmp/release-wheel-venv/bin/marketing-mcp --help
+          /tmp/release-wheel-venv/bin/marketing-mcp-auth --help
+          /tmp/release-wheel-venv/bin/marketing-mcp-worker --help
+          uv venv --seed /tmp/release-sdist-venv
+          uv pip install --python /tmp/release-sdist-venv/bin/python "${sdist[0]}"
+          /tmp/release-sdist-venv/bin/marketing-mcp --help
 
-      - name: GH Release
-        uses: softprops/action-gh-release@v2
+      - name: Smoke exact container archive and labels
+        env:
+          APP_VERSION: ${{ steps.candidate.outputs.version }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+          IMAGE: ${{ steps.candidate.outputs.image }}
+        shell: bash
+        run: |
+          docker image rm "${IMAGE}"
+          docker load --input dist/pymc-marketing-mcp-container.tar
+          test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "${IMAGE}")" = "${APP_VERSION}"
+          test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${IMAGE}")" = "${CANDIDATE_SHA}"
+          docker run --detach --name release-smoke --publish 18080:8080 "${IMAGE}"
+          trap 'docker rm --force release-smoke >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs release-smoke
+          exit 1
+
+      - name: Verify exact bytes and collect nonauthorizing rehearsal evidence
+        run: |
+          (cd dist && sha256sum -c SHA256SUMS)
+          uv run python scripts/collect_release_evidence.py \
+            --command "cd dist && sha256sum -c SHA256SUMS" \
+            --skip-build \
+            --label candidate
+
+      - name: Upload verified candidate bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          files: |
+          name: release-candidate-${{ steps.candidate.outputs.sha }}-${{ github.run_attempt }}
+          path: |
             dist/*
-            docs/release-evidence/*.md
-            docs/release-evidence/*.json
+            docs/release-evidence/candidate.json
+            docs/release-evidence/candidate.md
+          if-no-files-found: error
+
+  publish:
+    name: Publish Verified Bytes
+    needs: verify-candidate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified candidate bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-candidate-*-${{ github.run_attempt }}
+          path: candidate
+          merge-multiple: true
+
+      - name: Reverify digests and release authorization
+        run: |
+          (cd candidate/dist && sha256sum -c SHA256SUMS)
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path("candidate/docs/release-evidence/candidate.json").read_text())
+          if evidence.get("release_authorized") is not True:
+              raise SystemExit("candidate evidence does not authorize production publication")
+          PY
+
+      - name: Publish verified artifacts
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: candidate/dist/*
           generate_release_notes: true
           draft: false
           prerelease: false
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          tag_name: ${{ inputs.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
