@@ -48,6 +48,7 @@ Following the Compound Engineering loop, `/fable-learning`, and `/convo-learn` m
 | 31 | [MCP Protocol Inversion & Unprotected Ingress Admission](./31-mcp-protocol-inversion-and-admission-boundary.md) | Ingress Protection / Protocol Framing | High | Fast native request admission and size enforcement (<50MB) rejects invalid payloads without allocating Python heap objects. |
 | 32 | [Deceptive Cancellation & Orphan Compute Fences](./32-deceptive-cancellation-and-orphan-compute-fence.md) | Async Jobs / Compute Resource Fences | High | Cancelling an async job must halt underlying computation; cooperative checkpoint tokens prevent runaway orphan MCMC sampling. |
 | 33 | [PyO3 Build in Slim Rust Container Missing Python Interpreter & ABI Mismatch](./33-pyo3-build-in-rust-slim-missing-python-interpreter.md) | Container Packaging / Native Compilation | Critical | Base Rust builder stage on target CPython container runtime (python:3.12-slim) so pyo3-build-config has exact headers and eliminates minor version ABI incompatibilities. |
+| 34 | [Dockerfile POSIX /bin/sh Process Substitution Syntax Error](./34-dockerfile-posix-sh-process-substitution-syntax-error.md) | Container Packaging / Shell Portability | High | Avoid Bash-specific process substitution `<(...)` in Dockerfile `RUN` directives; use standard POSIX file redirection (`-o /tmp/requirements.txt`) with immediate cleanup. |
 
 ---
 

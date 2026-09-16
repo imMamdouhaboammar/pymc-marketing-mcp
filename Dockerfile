@@ -44,7 +44,9 @@ COPY --from=rust-builder /build/crates/marketing_mcp_fast/target/release/libmark
 
 # Deterministic frozen build matching CI locked dependencies
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system --no-cache --require-hashes -r <(uv export --format requirements-txt --no-hashes) 2>/dev/null || \
+    (uv export --format requirements-txt --no-hashes -o /tmp/requirements.txt 2>/dev/null && \
+     uv pip install --system --no-cache -r /tmp/requirements.txt && \
+     rm -f /tmp/requirements.txt) || \
     uv pip install --system --no-cache .
 
 # Runtime activation verification: fail build if native extension is missing or unimportable
