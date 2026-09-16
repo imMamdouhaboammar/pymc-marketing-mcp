@@ -226,3 +226,48 @@ class TestPlottingSecurity:
         with pytest.raises(DomainError) as exc_info:
             svc.generate_plot(model, "m001", "saturation_curves", fmt="exe")
         assert exc_info.value.code == "INVALID_PLOT_FORMAT"
+
+
+class TestSaturationCurvesStrategies:
+    def test_saturation_curves_uses_model_plot_saturation_curves(self, tmp_path):
+        import matplotlib.pyplot as plt
+        svc = PlottingService(tmp_path)
+        model = _make_fake_model()
+        fig, ax = plt.subplots()
+        model.sample_saturation_curve = MagicMock(return_value="mock_curve")
+        model.plot = MagicMock()
+        model.plot.saturation_curves = MagicMock(return_value=(fig, [ax]))
+
+        data = svc.generate_plot(model, "m_sat1", "saturation_curves")
+        assert len(data) > 0
+        model.sample_saturation_curve.assert_called_once_with(original_scale=False)
+        model.plot.saturation_curves.assert_called_once_with(curve="mock_curve")
+
+    def test_saturation_curves_falls_back_to_plot_curve_hdi_with_axes_kwarg(self, tmp_path):
+        import matplotlib.pyplot as plt
+        svc = PlottingService(tmp_path)
+        model = _make_fake_model()
+        fig, ax = plt.subplots()
+        model.sample_saturation_curve = MagicMock(return_value="mock_curve")
+        model.plot = None
+        model.saturation = MagicMock()
+        model.saturation.plot_curve_hdi = MagicMock(return_value=(fig, [ax]))
+
+        data = svc.generate_plot(model, "m_sat2", "saturation_curves")
+        assert len(data) > 0
+        assert model.saturation.plot_curve_hdi.called
+        kwargs = model.saturation.plot_curve_hdi.call_args.kwargs
+        assert "axes" in kwargs
+        assert "ax" not in kwargs
+
+    def test_plot_render_failure_has_contextual_next_action(self, tmp_path):
+        svc = PlottingService(tmp_path)
+        model = _make_fake_model()
+        # Force render failure
+        setattr(svc, "_render_saturation_curves", MagicMock(side_effect=RuntimeError("GPU OOM")))
+        with pytest.raises(DomainError) as exc_info:
+            svc.generate_plot(model, "m_sat3", "saturation_curves")
+        err = exc_info.value
+        assert err.code == "PLOT_RENDER_FAILED"
+        assert "saturation" in err.next_action.lower()
+

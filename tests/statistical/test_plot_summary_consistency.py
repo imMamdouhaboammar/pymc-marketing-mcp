@@ -66,7 +66,7 @@ def test_plot_summary_matches_analytical_contribution_summary(fitted_model):
 @pytest.mark.statistical
 @pytest.mark.parametrize(
     "plot_type",
-    ["waterfall_decomposition", "actual_vs_predicted", "channel_contribution_share"],
+    ["waterfall_decomposition", "actual_vs_predicted", "channel_contribution_share", "saturation_curves"],
 )
 def test_plots_render_against_real_datatree_idata(fitted_model, tmp_path, plot_type):
     service = PlottingService(artifacts_dir=tmp_path / "plots")

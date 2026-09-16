@@ -39,14 +39,19 @@ class PlottingService:
 
     def __init__(
         self,
-        artifact_storage: LocalArtifactStore | Path,
+        artifact_storage: LocalArtifactStore | Path | None = None,
         *,
         metadata=None,
+        artifacts_dir: Path | None = None,
+        plots_dir: Path | None = None,
     ):
+        storage = artifact_storage or artifacts_dir or plots_dir
+        if storage is None:
+            raise ValueError("artifact_storage, artifacts_dir, or plots_dir must be provided")
         self.artifacts = (
-            artifact_storage
-            if isinstance(artifact_storage, LocalArtifactStore)
-            else LocalArtifactStore(artifact_storage)
+            storage
+            if isinstance(storage, LocalArtifactStore)
+            else LocalArtifactStore(storage)
         )
         self.metadata = metadata
         self.plots_dir = self.artifacts.root / "plots"
@@ -108,11 +113,18 @@ class PlottingService:
         except DomainError:
             raise
         except Exception as e:
+            msg = str(e)[:500]
+            if plot_type == "actual_vs_predicted" or "posterior predictive" in msg.lower():
+                next_action = "Ensure the model was fitted with posterior predictive samples."
+            elif plot_type == "saturation_curves":
+                next_action = "Check model saturation specifications or inspect get_response_curves."
+            else:
+                next_action = f"Review model diagnostic metrics or check parameters for plot type '{plot_type}'."
             raise DomainError(
                 "PLOT_RENDER_FAILED",
-                f"Failed to render plot '{plot_type}'",
-                evidence={"type": type(e).__name__, "message": str(e)[:500]},
-                next_action="Ensure the model was fitted with posterior predictive samples",
+                f"Failed to render plot '{plot_type}': {msg}",
+                evidence={"type": type(e).__name__, "message": msg, "plot_type": plot_type},
+                next_action=next_action,
             ) from e
 
         if self.metadata is not None:
@@ -189,47 +201,73 @@ class PlottingService:
     # ------------------------------------------------------------------
 
     def _render_saturation_curves(self, model, fmt: str) -> bytes:
-        """Render channel saturation curves using adstock transform plot API."""
+        """Render channel saturation curves using PyMC-Marketing plot suite or fallback."""
         import matplotlib
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        import numpy as np
 
-        # Use PyMC-Marketing's transform plot API if available
-        if hasattr(model, "saturation") and hasattr(model.saturation, "plot_curve_hdi"):
-            fig, axes = plt.subplots(figsize=(10, 4))
-            model.saturation.plot_curve_hdi(ax=axes)
-            axes.set_title("Saturation Curves — 94% HDI")
-        elif hasattr(model, "plot") and model.plot is not None:
-            # Fallback: use ArviZ posterior summary for channel contributions
+        fig = None
+
+        # Strategy 1: Official model.plot.saturation_curves(curve=curve)
+        if hasattr(model, "sample_saturation_curve") and hasattr(model, "plot") and model.plot is not None:
+            try:
+                curve = model.sample_saturation_curve(original_scale=False)
+                if hasattr(model.plot, "saturation_curves"):
+                    fig, _ = model.plot.saturation_curves(curve=curve)
+            except Exception:
+                fig = None
+
+        # Strategy 2: Transformation plot_curve_hdi with correct axes kwarg
+        if fig is None and hasattr(model, "sample_saturation_curve") and hasattr(model, "saturation") and hasattr(model.saturation, "plot_curve_hdi"):
+            try:
+                curve = model.sample_saturation_curve(original_scale=False)
+                fig, ax = plt.subplots(figsize=(10, 5))
+                axes_arr = np.array([[ax]])
+                fig, _ = model.saturation.plot_curve_hdi(curve=curve, axes=axes_arr)
+            except Exception:
+                fig = None
+
+        # Strategy 3: Parameter posterior histograms
+        if fig is None:
             channels = getattr(model, "channel_columns", [])
+            n_ch = max(1, len(channels))
             fig, axes = plt.subplots(
-                1, max(1, len(channels)), figsize=(4 * max(1, len(channels)), 4)
+                1, n_ch, figsize=(4 * n_ch, 4)
             )
-            if len(channels) == 1:
+            if n_ch == 1:
                 axes = [axes]
+            idata = getattr(model, "idata", None)
+            posterior = getattr(idata, "posterior", {}) if idata is not None else {}
+            has_sat_plot = False
             for i, ch in enumerate(channels):
-                idata = model.idata
-                if "posterior" in idata and "saturation_lam" in idata["posterior"]:
-                    da = idata["posterior"]["saturation_lam"]
-                    if "channel" in da.dims:
+                if "saturation_lam" in posterior:
+                    da = posterior["saturation_lam"]
+                    if hasattr(da, "dims") and "channel" in da.dims:
                         vals = da.sel(channel=ch).values.flatten()
-                        axes[i].hist(vals, bins=30, edgecolor="black")
+                        axes[i].hist(vals, bins=30, edgecolor="black", color="#4361ee", alpha=0.7)
                         axes[i].set_title(f"{ch}\n(saturation λ)")
+                        has_sat_plot = True
+                    else:
+                        axes[i].text(0.5, 0.5, f"{ch}\nNo saturation posterior", ha="center")
                 else:
                     axes[i].text(0.5, 0.5, f"{ch}\nNo saturation posterior", ha="center")
-            fig.suptitle("Channel Saturation Parameters — Posterior")
-        else:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            ax.text(
-                0.5,
-                0.5,
-                "Saturation curve API unavailable\nfor this model version",
-                ha="center",
-                va="center",
-                transform=ax.transAxes,
-            )
-            ax.set_title("Saturation Curves")
+
+            if has_sat_plot:
+                fig.suptitle("Channel Saturation Parameters — Posterior", fontsize=12)
+            else:
+                plt.close(fig)
+                fig, ax = plt.subplots(figsize=(6, 4))
+                ax.text(
+                    0.5,
+                    0.5,
+                    "Saturation curve API unavailable\nfor this model version",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
+                )
+                ax.set_title("Saturation Curves")
 
         return self._fig_to_bytes(fig, fmt)
 
