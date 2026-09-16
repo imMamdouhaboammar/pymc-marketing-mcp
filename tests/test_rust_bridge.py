@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import pytest
 
 from marketing_mcp.accelerators import (
@@ -92,3 +93,144 @@ def test_pure_python_fallback_parity(monkeypatch):
     down_x, down_y = acc.compress_curve_lttb(xs, ys, max_points=10)
     assert len(down_x) == 10
     assert len(down_y) == 10
+
+
+def test_quantiles_edge_cases_and_numpy_parity():
+    import numpy as np
+
+    # 1. NaN and Inf handling
+    data = [1.0, float("nan"), 2.0, float("inf"), float("-inf"), 3.0, 4.0, 5.0]
+    qs = [0.0, 0.25, 0.5, 0.75, 1.0]
+    res = fast_compute_quantiles(data, qs)
+    assert res["count"] == 5  # Only finite values counted
+    assert res["mean"] == pytest.approx(3.0)
+    assert res["min"] == 1.0
+    assert res["max"] == 5.0
+    expected_qs = np.quantile([1.0, 2.0, 3.0, 4.0, 5.0], qs, method="linear").tolist()
+    for observed, expected in zip(res["quantiles"], expected_qs):
+        assert observed == pytest.approx(expected, abs=1e-5)
+
+    # 2. Empty data
+    empty_res = fast_compute_quantiles([], [0.5])
+    assert empty_res["count"] == 0
+    assert np.isnan(empty_res["mean"])
+    assert np.isnan(empty_res["quantiles"][0])
+
+    # 3. Constant array
+    const_res = fast_compute_quantiles([42.0] * 10, [0.1, 0.5, 0.9])
+    assert const_res["mean"] == pytest.approx(42.0)
+    assert const_res["std"] == pytest.approx(0.0, abs=1e-9)
+    assert const_res["quantiles"] == pytest.approx([42.0, 42.0, 42.0])
+
+    # 4. Extreme values
+    extreme_data = [1e-10, 2e-10, 5e-10, 1e-9]
+    ext_res = fast_compute_quantiles(extreme_data, [0.5])
+    assert ext_res["quantiles"][0] == pytest.approx(np.quantile(extreme_data, 0.5, method="linear"), rel=1e-5)
+
+
+def test_lttb_edge_cases_and_parity():
+    # Empty and sub-threshold inputs
+    assert compress_curve_lttb([], [], max_points=10) == ([], [])
+    assert compress_curve_lttb([1.0, 2.0], [3.0, 4.0], max_points=5) == ([1.0, 2.0], [3.0, 4.0])
+
+    # Parity between Rust and fallback
+    import marketing_mcp.accelerators as acc
+    xs = [float(i) * 0.1 for i in range(200)]
+    ys = [math.sin(x) + 0.1 * math.cos(x * 3) for x in xs]
+    rust_x, rust_y = compress_curve_lttb(xs, ys, max_points=25)
+    py_x, py_y = acc._py_compress_curve_lttb(xs, ys, max_points=25)
+    assert len(rust_x) == 25
+    assert len(py_x) == 25
+    assert rust_x == pytest.approx(py_x, abs=1e-6)
+    assert rust_y == pytest.approx(py_y, abs=1e-6)
+
+
+def test_sparklines_edge_cases_and_parity():
+    import marketing_mcp.accelerators as acc
+
+    # Empty and all-NaN
+    assert generate_sparkline([]) == ""
+    assert generate_sparkline([float("nan"), float("inf")]) == "  "
+
+    # Constant values
+    assert generate_sparkline([10.0, 10.0, 10.0]) == "▄▄▄"
+
+    # Parity
+    vals = [-5.0, 0.0, 2.5, float("nan"), 10.0, 20.0, -10.0]
+    assert generate_sparkline(vals) == acc._py_generate_sparkline(vals)
+
+
+def test_fallback_mcmc_diagnostics_no_attribute_error(monkeypatch):
+    """Verify that Python fallback in _py_fast_mcmc_diagnostics appends without AttributeError."""
+    import marketing_mcp.accelerators as acc
+    monkeypatch.setattr(acc, "_IS_RUST_AVAILABLE", False)
+
+    # Trigger max_rhat > 1.05 failure branch
+    res = acc.fast_mcmc_diagnostics(rhats=[1.08, 1.02], esses=[500.0], divergences=0)
+    assert res["decision_status"] == "rejected"
+    assert res["decision_tools_enabled"] is False
+    assert any("exceeds safety threshold" in f for f in res["failures"])
+
+
+def test_fast_admit_request_native_and_fallback(monkeypatch):
+    import marketing_mcp.accelerators as acc
+
+    raw_valid = b'{"jsonrpc": "2.0", "id": "req-1", "method": "tools/call", "params": {"name": "simulate_budget"}}'
+    raw_large = b"x" * 500
+
+    for is_rust in [True, False]:
+      monkeypatch.setattr(acc, "_IS_RUST_AVAILABLE", is_rust)
+      res = acc.fast_admit_request(raw_valid)
+      assert res["admitted"] is True
+      assert res["request_id"] == "req-1"
+      assert res["method"] == "tools/call"
+      assert res["tool_name"] == "simulate_budget"
+      assert res["error"] is None
+
+      err = acc.fast_admit_request(
+          raw_large, max_size=100, tenant_id="tenant-1"
+      )
+      assert err["admitted"] is False
+      assert err["error"]["code"] == "PAYLOAD_TOO_LARGE"
+      assert err["error"]["tenant_id"] == "tenant-1"
+
+
+def test_fast_admit_job_native_and_fallback(monkeypatch):
+    import marketing_mcp.accelerators as acc
+
+    for is_rust in [True, False]:
+        monkeypatch.setattr(acc, "_IS_RUST_AVAILABLE", is_rust)
+
+        ok = acc.fast_admit_job(1024, max_size=10000, tenant_id="tenant-1")
+        assert ok["admitted"] is True
+        assert ok["status"] == "accepted"
+        assert ok["job_id"].startswith("job-")
+        assert ok["recommended_poll_interval_ms"] == 1000
+        assert ok["error"] is None
+
+        overflow = acc.fast_admit_job(20000, max_size=10000, tenant_id="tenant-1")
+        assert overflow["admitted"] is False
+        assert overflow["error"]["code"] == "PAYLOAD_TOO_LARGE"
+
+
+def test_fast_acknowledge_cancellation_native_and_fallback(monkeypatch):
+    import marketing_mcp.accelerators as acc
+
+    for is_rust in [True, False]:
+        monkeypatch.setattr(acc, "_IS_RUST_AVAILABLE", is_rust)
+
+        in_proc = acc.fast_acknowledge_cancellation("job-12345", in_process=True)
+        assert in_proc["acknowledged"] is True
+        assert in_proc["job_id"] == "job-12345"
+        assert in_proc["status"] == "cancelled"
+        assert in_proc["fence_triggered"] is True
+
+        distributed = acc.fast_acknowledge_cancellation("job-12345", in_process=False)
+        assert distributed["acknowledged"] is True
+        assert distributed["status"] == "cancelling"
+
+        invalid = acc.fast_acknowledge_cancellation("   ", in_process=True)
+        assert invalid["acknowledged"] is False
+        assert invalid["error"]["code"] == "INVALID_JOB_ID"
+
+

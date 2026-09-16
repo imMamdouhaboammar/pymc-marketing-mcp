@@ -37,18 +37,17 @@ def create_artifact_download_handler(app: Application):
             "X-Content-SHA256": digest,
         }
 
-        if range_header and range_header.startswith("bytes="):
-            match = re.match(r"bytes=(\d+)-(\d*)", range_header)
-            if match:
-                start = int(match.group(1))
-                end = int(match.group(2)) if match.group(2) else file_size - 1
-                if start >= file_size or end >= file_size or start > end:
-                    return Response(
-                        status_code=416,
-                        headers={"Content-Range": f"bytes */{file_size}"},
-                    )
+        if range_header:
+            from marketing_mcp.accelerators import fast_parse_range_header
 
-                chunk_length = end - start + 1
+            parsed_range = fast_parse_range_header(range_header, file_size)
+            if range_header.startswith("bytes=") and parsed_range is None:
+                return Response(
+                    status_code=416,
+                    headers={"Content-Range": f"bytes */{file_size}"},
+                )
+            if parsed_range:
+                start, end, chunk_length = parsed_range
                 headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
                 headers["Content-Length"] = str(chunk_length)
 

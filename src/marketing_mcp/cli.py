@@ -19,6 +19,8 @@ from marketing_mcp.http.safety import RequestSafetyMiddleware
 from marketing_mcp.mcp.context import RequestScopedContextProvider
 from marketing_mcp.mcp.server import create_server
 
+from marketing_mcp.accelerators import get_engine_info
+
 SERVICE_NAME = "pymc-marketing-mcp"
 
 
@@ -30,6 +32,7 @@ def health_payload(*, auth_enabled: bool) -> dict[str, Any]:
         "version": __version__,
         "transport": "streamable-http",
         "auth_enabled": auth_enabled,
+        "interaction_engine": get_engine_info(),
         "endpoints": {
             "mcp": "/mcp",
             "health": "/health",

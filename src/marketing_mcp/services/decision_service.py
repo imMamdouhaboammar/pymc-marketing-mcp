@@ -91,6 +91,25 @@ class DecisionService:
     def response_curves(self, model_id):
         model, record = self.modeling.load_model(model_id)
         result = self.modeling.adapter_factory().response_curves(model)
+
+        # Connect native LTTB compression and sparkline for AI client context efficiency
+        from marketing_mcp.accelerators import compress_curve_lttb, generate_sparkline
+        channel_curves = result.get("channel_curves") or result.get("curves") or {}
+        for ch_name, ch_data in channel_curves.items():
+            if isinstance(ch_data, dict):
+                spends = ch_data.get("spend_grid")
+                medians = ch_data.get("median_response")
+                if spends and medians and len(spends) > 30:
+                    down_x, down_y = compress_curve_lttb(spends, medians, max_points=30)
+                    ch_data["transport_curve"] = {
+                        "spend": down_x,
+                        "median_response": down_y,
+                        "downsampled_points": len(down_x),
+                        "algorithm": "lttb",
+                    }
+                if medians:
+                    ch_data["sparkline"] = generate_sparkline(medians)
+
         result.update(
             {
                 "model_id": model_id,
