@@ -23,6 +23,37 @@ from marketing_mcp.domain.decisions.allocation import (
 from marketing_mcp.errors import DomainError
 
 
+def _project_to_bounds_and_budget(
+    x: np.ndarray,
+    lower: np.ndarray,
+    upper: np.ndarray,
+    target_budget: float,
+) -> np.ndarray:
+    """Project initial guess vector onto box bounds [lower, upper] and hyperplane sum(x) == target_budget."""
+    arr = np.clip(np.asarray(x, dtype=float), lower, upper)
+    for _ in range(25):
+        diff = target_budget - float(np.sum(arr))
+        if abs(diff) < 1e-6:
+            break
+        if diff > 0:
+            room = upper - arr
+            active = room > 1e-8
+            if not np.any(active):
+                break
+            step = diff * (room[active] / np.sum(room[active]))
+            arr[active] += step
+            arr = np.clip(arr, lower, upper)
+        else:
+            room = arr - lower
+            active = room > 1e-8
+            if not np.any(active):
+                break
+            step = (-diff) * (room[active] / np.sum(room[active]))
+            arr[active] -= step
+            arr = np.clip(arr, lower, upper)
+    return arr
+
+
 class PyMCMarketingAdapter:
     def __init__(self):
         try:
@@ -326,30 +357,37 @@ class PyMCMarketingAdapter:
         # Build alternative configurations to test
         base_l_max = config.get("adstock", {}).get("l_max", 8)
         base_adstock_type = config.get("adstock", {}).get("type", "geometric")
+        base_sat_type = config.get("saturation", {}).get("type", "logistic")
+        base_sat_cfg = dict(config.get("saturation", {}))
+
         alt_sampler = dict(config.get("sampler", {}))
         alt_sampler["draws"] = min(alt_sampler.get("draws", 200), 100)
         alt_sampler["tune"] = min(alt_sampler.get("tune", 200), 100)
         alt_sampler["chains"] = 2
 
-        # Alternative 1: halved l_max with same type
+        # Alternative 1: halved l_max with same type (adstock variation)
         alt1_adstock = {"type": base_adstock_type, "l_max": max(2, base_l_max // 2)}
-        # Alternative 2: delayed adstock (if base is geometric, switch; else revert to geometric)
+        # Alternative 2: delayed adstock (adstock variation)
         alt2_type = "delayed" if base_adstock_type == "geometric" else "geometric"
         alt2_adstock = {"type": alt2_type, "l_max": base_l_max}
+        # Alternative 3: alternative saturation (saturation variation)
+        alt3_sat_type = "michaelis_menten" if base_sat_type == "logistic" else "logistic"
+        alt3_sat_cfg = {"type": alt3_sat_type}
 
         alternatives = [
-            ("shorter_memory", alt1_adstock),
-            ("alternative_type", alt2_adstock),
+            ("shorter_memory", alt1_adstock, base_sat_cfg, "adstock"),
+            ("alternative_type", alt2_adstock, base_sat_cfg, "adstock"),
+            ("alternative_saturation", {"type": base_adstock_type, "l_max": base_l_max}, alt3_sat_cfg, "saturation"),
         ]
 
         all_alt_ranks: list[dict] = []
         max_shift = 0
         findings = []
 
-        for alt_label, alt_adstock_cfg in alternatives:
+        for alt_label, alt_adstock_cfg, alt_sat_cfg, alt_dim in alternatives:
             alt_config = dict(config)
             alt_config["adstock"] = alt_adstock_cfg
-            alt_config["saturation"] = config.get("saturation", {})
+            alt_config["saturation"] = alt_sat_cfg
             alt_config["sampler"] = alt_sampler
 
             target = alt_config["target_column"]
@@ -399,7 +437,13 @@ class PyMCMarketingAdapter:
                 all_alt_ranks.append(
                     {
                         "label": alt_label,
+                        "dimension": alt_dim,
                         "adstock_config": alt_adstock_cfg,
+                        "saturation_config": alt_sat_cfg,
+                        "scenario_config": {
+                            "adstock": alt_adstock_cfg,
+                            "saturation": alt_sat_cfg,
+                        },
                         "ranks": alt_ranks,
                         "max_rank_shift": shift,
                     }
@@ -411,13 +455,17 @@ class PyMCMarketingAdapter:
                             "severity": "warning",
                             "message": (
                                 f"Channel contribution ranking shifted by {shift} positions "
-                                f"under '{alt_label}' alternative adstock specification."
+                                f"under '{alt_label}' alternative {alt_dim} specification."
                             ),
                             "evidence": {
                                 "baseline_ranks": base_ranks,
                                 "alternative_ranks": alt_ranks,
                                 "alternative_label": alt_label,
-                                "alternative_adstock": alt_adstock_cfg,
+                                "dimension": alt_dim,
+                                "scenario_config": {
+                                    "adstock": alt_adstock_cfg,
+                                    "saturation": alt_sat_cfg,
+                                },
                             },
                             "suggested_action": (
                                 "Calibrate with incrementality experiments or collect "
@@ -425,21 +473,29 @@ class PyMCMarketingAdapter:
                             ),
                         }
                     )
-            except DomainError as e:
-                # If alternative type not available (e.g. legacy path), record and skip
+            except Exception as e:
                 all_alt_ranks.append(
                     {
                         "label": alt_label,
+                        "dimension": alt_dim,
                         "adstock_config": alt_adstock_cfg,
+                        "saturation_config": alt_sat_cfg,
+                        "scenario_config": {
+                            "adstock": alt_adstock_cfg,
+                            "saturation": alt_sat_cfg,
+                        },
                         "ranks": None,
-                        "error": e.to_dict().get("error", {}).get("message", str(e)),
+                        "error": e.to_dict().get("error", {}).get("message", str(e)) if hasattr(e, "to_dict") else str(e),
                     }
                 )
 
         return {
             "baseline_ranks": base_ranks,
+            "tested_dimensions": {
+                "adstock": True,
+                "saturation": True,
+            },
             "alternatives": all_alt_ranks,
-            # Backward-compat alias: last alternative's ranks (same semantics as v0.3 single-alt output)
             "alternative_ranks": all_alt_ranks[-1]["ranks"] if all_alt_ranks else {},
             "max_rank_shift": max_shift,
             "findings": findings,
@@ -650,40 +706,167 @@ class PyMCMarketingAdapter:
             constraints,
             cell_constraints or [],
         )
+
+        lower_da = bounds.sel(bound="lower")
+        upper_da = bounds.sel(bound="upper")
+
+        baseline = {}
+        baseline_xr = None
+        x0_baseline = None
         try:
-            allocation, result = wrapper.optimize_budget(
-                budget=budget,
-                budget_bounds=bounds,
+            baseline = historical_allocation(
+                model,
+                planning_periods,
+                total_budget=budget,
             )
-        except Exception as e:
-            raise DomainError(
-                "OPTIMIZATION_FAILED",
-                "Budget optimizer failed to produce a trustworthy allocation",
-                evidence={
-                    "optimizer_message": str(e)[:500],
+            baseline_xr = allocation_to_xarray(model, baseline)
+            lower_flat = lower_da.transpose(*baseline_xr.dims).values.flatten()
+            upper_flat = upper_da.transpose(*baseline_xr.dims).values.flatten()
+            x0_baseline = _project_to_bounds_and_budget(
+                baseline_xr.values.flatten(), lower_flat, upper_flat, budget
+            )
+        except Exception:
+            baseline = {}
+            x0_baseline = None
+
+        try:
+            mid_da = (lower_da + upper_da) / 2.0
+            if baseline_xr is not None:
+                lower_flat = lower_da.transpose(*baseline_xr.dims).values.flatten()
+                upper_flat = upper_da.transpose(*baseline_xr.dims).values.flatten()
+                mid_flat = mid_da.transpose(*baseline_xr.dims).values.flatten()
+            else:
+                lower_flat = lower_da.values.flatten()
+                upper_flat = upper_da.values.flatten()
+                mid_flat = mid_da.values.flatten()
+            x0_midpoint = _project_to_bounds_and_budget(mid_flat, lower_flat, upper_flat, budget)
+        except Exception:
+            x0_midpoint = None
+
+        strategies = [
+            ("default", None, None),
+            ("historical_baseline", x0_baseline, None),
+            ("bounded_midpoint", x0_midpoint, None),
+            ("slsqp_relaxed_tolerance", x0_baseline, {"method": "SLSQP", "ftol": 1e-6, "maxiter": 2000}),
+            ("slsqp_midpoint_relaxed", x0_midpoint, {"method": "SLSQP", "ftol": 1e-6, "maxiter": 2000}),
+        ]
+
+        allocation = None
+        result = None
+        attempts: list[dict[str, Any]] = []
+        last_error = None
+        last_error_type = None
+        last_res = None
+
+        for strategy_name, candidate_x0, min_kwargs in strategies:
+            if candidate_x0 is None and strategy_name != "default":
+                continue
+
+            call_kwargs: dict[str, Any] = {"budget": budget, "budget_bounds": bounds}
+            if candidate_x0 is not None:
+                call_kwargs["x0"] = candidate_x0
+            if min_kwargs is not None:
+                call_kwargs["minimize_kwargs"] = min_kwargs
+
+            try:
+                cur_alloc, cur_res = wrapper.optimize_budget(**call_kwargs)
+            except TypeError as te:
+                if strategy_name != "default":
+                    continue
+                last_error = te
+                last_error_type = type(te).__name__
+                break
+            except Exception as e:
+                last_error = e
+                last_error_type = type(e).__name__
+                attempts.append(
+                    {
+                        "attempt": len(attempts) + 1,
+                        "strategy": strategy_name,
+                        "solver": (min_kwargs or {}).get("method", "SLSQP"),
+                        "success": False,
+                        "message": str(e)[:500],
+                    }
+                )
+                try:
+                    from pymc_marketing.mmm.budget_optimizer import MinimizeException
+                except ImportError:
+                    MinimizeException = RuntimeError
+                if not isinstance(e, (MinimizeException, RuntimeError, ArithmeticError)):
+                    break
+                continue
+
+            cur_success = getattr(cur_res, "success", None)
+            if cur_success is True:
+                in_bounds = bool(((cur_alloc >= lower_da - 1e-3) & (cur_alloc <= upper_da + 1e-3)).all())
+                total_alloc = float(cur_alloc.sum())
+                budget_conserved = bool(abs(total_alloc - budget) <= max(1e-2, budget * 1e-3))
+                if in_bounds and budget_conserved:
+                    allocation = cur_alloc
+                    result = cur_res
+                    attempts.append(
+                        {
+                            "attempt": len(attempts) + 1,
+                            "strategy": strategy_name,
+                            "solver": (min_kwargs or {}).get("method", "SLSQP"),
+                            "success": True,
+                            "message": str(getattr(cur_res, "message", "converged"))[:500],
+                        }
+                    )
+                    break
+                else:
+                    attempts.append(
+                        {
+                            "attempt": len(attempts) + 1,
+                            "strategy": strategy_name,
+                            "solver": (min_kwargs or {}).get("method", "SLSQP"),
+                            "success": False,
+                            "message": f"Allocation violated constraints: in_bounds={in_bounds}, budget_conserved={budget_conserved}",
+                        }
+                    )
+            else:
+                last_res = cur_res
+                attempts.append(
+                    {
+                        "attempt": len(attempts) + 1,
+                        "strategy": strategy_name,
+                        "solver": (min_kwargs or {}).get("method", "SLSQP"),
+                        "success": False,
+                        "message": str(getattr(cur_res, "message", "non-converged"))[:500],
+                    }
+                )
+
+        if allocation is None or result is None:
+            failed_res = result or last_res
+            if last_error:
+                evidence: dict[str, Any] = {
+                    "optimizer_message": str(last_error)[:500],
                     "optimizer_status": "exception",
-                    "type": type(e).__name__,
-                },
-                next_action="Review budget bounds and fitted model state before retrying",
-            ) from e
-        optimizer_success = getattr(result, "success", None)
-        if optimizer_success is not True:
+                    "type": last_error_type,
+                }
+            else:
+                evidence = {
+                    "optimizer_message": str(getattr(failed_res, "message", ""))[:500],
+                    "optimizer_success": getattr(failed_res, "success", None),
+                }
+            if len(attempts) > 1:
+                evidence["attempts"] = attempts
             raise DomainError(
                 "OPTIMIZATION_FAILED",
                 "Budget optimizer failed to produce a trustworthy allocation",
-                evidence={
-                    "optimizer_message": str(getattr(result, "message", ""))[:500],
-                    "optimizer_success": optimizer_success,
-                },
+                evidence=evidence,
                 next_action="Review budget bounds and optimizer convergence diagnostics",
             )
+
         recommended = allocation_from_xarray(model, allocation)
-        baseline = historical_allocation(
-            model,
-            planning_periods,
-            total_budget=budget,
-        )
-        baseline_xr = allocation_to_xarray(model, baseline)
+        if not baseline:
+            baseline = historical_allocation(
+                model,
+                planning_periods,
+                total_budget=budget,
+            )
+        if baseline_xr is None:
+            baseline_xr = allocation_to_xarray(model, baseline)
         recommended_xr = allocation_to_xarray(model, recommended)
         baseline_samples = wrapper.sample_response_distribution(
             allocation_strategy=baseline_xr,
@@ -697,6 +880,17 @@ class PyMCMarketingAdapter:
         )
         baseline_values = self._response_values(baseline_samples)
         recommended_values = self._response_values(recommended_samples)
+
+        winning_strategy = attempts[-1]["strategy"] if attempts else "default"
+        fallback_used = len(attempts) > 1 and winning_strategy != "default"
+        total_allocated = float(allocation.sum())
+        constraint_val = {
+            "bounds_satisfied": True,
+            "budget_conserved": bool(abs(total_allocated - budget) <= max(1e-2, budget * 1e-3)),
+            "total_allocated": total_allocated,
+            "target_budget": float(budget),
+        }
+
         return {
             "baseline_allocation": baseline,
             "recommended_allocation": recommended,
@@ -709,7 +903,16 @@ class PyMCMarketingAdapter:
             ),
             "response_variable": "total_media_contribution_original_scale",
             "optimizer_success": True,
+            "optimizer_status": "converged",
             "optimizer_message": str(getattr(result, "message", ""))[:500],
+            "solver": "SLSQP",
+            "converged": True,
+            "attempts": attempts,
+            "attempts_count": len(attempts),
+            "fallback_used": fallback_used,
+            "initialization_strategy": winning_strategy,
+            "constraint_validation": constraint_val,
+            "objective_value": float(getattr(result, "fun", 0.0)) if hasattr(result, "fun") and getattr(result, "fun") is not None else None,
             "planning_start": str(dates.min().date()),
             "planning_end": str(dates.max().date()),
         }

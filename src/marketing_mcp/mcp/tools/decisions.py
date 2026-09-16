@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from marketing_mcp.app import Application
+from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.schemas.models import (
@@ -28,24 +29,22 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             "Does not fabricate estimates."
         ),
     )
+    @mcp_error_boundary("get_channel_contributions", "decisions", "inference")
     async def get_channel_contributions(model_id: str):
-        try:
-            principal = resolve_context().principal
-            require_scope(principal, scopes_for_tool("get_channel_contributions")[0])
-            model_rec = app.metadata.get_model(model_id)
-            if not model_rec:
-                raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
-            authorize_model(principal, model_rec, action="read")
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("get_channel_contributions")[0])
+        model_rec = app.metadata.get_model(model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
 
-            r = app.decisions.contributions(model_id)
-            return env(
-                summary={"model_id": model_id, "channels": r["channels"]},
-                evidence={"variable": r["variable"]},
-                provenance=r["provenance"],
-                next_actions=["get_incremental_roas", "simulate_budget"],
-            )
-        except DomainError as e:
-            return e.to_dict()
+        r = app.decisions.contributions(model_id)
+        return env(
+            summary={"model_id": model_id, "channels": r["channels"]},
+            evidence={"variable": r["variable"]},
+            provenance=r["provenance"],
+            next_actions=["get_incremental_roas", "simulate_budget"],
+        )
 
     @mcp.tool(
         name="get_incremental_roas",
@@ -54,41 +53,37 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             "including posterior uncertainty. No ad-hoc LLM ROAS calculation."
         ),
     )
+    @mcp_error_boundary("get_incremental_roas", "decisions", "inference")
     async def get_incremental_roas(model_id: str):
-        try:
-            principal = resolve_context().principal
-            require_scope(principal, scopes_for_tool("get_incremental_roas")[0])
-            model_rec = app.metadata.get_model(model_id)
-            if not model_rec:
-                raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
-            authorize_model(principal, model_rec, action="read")
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("get_incremental_roas")[0])
+        model_rec = app.metadata.get_model(model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
 
-            r = app.decisions.iroas(model_id)
-            return env(
-                summary=r,
-                provenance=r.get("provenance", {}),
-                next_actions=["simulate_budget", "optimize_budget"],
-            )
-        except DomainError as e:
-            return e.to_dict()
+        r = app.decisions.iroas(model_id)
+        return env(
+            summary=r,
+            provenance=r.get("provenance", {}),
+            next_actions=["simulate_budget", "optimize_budget"],
+        )
 
     @mcp.tool(
         name="get_response_curves",
         description="Return response/saturation information sampled by PyMC-Marketing rather than raw posterior arrays.",
     )
+    @mcp_error_boundary("get_response_curves", "decisions", "inference")
     async def get_response_curves(model_id: str):
-        try:
-            principal = resolve_context().principal
-            require_scope(principal, scopes_for_tool("get_response_curves")[0])
-            model_rec = app.metadata.get_model(model_id)
-            if not model_rec:
-                raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
-            authorize_model(principal, model_rec, action="read")
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("get_response_curves")[0])
+        model_rec = app.metadata.get_model(model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
 
-            r = app.decisions.response_curves(model_id)
-            return env(summary=r, provenance=r.get("provenance", {}))
-        except DomainError as e:
-            return e.to_dict()
+        r = app.decisions.response_curves(model_id)
+        return env(summary=r, provenance=r.get("provenance", {}))
 
     @mcp.tool(
         name="simulate_budget",
@@ -97,24 +92,22 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             "response sampling. Rejected models are blocked."
         ),
     )
+    @mcp_error_boundary("simulate_budget", "decisions", "inference")
     async def simulate_budget(config: BudgetSimulationInput):
-        try:
-            principal = resolve_context().principal
-            require_scope(principal, scopes_for_tool("simulate_budget")[0])
-            model_rec = app.metadata.get_model(config.model_id)
-            if not model_rec:
-                raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
-            authorize_model(principal, model_rec, action="read")
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("simulate_budget")[0])
+        model_rec = app.metadata.get_model(config.model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
 
-            r = app.decisions.simulate(config)
-            return env(
-                summary=r,
-                warnings=r.get("warnings", []),
-                evidence={"caveats": r.get("caveats", [])},
-                provenance=r.get("provenance", {}),
-            )
-        except DomainError as e:
-            return e.to_dict()
+        r = app.decisions.simulate(config)
+        return env(
+            summary=r,
+            warnings=r.get("warnings", []),
+            evidence={"caveats": r.get("caveats", [])},
+            provenance=r.get("provenance", {}),
+        )
 
     @mcp.tool(
         name="optimize_budget",
@@ -123,27 +116,25 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             "then compare baseline and recommended posterior responses. Requires a diagnosed model."
         ),
     )
+    @mcp_error_boundary("optimize_budget", "decisions", "optimization")
     async def optimize_budget(config: BudgetOptimizationInput):
-        try:
-            principal = resolve_context().principal
-            require_scope(principal, scopes_for_tool("optimize_budget")[0])
-            model_rec = app.metadata.get_model(config.model_id)
-            if not model_rec:
-                raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
-            authorize_model(principal, model_rec, action="read")
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("optimize_budget")[0])
+        model_rec = app.metadata.get_model(config.model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
 
-            r = app.decisions.optimize(config)
-            return env(
-                summary=r,
-                warnings=r.get("warnings", []),
-                evidence={
-                    "identifiability_risks": r.get("identifiability_risks", []),
-                    "channel_confidence": r.get("channel_confidence", {}),
-                },
-                provenance=r.get("provenance", {}),
-            )
-        except DomainError as e:
-            return e.to_dict()
+        r = app.decisions.optimize(config)
+        return env(
+            summary=r,
+            warnings=r.get("warnings", []),
+            evidence={
+                "identifiability_risks": r.get("identifiability_risks", []),
+                "channel_confidence": r.get("channel_confidence", {}),
+            },
+            provenance=r.get("provenance", {}),
+        )
 
     @mcp.tool(
         name="recommend_next_measurement",
@@ -152,18 +143,16 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             "It can explicitly return that no single experiment is implied."
         ),
     )
+    @mcp_error_boundary("recommend_next_measurement", "decisions", "inference")
     async def recommend_next_measurement(model_id: str):
-        try:
-            principal = resolve_context().principal
-            require_scope(principal, scopes_for_tool("recommend_next_measurement")[0])
-            model_rec = app.metadata.get_model(model_id)
-            if not model_rec:
-                raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
-            authorize_model(principal, model_rec, action="read")
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("recommend_next_measurement")[0])
+        model_rec = app.metadata.get_model(model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
 
-            return env(summary=app.decisions.recommend_measurement(model_id))
-        except DomainError as e:
-            return e.to_dict()
+        return env(summary=app.decisions.recommend_measurement(model_id))
 
     @mcp.tool(
         name="optimize_flighting",
@@ -176,25 +165,23 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             "and net-profit estimates."
         ),
     )
+    @mcp_error_boundary("optimize_flighting", "decisions", "optimization")
     async def optimize_flighting(config: FlightingOptimizationInput):
-        try:
-            principal = resolve_context().principal
-            require_scope(principal, scopes_for_tool("optimize_flighting")[0])
-            model_rec = app.metadata.get_model(config.model_id)
-            if not model_rec:
-                raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
-            authorize_model(principal, model_rec, action="read")
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("optimize_flighting")[0])
+        model_rec = app.metadata.get_model(config.model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
 
-            r = app.decisions.optimize_flighting(config)
-            return env(
-                summary={
-                    "model_id": config.model_id,
-                    "total_budget": config.total_budget,
-                    "planning_weeks": config.planning_weeks,
-                    "objective": config.objective,
-                },
-                evidence=r,
-                next_actions=["simulate_budget", "get_channel_contributions"],
-            )
-        except DomainError as e:
-            return e.to_dict()
+        r = app.decisions.optimize_flighting(config)
+        return env(
+            summary={
+                "model_id": config.model_id,
+                "total_budget": config.total_budget,
+                "planning_weeks": config.planning_weeks,
+                "objective": config.objective,
+            },
+            evidence=r,
+            next_actions=["simulate_budget", "get_channel_contributions"],
+        )

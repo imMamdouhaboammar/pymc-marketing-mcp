@@ -90,9 +90,29 @@ def create_http_app(
             return HTMLResponse(index_file.read_text(encoding="utf-8"))
         return await health_check(request)
 
+    async def well_known_mcp(_request):
+        return JSONResponse({
+            "name": "PyMC Marketing MCP",
+            "version": __version__,
+            "description": "Production Marketing Mix Modeling (MMM) & Customer Lifetime Value (CLV) Bayesian Platform",
+            "protocol_version": "2024-11-05",
+            "mcp_endpoint": "/mcp",
+            "transports": ["streamable-http", "stdio"],
+            "authentication": {
+                "type": "bearer" if auth_mgr.enabled else "none",
+                "schemes": ["Authorization: Bearer <TOKEN>", "X-API-Key: <KEY>"],
+            },
+            "capabilities": {
+                "tools": True,
+                "resources": True,
+                "prompts": False,
+            },
+        })
+
     app.add_route("/health", health_check, methods=["GET"])
     app.add_route("/health/live", liveness_handler, methods=["GET"])
     app.add_route("/health/ready", create_readiness_handler(app_instance), methods=["GET"])
+    app.add_route("/.well-known/mcp.json", well_known_mcp, methods=["GET"])
     app.add_route(
         "/artifacts/{namespace}/{digest}/download",
         create_artifact_download_handler(app_instance),
@@ -132,8 +152,31 @@ def main():
         default=os.getenv("MARKETING_MCP_API_KEY", None),
         help="Optional API key to secure the MCP server",
     )
+    p.add_argument(
+        "--lookup-error",
+        dest="flag_error_id",
+        help="Look up diagnostic record by error_id and exit",
+    )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+
+    subparsers = p.add_subparsers(dest="subcommand")
+    lookup_parser = subparsers.add_parser("lookup-error", help="Look up diagnostic record by error_id")
+    lookup_parser.add_argument("error_id", help="Error ID (e.g. err_...)")
+
     args = p.parse_args()
+
+    error_id_to_lookup = getattr(args, "error_id", None) or args.flag_error_id
+    if error_id_to_lookup:
+        from marketing_mcp.observability.errors import GLOBAL_ERROR_REGISTRY
+        import json
+        import sys
+
+        rec = GLOBAL_ERROR_REGISTRY.lookup(error_id_to_lookup)
+        if not rec:
+            print(f"Error '{error_id_to_lookup}' not found in in-memory diagnostic registry.", file=sys.stderr)
+            raise SystemExit(1)
+        print(json.dumps(rec, indent=2))
+        return
 
     if args.transport == "stdio":
         create_server().run("stdio")

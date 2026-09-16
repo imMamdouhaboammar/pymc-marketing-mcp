@@ -62,9 +62,39 @@ class DatasetService:
             )
         extension = f".{fmt}"
         if fmt == "csv":
+            stripped = raw.lstrip()
+            if stripped.startswith((b"<!doctype", b"<!DOCTYPE", b"<html", b"<HTML", b"<head", b"<body", b"<?xml")):
+                raise DomainError(
+                    "INVALID_DATASET_CONTENT",
+                    "Provided file content appears to be an HTML or XML document, not a tabular CSV",
+                    evidence={"prefix": raw[:100].decode("utf-8", errors="replace")},
+                    next_action="Provide tabular CSV or Parquet data",
+                )
+            if stripped.startswith(b"{") and stripped.rstrip().endswith(b"}"):
+                raise DomainError(
+                    "INVALID_DATASET_CONTENT",
+                    "Provided file content appears to be JSON markup, not a tabular CSV",
+                    evidence={"prefix": raw[:100].decode("utf-8", errors="replace")},
+                    next_action="Provide tabular CSV or Parquet data",
+                )
             from marketing_mcp.accelerators import fast_sniff_and_validate_csv
 
-            preflight = fast_sniff_and_validate_csv(raw)
+            try:
+                preflight = fast_sniff_and_validate_csv(raw)
+            except Exception as e:
+                raise DomainError(
+                    "INVALID_DATASET_CONTENT",
+                    f"Failed to parse CSV dataset: {e}",
+                    evidence={"error": str(e)},
+                    next_action="Ensure CSV data is properly formatted",
+                ) from e
+            if len(preflight.get("column_names", [])) < 2:
+                raise DomainError(
+                    "INVALID_DATASET_CONTENT",
+                    "Dataset must contain at least two columns (e.g. date and target/channel)",
+                    evidence={"columns": preflight.get("column_names", [])},
+                    next_action="Provide tabular CSV data with headers and multiple columns",
+                )
             row_count = preflight["row_count"]
         else:
             frame = self._read_bytes(raw, extension)
@@ -108,15 +138,39 @@ class DatasetService:
 
     @staticmethod
     def _read_bytes(data: bytes, extension: str):
+        if not data or len(data.strip()) == 0:
+            raise DomainError(
+                "DATASET_EMPTY",
+                "Dataset contains no data",
+                next_action="Provide a non-empty CSV or Parquet file",
+            )
         buffer = BytesIO(data)
-        return pd.read_csv(buffer) if extension == ".csv" else pd.read_parquet(buffer)
+        try:
+            df = pd.read_csv(buffer) if extension == ".csv" else pd.read_parquet(buffer)
+        except Exception as exc:
+            raise DomainError(
+                "DATASET_PARSE_FAILED",
+                f"Failed to parse {extension} dataset: {exc}",
+                evidence={"extension": extension, "error": str(exc)},
+                next_action="Ensure the dataset is a valid, well-formed CSV or Parquet file",
+            ) from exc
+        return df
 
     def load(self, dataset_id: str):
         record = self.metadata.get_dataset(dataset_id)
         blob = record.get("blob")
         if blob is None:
             path = Path(record["path"])
-            return pd.read_csv(path) if path.suffix.lower() == ".csv" else pd.read_parquet(path)
+            try:
+                df = pd.read_csv(path) if path.suffix.lower() == ".csv" else pd.read_parquet(path)
+            except Exception as exc:
+                raise DomainError(
+                    "DATASET_PARSE_FAILED",
+                    f"Failed to parse dataset file: {exc}",
+                    evidence={"path": str(path), "error": str(exc)},
+                    next_action="Ensure the file is a valid CSV or Parquet file",
+                ) from exc
+            return df
         ref = ArtifactRef(**blob)
         data = self.blobs.read_bytes(
             ref,
@@ -224,8 +278,9 @@ class DatasetService:
     def validate(
         self, dataset_id, date_column, target_column, channel_columns, control_columns, dims=None
     ) -> DatasetValidationResult:
+        df = self.load(dataset_id)
         findings = validate_mmm_dataset(
-            self.load(dataset_id),
+            df,
             date_column,
             target_column,
             channel_columns,
@@ -233,8 +288,47 @@ class DatasetService:
             dims=dims or [],
         )
         valid = not any(f.severity == "error" for f in findings)
+
+        temporal_summary = None
+        if date_column in df.columns:
+            clean_dates = (
+                pd.to_datetime(df[date_column], errors="coerce").dropna().sort_values().drop_duplicates()
+            )
+            if len(clean_dates) >= 3:
+                deltas = clean_dates.diff().dropna().dt.days
+                med = float(deltas.median())
+                freq = (
+                    "daily"
+                    if med <= 1.5
+                    else "weekly"
+                    if med <= 8
+                    else "monthly"
+                    if med <= 35
+                    else "irregular"
+                )
+                if freq in ("daily", "weekly"):
+                    step = pd.Timedelta(days=round(med)) if freq == "weekly" else pd.Timedelta(days=1)
+                    expected_index = pd.date_range(clean_dates.min(), clean_dates.max(), freq=step)
+                    missing_dates = expected_index.difference(clean_dates)
+                    temporal_summary = {
+                        "frequency": freq,
+                        "observed_periods": len(clean_dates),
+                        "expected_periods": len(expected_index),
+                        "missing_period_count": len(missing_dates),
+                    }
+                else:
+                    temporal_summary = {
+                        "frequency": freq,
+                        "observed_periods": len(clean_dates),
+                        "expected_periods": len(clean_dates),
+                        "missing_period_count": 0,
+                    }
+
         return DatasetValidationResult(
-            dataset_id=dataset_id, findings=findings, valid_for_modeling=valid
+            dataset_id=dataset_id,
+            findings=findings,
+            valid_for_modeling=valid,
+            temporal_summary=temporal_summary,
         )
 
 

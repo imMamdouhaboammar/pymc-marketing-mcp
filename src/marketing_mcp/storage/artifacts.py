@@ -10,6 +10,7 @@ from pathlib import Path
 from marketing_mcp.errors import DomainError
 from marketing_mcp.repositories.models import ArtifactRef
 from marketing_mcp.security import safe_identifier
+from marketing_mcp.security.artifact_token import generate_artifact_download_token
 
 
 class LocalArtifactStore:
@@ -289,17 +290,22 @@ class LocalArtifactStore:
         signed_url = self.generate_signed_url(ref, owner=owner, tenant_id=tenant_id)
         namespace = self._namespace(ref.owner, ref.tenant_id)
         base = base_url.rstrip("/")
-        stream_url = f"{base}/artifacts/{namespace}/{ref.sha256}/download"
+        download_token = generate_artifact_download_token(
+            namespace=namespace,
+            digest=ref.sha256,
+            owner=owner,
+            tenant_id=tenant_id,
+            expires_in_seconds=86400,
+        )
+        stream_url = f"{base}/artifacts/{namespace}/{ref.sha256}/download?token={download_token}"
         download_url = signed_url or stream_url
         safe_name = export_name or f"artifact_{ref.sha256[:12]}.bin"
 
-        auth_header = f' -H "Authorization: Bearer {api_key}"' if api_key and not signed_url else ""
-        curl_cmd = f'curl -fSL{auth_header} "{download_url}" -o "{safe_name}"'
+        curl_cmd = f'curl -fSL "{download_url}" -o "{safe_name}"'
         python_snippet = (
             f"import urllib.request, shutil\n"
             f"url = '{download_url}'\n"
-            f"headers = {{'Authorization': 'Bearer {api_key}'}} if '{api_key}' and not '{bool(signed_url)}' else {{}}\n"
-            f"req = urllib.request.Request(url, headers=headers)\n"
+            f"req = urllib.request.Request(url)\n"
             f"with urllib.request.urlopen(req) as resp, open('{safe_name}', 'wb') as f:\n"
             f"    shutil.copyfileobj(resp, f)\n"
             f"print('Successfully downloaded {safe_name}')"
@@ -311,6 +317,7 @@ class LocalArtifactStore:
             "size_mb": round(ref.size_bytes / (1024 * 1024), 2),
             "sha256": ref.sha256,
             "download_url": download_url,
+            "download_token": download_token,
             "is_signed_url": bool(signed_url),
             "sandbox_curl_command": curl_cmd,
             "python_snippet": python_snippet,

@@ -31,6 +31,8 @@ class StorageGarbageCollector:
         deleted_count = 0
         cleaned_paths: list[str] = []
 
+        gc_errors: list[str] = []
+
         # 1. Clean temporary directories in system temp (/tmp/marketing-mcp-*)
         if clean_tmp:
             temp_root = Path(tempfile.gettempdir())
@@ -52,8 +54,8 @@ class StorageGarbageCollector:
                         freed_bytes += size
                         deleted_count += 1
                         cleaned_paths.append(str(entry))
-                except Exception:
-                    continue
+                except Exception as exc:
+                    gc_errors.append(f"Temp cleanup failed for {entry}: {exc}")
 
         # 2. Clean delivered/exported artifacts from lifecycle table
         if self.metadata_conn:
@@ -62,7 +64,7 @@ class StorageGarbageCollector:
                 rows = self.metadata_conn.execute(
                     """
                     SELECT artifact_uri, sha256 FROM artifact_lifecycle
-                    WHERE status = exported AND (expires_at IS NOT NULL AND expires_at <= ?)
+                    WHERE status = 'exported' AND (expires_at IS NOT NULL AND expires_at <= ?)
                     """,
                     (now_iso,),
                 ).fetchall()
@@ -84,8 +86,8 @@ class StorageGarbageCollector:
                         )
                 if not dry_run:
                     self.metadata_conn.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                gc_errors.append(f"Lifecycle cleanup failed: {exc}")
 
         # 3. Clean unreferenced blobs not linked to any model, dataset, or job
         if force_unreferenced and self.metadata_conn:
@@ -99,24 +101,24 @@ class StorageGarbageCollector:
                             referenced_digests.add(d["fingerprint"])
                         if "artifact_ref" in d and d["artifact_ref"]:
                             referenced_digests.add(d["artifact_ref"].get("sha256", ""))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        gc_errors.append(f"Skipping corrupt dataset payload: {exc}")
                 # Scan models
                 for row in self.metadata_conn.execute("SELECT payload FROM models").fetchall():
                     try:
                         d = json.loads(row[0])
                         if "artifact_ref" in d and d["artifact_ref"]:
                             referenced_digests.add(d["artifact_ref"].get("sha256", ""))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        gc_errors.append(f"Skipping corrupt model payload: {exc}")
                 # Scan jobs
                 for row in self.metadata_conn.execute("SELECT result FROM jobs WHERE result IS NOT NULL").fetchall():
                     try:
                         d = json.loads(row[0])
                         if "artifact_ref" in d and d["artifact_ref"]:
                             referenced_digests.add(d["artifact_ref"].get("sha256", ""))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        gc_errors.append(f"Skipping corrupt job result: {exc}")
 
                 referenced_digests.discard("")
 
@@ -134,8 +136,8 @@ class StorageGarbageCollector:
                                     freed_bytes += size
                                     deleted_count += 1
                                     cleaned_paths.append(str(blob_file))
-            except Exception:
-                pass
+            except Exception as exc:
+                gc_errors.append(f"Unreferenced blob cleanup failed: {exc}")
 
         # Remaining stats
         total_remaining_bytes = 0
@@ -155,4 +157,5 @@ class StorageGarbageCollector:
             "remaining_blobs_count": remaining_files,
             "remaining_storage_mb": round(total_remaining_bytes / (1024 * 1024), 2),
             "cleaned_paths": cleaned_paths[:50],
+            "errors": gc_errors,
         }

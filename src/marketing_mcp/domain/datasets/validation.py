@@ -153,6 +153,41 @@ def validate_mmm_dataset(
             )
         )
 
+    # Check temporal continuity (daily, weekly, monthly calendar gaps)
+    clean_dates = dates.dropna().sort_values().drop_duplicates()
+    if len(clean_dates) >= 3:
+        deltas = clean_dates.diff().dropna().dt.days
+        med = float(deltas.median())
+        freq = (
+            "daily"
+            if med <= 1.5
+            else "weekly"
+            if med <= 8
+            else "monthly"
+            if med <= 35
+            else "irregular"
+        )
+        if freq in ("daily", "weekly"):
+            step = pd.Timedelta(days=round(med)) if freq == "weekly" else pd.Timedelta(days=1)
+            expected_index = pd.date_range(clean_dates.min(), clean_dates.max(), freq=step)
+            missing_dates = expected_index.difference(clean_dates)
+            if len(missing_dates) > 0:
+                findings.append(
+                    _f(
+                        "warning",
+                        "MISSING_PERIODS",
+                        f"Detected {len(missing_dates)} missing {freq} calendar periods in date range",
+                        {
+                            "frequency": freq,
+                            "observed_periods": len(clean_dates),
+                            "expected_periods": len(expected_index),
+                            "missing_count": len(missing_dates),
+                            "first_missing_dates": [d.date().isoformat() for d in missing_dates[:10]],
+                        },
+                        "Inspect or impute missing observation dates before fitting MMM to avoid distorted adstock",
+                    )
+                )
+
     for column in [target_column, *channel_columns, *control_columns]:
         if df[column].isna().any():
             findings.append(

@@ -47,6 +47,7 @@ class DatasetValidationResult(BaseModel):
     dataset_id: str
     findings: list[Finding]
     valid_for_modeling: bool
+    temporal_summary: dict[str, Any] | None = None
 
 
 class ColumnSummary(BaseModel):

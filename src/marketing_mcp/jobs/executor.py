@@ -79,10 +79,20 @@ class AsyncioJobExecutor:
             self.repo.update_job(job.job_id, JobStatus.CANCELLED)
         except Exception as e:
             logger.exception("Job %s failed", job.job_id)
+            from marketing_mcp.error_classifier import classify_exception
+            norm = classify_exception(
+                e,
+                operation=job.job_type,
+                component="jobs",
+                stage="execution",
+                request_id=job.job_id,
+                tenant_id=job.tenant_id,
+                job_id=job.job_id,
+            )
             self.repo.update_job(
                 job.job_id,
                 JobStatus.FAILED,
-                error={"code": "JOB_EXECUTION_FAILED", "message": str(e)},
+                error=norm.to_dict(),
             )
         finally:
             self._tasks.pop(job.job_id, None)

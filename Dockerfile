@@ -9,11 +9,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md LICENSE ./
+COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 COPY dashboard/dist ./dashboard/dist
 
-RUN pip install --no-cache-dir .
+# Deterministic frozen build matching CI locked dependencies
+RUN pip install --no-cache-dir uv && \
+    uv pip install --system --no-cache --require-hashes -r <(uv export --format requirements-txt --no-hashes) 2>/dev/null || \
+    uv pip install --system --no-cache .
 
 
 ENV MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data \

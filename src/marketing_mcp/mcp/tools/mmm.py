@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from marketing_mcp.app import Application
+from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.schemas.models import (
@@ -35,6 +36,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             "Per-channel adstock/saturation overrides can be set via channel_priors."
         ),
     )
+    @mcp_error_boundary(operation="fit_mmm", component="ModelingService", stage="sampling")
     async def fit_mmm(config: FitMMMInput):
         try:
             principal = resolve_context().principal
@@ -57,6 +59,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
         name="get_model_status",
         description="Get persisted model fit state, lineage, and safe failure information.",
     )
+    @mcp_error_boundary(operation="get_model_status", component="ModelingService")
     async def get_model_status(model_id: str):
         try:
             principal = resolve_context().principal
@@ -77,6 +80,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             "coverage, predictive error, and residual behavior before decision tools may run."
         ),
     )
+    @mcp_error_boundary(operation="diagnose_mmm", component="DiagnosticsService", stage="diagnostics")
     async def diagnose_mmm(model_id: str):
         try:
             principal = resolve_context().principal
@@ -112,6 +116,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             "Evaluates out-of-sample predictive RMSE/NRMSE across multiple temporal folds."
         ),
     )
+    @mcp_error_boundary(operation="cross_validate_mmm", component="DiagnosticsService", stage="cross_validation")
     async def cross_validate_mmm(input: CrossValidateMMMInput):
         try:
             principal = resolve_context().principal
@@ -137,6 +142,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             "under alternative adstock and saturation priors."
         ),
     )
+    @mcp_error_boundary(operation="evaluate_prior_sensitivity", component="DiagnosticsService", stage="prior_sensitivity")
     async def evaluate_prior_sensitivity(input: PriorSensitivityInput):
         try:
             principal = resolve_context().principal
@@ -162,6 +168,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             "Produces a new calibrated model artifact linked via lineage."
         ),
     )
+    @mcp_error_boundary(operation="calibrate_mmm", component="ModelingService", stage="calibration")
     async def calibrate_mmm(input: CalibrateMMMInput):
         try:
             principal = resolve_context().principal
@@ -184,6 +191,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
         name="archive_model",
         description="Archive a model record and update its lifecycle state.",
     )
+    @mcp_error_boundary(operation="archive_model", component="ModelingService")
     async def archive_model(input: ArchiveModelInput):
         try:
             principal = resolve_context().principal
@@ -208,6 +216,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             "actual_vs_predicted, channel_contribution_share."
         ),
     )
+    @mcp_error_boundary(operation="get_posterior_plots", component="PlottingService", stage="plotting")
     async def get_posterior_plots(config: GetPosteriorPlotsInput):
         try:
             principal = resolve_context().principal

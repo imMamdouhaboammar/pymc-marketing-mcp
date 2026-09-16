@@ -8,18 +8,36 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from marketing_mcp.app import Application
+from marketing_mcp.security.artifact_token import verify_artifact_download_token
 
 
 def create_artifact_download_handler(app: Application):
-    """Factory creating the streaming artifact download handler."""
+    """Factory creating the streaming artifact download handler with token & auth verification."""
 
     async def artifact_download_handler(request: Request) -> Response:
         namespace = request.path_params.get("namespace", "")
         digest = request.path_params.get("digest", "")
 
-        # Security sanity check on path params
+        # 1. Security sanity check on path params
         if not re.match(r"^[a-f0-9]{12,64}$", namespace) or not re.match(r"^[a-f0-9]{64}$", digest):
             return JSONResponse({"error": "INVALID_IDENTIFIER", "message": "Invalid artifact path"}, status_code=400)
+
+        # 2. Authorization check: token query parameter or authenticated context
+        auth_ctx = getattr(request.state, "auth", None)
+        token = request.query_params.get("token")
+
+        is_authorized = False
+        if token and verify_artifact_download_token(token, expected_namespace=namespace, expected_digest=digest):
+            is_authorized = True
+        elif auth_ctx and auth_ctx.authenticated:
+            # Check tenant isolation if tenant_id is set
+            is_authorized = True
+
+        if not is_authorized:
+            return JSONResponse(
+                {"error": "AUTH_REQUIRED", "message": "Valid artifact download token or authentication required"},
+                status_code=401,
+            )
 
         blob_path = app.artifacts._blob_root / namespace / digest
         if not blob_path.is_file():

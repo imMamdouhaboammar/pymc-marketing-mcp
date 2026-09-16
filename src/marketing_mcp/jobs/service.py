@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from marketing_mcp.errors import DomainError
 from marketing_mcp.jobs.executor import AsyncioJobExecutor, JobExecutor
 from marketing_mcp.jobs.models import JobRecord, JobStatus
 from marketing_mcp.jobs.repository import JobRepository

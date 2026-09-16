@@ -8,6 +8,7 @@ from typing import Annotated, Any
 from pydantic import Field
 
 from marketing_mcp.app import Application
+from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.security import safe_ingest_path
@@ -34,6 +35,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
             "Supports binary/parquet in 'content_base64', remote download in 'url', or server paths in 'path'."
         ),
     )
+    @mcp_error_boundary(operation="register_dataset", component="DatasetService", stage="ingestion")
     async def register_dataset(
         content: Annotated[
             str | None,
@@ -88,10 +90,12 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                     next_actions=["inspect_dataset", "validate_dataset"],
                 )
 
-            # 2. Base64-encoded bytes
+            # 2. Base64-encoded bytes (Strict validation)
             if content_base64 is not None:
                 try:
-                    raw = base64.b64decode(content_base64)
+                    raw = base64.b64decode(content_base64, validate=True)
+                    if not raw and content_base64.strip():
+                        raise ValueError("Base64 content decoded to empty bytes")
                 except Exception as exc:
                     raise DomainError(
                         "INVALID_BASE64",
@@ -109,39 +113,26 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                     next_actions=["inspect_dataset", "validate_dataset"],
                 )
 
-            # 3. HTTP / HTTPS URL download
+            # 3. HTTP / HTTPS URL download with SSRF protection & streaming byte caps
             target_url = url or (
                 path if (path and (path.startswith("http://") or path.startswith("https://"))) else None
             )
             if target_url is not None:
-                if not (target_url.startswith("http://") or target_url.startswith("https://")):
+                max_allowed_bytes = app.settings.max_dataset_mb * 1024 * 1024
+                from marketing_mcp.security.remote_fetch import safe_fetch_remote_dataset
+
+                raw, content_type = safe_fetch_remote_dataset(
+                    target_url,
+                    max_bytes=max_allowed_bytes,
+                )
+                ct = (content_type or "").lower().split(";")[0].strip()
+                if ct in {"text/html", "application/xhtml+xml", "application/json", "application/xml", "text/xml"}:
                     raise DomainError(
-                        "UNSUPPORTED_SCHEME",
-                        f"URL must start with http:// or https://, got: '{target_url}'",
-                        evidence={"url": target_url},
-                        next_action="Provide a valid http:// or https:// URL",
+                        "INVALID_REMOTE_DATASET",
+                        f"Remote URL returned Content-Type '{content_type}' instead of a tabular CSV or Parquet dataset",
+                        evidence={"url": target_url, "content_type": content_type},
+                        next_action="Provide a direct URL to a valid CSV or Parquet file",
                     )
-                try:
-                    req = urllib.request.Request(
-                        target_url,
-                        headers={"User-Agent": "PyMC-Marketing-MCP/0.4.0 (Dataset Ingest)"},
-                    )
-                    with urllib.request.urlopen(req, timeout=30) as resp:
-                        raw = resp.read()
-                except urllib.error.HTTPError as exc:
-                    raise DomainError(
-                        "UNREACHABLE_SOURCE",
-                        f"HTTP {exc.code} {exc.reason} when downloading dataset from URL: {target_url}",
-                        evidence={"url": target_url, "http_status": exc.code, "reason": str(exc.reason)},
-                        next_action="Verify that the dataset URL is public and accessible",
-                    ) from exc
-                except urllib.error.URLError as exc:
-                    raise DomainError(
-                        "UNREACHABLE_SOURCE",
-                        f"Failed to connect to dataset URL '{target_url}': {exc.reason}",
-                        evidence={"url": target_url, "reason": str(exc.reason)},
-                        next_action="Verify the host name and network connection to the URL",
-                    ) from exc
                 parsed_path = urllib.parse.urlparse(target_url).path
                 ext = (
                     Path(parsed_path).suffix.lower()
@@ -184,19 +175,28 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
         name="list_datasets",
         description="List all registered datasets and available inbox files on the server.",
     )
+    @mcp_error_boundary(operation="list_datasets", component="DatasetService", stage="discovery")
     async def list_datasets():
         try:
             principal = resolve_context().principal
             require_scope(principal, scopes_for_tool("list_datasets")[0])
             registered = app.datasets.list()
-            if principal and principal.tenant_id and principal.tenant_id != "default":
-                registered = [d for d in registered if d.get("tenant_id") == principal.tenant_id]
+
+            is_admin = bool(
+                principal and ("marketing:admin" in (principal.scopes or set()) or "admin" in (principal.scopes or set()))
+            )
+            is_stdio = principal is None or principal.auth_type == "stdio"
+
+            if not (is_admin or is_stdio):
+                caller_tenant = principal.tenant_id if principal else None
+                registered = [d for d in registered if d.get("tenant_id") == caller_tenant]
 
             inbox_files = []
-            if app.settings.ingest_dir.exists():
-                for f in sorted(app.settings.ingest_dir.iterdir()):
-                    if f.is_file() and f.suffix.lower() in {".csv", ".parquet"}:
-                        inbox_files.append({"name": f.name, "size_bytes": f.stat().st_size})
+            if is_admin or is_stdio:
+                if app.settings.ingest_dir.exists():
+                    for f in sorted(app.settings.ingest_dir.iterdir()):
+                        if f.is_file() and f.suffix.lower() in {".csv", ".parquet"}:
+                            inbox_files.append({"name": f.name, "size_bytes": f.stat().st_size})
 
             return env(
                 summary={
@@ -228,6 +228,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
             "Returns candidate targets, channels, controls, frequency, and data issues."
         ),
     )
+    @mcp_error_boundary(operation="inspect_dataset", component="DatasetService", stage="inspection")
     async def inspect_dataset(dataset_id: str):
         try:
             principal = resolve_context().principal
@@ -253,6 +254,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
             "This must pass before fitting."
         ),
     )
+    @mcp_error_boundary(operation="validate_dataset", component="DatasetService", stage="validation")
     async def validate_dataset(
         dataset_id: str,
         date_column: str,
@@ -277,9 +279,15 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 control_columns or [],
                 dims or [],
             )
+            summary = {"dataset_id": dataset_id, "valid_for_modeling": r.valid_for_modeling}
+            evidence = {"findings": [f.model_dump() for f in r.findings]}
+            if r.temporal_summary:
+                summary.update(r.temporal_summary)
+                evidence["temporal_summary"] = r.temporal_summary
+
             return env(
-                summary={"dataset_id": dataset_id, "valid_for_modeling": r.valid_for_modeling},
-                evidence={"findings": [f.model_dump() for f in r.findings]},
+                summary=summary,
+                evidence=evidence,
                 next_actions=["fit_mmm"] if r.valid_for_modeling else ["register_dataset"],
             )
         except DomainError as e:

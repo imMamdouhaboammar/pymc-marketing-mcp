@@ -497,7 +497,9 @@ class PlottingService:
         import matplotlib.pyplot as plt
 
         buf = io.BytesIO()
-        fig.savefig(buf, format=fmt, bbox_inches="tight", dpi=150)
-        plt.close(fig)
-        buf.seek(0)
-        return buf.read()
+        try:
+            fig.savefig(buf, format=fmt, bbox_inches="tight", dpi=150)
+            buf.seek(0)
+            return buf.read()
+        finally:
+            plt.close(fig)

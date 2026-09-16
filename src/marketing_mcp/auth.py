@@ -276,7 +276,7 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, auth_manager: AuthManager, public_paths: set[str] | None = None):
         super().__init__(app)
         self.auth_manager = auth_manager
-        self.public_paths = public_paths or {"/health", "/", "/openapi.json"}
+        self.public_paths = public_paths or {"/health", "/", "/openapi.json", "/.well-known/mcp.json"}
 
     async def dispatch(self, request: Request, call_next) -> Response:
         # 1. Allow health check, dashboard static assets, and public endpoints without auth
