@@ -21,6 +21,7 @@ Following the Compound Engineering loop, `/fable-learning`, and `/convo-learn` m
 | 04 | [Relative Ingest Path Resolution Boundary](./04-relative-ingest-path-resolution-boundary.md) | Data Ingestion / Path Safety | Medium | Safe path resolvers must anchor relative user inputs against `ingest_root` before canonical resolution, rather than resolving against process CWD. |
 | 05 | [NetCDF Model Materialization File Write Omission](./05-netcdf-materialization-file-write-omission.md) | Storage / Model Inference | High | Materialization context managers must write physical payload bytes to temporary disk paths before yielding to native C libraries (NetCDF/HDF5). |
 | 06 | [Bayesian RFM Mathematical Domain Invariants](./06-bayesian-rfm-domain-invariants.md) | Statistical Modeling / Data Hygiene | High | Bayesian BTYD count models mathematically enforce $x = 0 \implies t_x = 0$ and $t_x \le T$. Preflight guards must catch invalid distributions before MCMC sampling. |
+| 07 | [Remote Client Sandbox Data Ingestion & Diagnostic Usability](./07-remote-client-sandbox-data-ingestion.md) | Ingestion / Error Diagnostics | P0 Blocker | Multi-modal ingestion ('content', 'content_base64', 'url') solves client filesystem isolation; batch model validation eliminates repetitive round-trips. |
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "total_capabilities_tracked": 43,
+  "total_capabilities_tracked": 44,
   "tools": [
     {
       "name": "archive_model",
@@ -137,6 +137,13 @@
     },
     {
       "name": "inspect_dataset",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/datasets",
+      "cutover_gate": "G_DATASET_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "list_datasets",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/datasets",
       "cutover_gate": "G_DATASET_PARITY",

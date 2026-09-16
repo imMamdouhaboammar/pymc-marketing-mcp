@@ -24,7 +24,7 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 39 capabilities (12 experimental, 25 stable, 2 deprecated).
+**Totals:** 40 capabilities (12 experimental, 26 stable, 2 deprecated).
 
 
 ## Tools
@@ -41,6 +41,7 @@ approved the model.
 | `predict_expected_spend` | clv | stable | not enforced | `clv.predict_expected_spend` | Predict average transaction monetary spend per customer from a fitted value model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
 | `predict_probability_alive` | clv | stable | not enforced | `clv.predict_probability_alive` | Estimate probability of customer retention/alive from a fitted purchase or churn model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow`<br>`tests/statistical/test_clv_real_models.py::test_real_shifted_beta_geo_workflow` |
 | `inspect_dataset` | datasets | stable | not enforced | `datasets.inspect` | Report columns, dtypes, ranges, and candidate role assignments for a registered dataset. | `tests/unit/test_dataset_service.py::test_register_and_inspect_dataset`<br>`tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists` |
+| `list_datasets` | datasets | stable | not enforced | `datasets.list` | List all registered datasets and available inbox files on the server. | `tests/integration/test_data_ingestion_and_error_diagnostics.py::test_list_datasets_discovery` |
 | `register_dataset` | datasets | stable | not enforced | `datasets.register_file` | Register a CSV/Parquet file from the allowed ingest directory and fingerprint it. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists` |
 | `validate_dataset` | datasets | stable | not enforced | `datasets.validate` | Check a dataset against MMM modeling requirements and report blocking issues. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists` |
 | `get_channel_contributions` | decisions | stable | not enforced | `decisions.contributions` | Report posterior channel contributions with uncertainty intervals. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling` |

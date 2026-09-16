@@ -122,6 +122,16 @@ _INVENTORY: tuple[Capability, ...] = (
         ),
     ),
     _tool(
+        "list_datasets",
+        "datasets",
+        "List all registered datasets and available inbox files on the server.",
+        delegates_to="datasets.list",
+        status="stable",
+        evidence_test_ids=(
+            "tests/integration/test_data_ingestion_and_error_diagnostics.py::test_list_datasets_discovery",
+        ),
+    ),
+    _tool(
         "validate_dataset",
         "datasets",
         "Check a dataset against MMM modeling requirements and report blocking issues.",

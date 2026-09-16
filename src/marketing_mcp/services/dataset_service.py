@@ -33,19 +33,40 @@ class DatasetService:
         self.blobs = storage if isinstance(storage, LocalArtifactStore) else LocalArtifactStore(storage)
         self.max_bytes = max_dataset_mb * 1024 * 1024
 
-    def register_file(self, source: Path, principal: Any = None) -> DatasetRegistration:
-        source = safe_source_path(Path(source), self.max_bytes)
-        raw = source.read_bytes()
+    def register_bytes(
+        self,
+        raw: bytes,
+        format: str = "csv",
+        filename: str | None = None,
+        principal: Any = None,
+    ) -> DatasetRegistration:
+        from marketing_mcp.errors import DomainError
+
+        if len(raw) > self.max_bytes:
+            raise DomainError(
+                "DATASET_TOO_LARGE",
+                f"Dataset exceeds maximum allowed size of {self.max_bytes} bytes",
+                evidence={"size_bytes": len(raw), "max_bytes": self.max_bytes},
+                next_action="Pre-aggregate or filter dataset to reduce size before registering",
+            )
+        fmt = format.lower().lstrip(".")
+        if fmt not in {"csv", "parquet"}:
+            raise DomainError(
+                "UNSUPPORTED_DATASET_FORMAT",
+                f"Unsupported format '{format}'. Only CSV and Parquet are supported",
+                evidence={"provided_format": format},
+                next_action="Provide dataset in CSV or Parquet format",
+            )
+        extension = f".{fmt}"
+        frame = self._read_bytes(raw, extension)
         fingerprint = hashlib.sha256(raw).hexdigest()
         owner = principal.subject if principal is not None else "local"
         tenant_id = principal.tenant_id if principal is not None else None
         identity = f"{tenant_id or 'local'}\0{owner}\0{fingerprint}".encode()
         dataset_id = f"dataset_{hashlib.sha256(identity).hexdigest()[:12]}"
-        extension = source.suffix.lower()
-        frame = self._read_bytes(raw, extension)
         ref = self.blobs.put_bytes(
             raw,
-            content_type="text/csv" if extension == ".csv" else "application/x-parquet",
+            content_type="text/csv" if fmt == "csv" else "application/x-parquet",
             owner=owner,
             tenant_id=tenant_id,
         )
@@ -53,7 +74,7 @@ class DatasetService:
             dataset_id=dataset_id,
             path=ref.uri,
             fingerprint=fingerprint,
-            format="csv" if extension == ".csv" else "parquet",
+            format=fmt,
             rows=len(frame),
             created_at=_utc(),
             owner=owner,
@@ -62,6 +83,17 @@ class DatasetService:
         )
         self.metadata.put_dataset(record.model_dump())
         return record
+
+    def register_file(self, source: Path, principal: Any = None) -> DatasetRegistration:
+        source = safe_source_path(Path(source), self.max_bytes)
+        raw = source.read_bytes()
+        extension = source.suffix.lower()
+        return self.register_bytes(
+            raw,
+            format=extension.lstrip("."),
+            filename=source.name,
+            principal=principal,
+        )
 
     @staticmethod
     def _read_bytes(data: bytes, extension: str):

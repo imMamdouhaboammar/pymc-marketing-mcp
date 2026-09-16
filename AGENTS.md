@@ -156,6 +156,7 @@ All real-world post-mortems and architectural bug fixes are codified in `Failure
 - `04-relative-ingest-path-resolution-boundary.md`: Resolving relative filenames against `ingest_root`.
 - `05-netcdf-materialization-file-write-omission.md`: Ensuring payload bytes written before native NetCDF read.
 - `06-bayesian-rfm-domain-invariants.md`: Enforcing $x = 0 \implies t_x = 0$ for BG/NBD models.
+- `07-remote-client-sandbox-data-ingestion.md`: Multi-modal data ingestion (content, base64, url) and actionable error diagnostics.
 
 ## Release claim rule
 

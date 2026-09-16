@@ -28,11 +28,20 @@ def register_model_selection_tools(mcp, app: Application, context_provider: Any 
         try:
             principal = resolve_context().principal
             require_scope(principal, scopes_for_tool("compare_models")[0])
+            missing = []
             for mid in input.model_ids:
-                model_rec = app.metadata.get_model(mid)
-                if not model_rec:
-                    raise DomainError("MODEL_NOT_FOUND", f"Model '{mid}' was not found")
-                authorize_model(principal, model_rec, action="read")
+                try:
+                    model_rec = app.metadata.get_model(mid)
+                    authorize_model(principal, model_rec, action="read")
+                except DomainError:
+                    missing.append(mid)
+            if missing:
+                raise DomainError(
+                    "MODEL_NOT_FOUND",
+                    f"Model(s) not found: {', '.join(missing)}",
+                    evidence={"missing_model_ids": missing, "provided_model_ids": input.model_ids},
+                    next_action="Verify model IDs using get_model_status or fit models first using fit_mmm",
+                )
 
             r = app.models.compare_models(input.model_ids)
             return env(summary=r)
@@ -52,11 +61,20 @@ def register_model_selection_tools(mcp, app: Application, context_provider: Any 
         try:
             principal = resolve_context().principal
             require_scope(principal, scopes_for_tool("select_best_model")[0])
+            missing = []
             for mid in config.model_ids:
-                model_rec = app.metadata.get_model(mid)
-                if not model_rec:
-                    raise DomainError("MODEL_NOT_FOUND", f"Model '{mid}' was not found")
-                authorize_model(principal, model_rec, action="read")
+                try:
+                    model_rec = app.metadata.get_model(mid)
+                    authorize_model(principal, model_rec, action="read")
+                except DomainError:
+                    missing.append(mid)
+            if missing:
+                raise DomainError(
+                    "MODEL_NOT_FOUND",
+                    f"Model(s) not found: {', '.join(missing)}",
+                    evidence={"missing_model_ids": missing, "provided_model_ids": config.model_ids},
+                    next_action="Verify model IDs using get_model_status or fit models first using fit_mmm",
+                )
 
             r = app.models.select_best_model(config)
             return env(

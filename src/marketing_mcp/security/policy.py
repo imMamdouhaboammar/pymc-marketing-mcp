@@ -30,6 +30,7 @@ TOOL_SCOPES: dict[str, str] = {
     "get_channel_contributions": "marketing:read",
     "get_posterior_plots": "marketing:read",
     "inspect_dataset": "marketing:read",
+    "list_datasets": "marketing:read",
     "validate_dataset": "marketing:read",
     "recommend_next_measurement": "marketing:read",
     # modeling lifecycle

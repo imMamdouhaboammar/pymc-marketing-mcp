@@ -39,7 +39,18 @@ class SQLiteMetadataStore:
             f"SELECT payload FROM {table} WHERE {keycol} = ?", (key,)
         ).fetchone()
         if not row:
-            raise DomainError(code, f"{key} was not found")
+            if code == "DATASET_NOT_FOUND":
+                next_action = "Register the dataset with register_dataset or check available datasets via list_datasets"
+            elif code in ("MODEL_NOT_FOUND", "CLV_MODEL_NOT_FOUND"):
+                next_action = "Fit a model first via fit_mmm or fit_clv_model, or verify the model ID with get_model_status"
+            else:
+                next_action = f"Verify the resource '{key}' exists in table '{table}'"
+            raise DomainError(
+                code,
+                f"{key} was not found",
+                evidence={"resource_id": key, "table": table},
+                next_action=next_action,
+            )
         return json.loads(row["payload"])
 
     def put_dataset(self, payload: dict[str, Any]):
@@ -48,11 +59,19 @@ class SQLiteMetadataStore:
     def get_dataset(self, dataset_id: str) -> dict[str, Any]:
         return self._get("datasets", "dataset_id", dataset_id, "DATASET_NOT_FOUND")
 
+    def list_datasets(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT payload FROM datasets ORDER BY rowid DESC").fetchall()
+        return [json.loads(r["payload"]) for r in rows]
+
     def put_model(self, payload: dict[str, Any]):
         self._put("models", "model_id", payload["model_id"], payload)
 
     def get_model(self, model_id: str) -> dict[str, Any]:
         return self._get("models", "model_id", model_id, "MODEL_NOT_FOUND")
+
+    def list_models(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT payload FROM models ORDER BY rowid DESC").fetchall()
+        return [json.loads(r["payload"]) for r in rows]
 
     def put_clv_model(self, payload: dict[str, Any]):
         self._put("clv_models", "model_id", payload["model_id"], payload)

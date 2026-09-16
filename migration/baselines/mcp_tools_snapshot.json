@@ -1,5 +1,5 @@
 {
-  "total": 33,
+  "total": 34,
   "tools": [
     {
       "name": "archive_model",
@@ -1300,6 +1300,15 @@
       }
     },
     {
+      "name": "list_datasets",
+      "description": "List all registered datasets and available inbox files on the server.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_datasetsArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "list_jobs",
       "description": "List recent asynchronous background jobs for the active tenant.",
       "input_schema": {
@@ -1871,17 +1880,70 @@
     },
     {
       "name": "register_dataset",
-      "description": "Register a local CSV or Parquet marketing dataset and return a stable dataset reference.",
+      "description": "Register a marketing dataset for MMM or CLV analysis and return a stable dataset reference. Supports direct CSV text in 'content', base64-encoded CSV/Parquet in 'content_base64', remote HTTP/HTTPS URL in 'url' or 'path', or an existing server path in 'path'.",
       "input_schema": {
         "properties": {
           "path": {
-            "title": "Path",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Content"
+          },
+          "content_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Content Base64"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Filename"
           }
         },
-        "required": [
-          "path"
-        ],
         "title": "register_datasetArguments",
         "type": "object"
       }
