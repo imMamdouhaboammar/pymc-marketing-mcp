@@ -190,6 +190,7 @@ All real-world post-mortems and architectural bug fixes are codified in `Failure
 - `11-artifact-sandbox-push-and-server-garbage-collection.md`: Direct curl/SHA256 sandbox export and automated server-side garbage collection.
 - `12-saturation-curves-response-fidelity-and-decision-caveats.md`: Saturation curve rendering, response curve granularity, and propagating data sparsity warnings to budget optimization.
 - `13-native-rust-acceleration-pyo3-and-mcmc-gatekeeper.md`: Rust C-extension acceleration, PyO3 dynamic linking on Darwin/Linux, split R-hat edge-case gatekeeping, and zero-downtime Python fallback parity.
+- `14-pyo3-major-version-breaking-api-changes.md`: Never auto-merge multi-version pyo3 bumps without `cargo check --workspace`; pyo3 0.24+ has breaking `IntoPyObject` / `Bound<'py, PyAny>` API changes incompatible with our 0.23 code. Dependabot PR #18 deferred pending migration sprint.
 
 ## Release claim rule
 

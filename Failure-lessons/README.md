@@ -28,6 +28,7 @@ Following the Compound Engineering loop, `/fable-learning`, and `/convo-learn` m
 | 11 | [Artifact Sandbox Push & Server Garbage Collection](./11-artifact-sandbox-push-and-server-garbage-collection.md) | Storage / Client UX | High | Deliver artifacts directly to client sandboxes with curl and SHA256 verification; automate server-side cleanup of /tmp, expired files, and orphan blobs. |
 | 12 | [Saturation Curve Rendering & Decision Identifiability Caveats](./12-saturation-curves-response-fidelity-and-decision-caveats.md) | Plotting / Decision Quality | High | Use canonical `model.plot.saturation_curves` with DataArray `curve`, break down response curves per-channel, and carry forward upstream dataset validation warnings (`LONG_ZERO_SPEND_RUN`) into budget optimization output. |
 | 13 | [Native Rust C-Extension Acceleration & Diagnostic Gatekeeper](./13-native-rust-acceleration-pyo3-and-mcmc-gatekeeper.md) | Performance / LLM Latency | High | Accelerate CSV preflight 2,800x (3.7s to 1.31ms) via SIMD Rust, enforce 0.1ms fail-closed split R-hat MCMC decision gates, downsample curves with LTTB, and guarantee zero-downtime Python fallback. |
+| 14 | [PyO3 Major Version Breaking API Changes (0.23 → 0.29)](./14-pyo3-major-version-breaking-api-changes.md) | Dependency Management / Rust Extension | High | Never auto-merge multi-version PyO3 bumps without `cargo check`; security-motivated dependabot PRs still require compile verification before merge. |
 
 ---
 

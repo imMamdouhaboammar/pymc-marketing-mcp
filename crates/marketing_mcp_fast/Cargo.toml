@@ -8,7 +8,7 @@ name = "marketing_mcp_fast"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.23" }
+pyo3 = { version = "0.23" }  # pyo3 upgrade blocked: 0.24+ breaks IntoPyObject API. See Failure-lessons/14
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rayon = "1.10"
