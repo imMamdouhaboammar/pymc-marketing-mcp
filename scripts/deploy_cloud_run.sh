@@ -6,22 +6,41 @@ set -euo pipefail
 # Production-ready Bayesian Marketing Mix Modeling Serverless Deployment
 # ==============================================================================
 
-PROJECT_ID="${GCP_PROJECT_ID:-project-10698895-5ed8-4764-bb7}"
+# Load local .env if present
+if [ -f ".env" ]; then
+    set -a
+    source .env
+    set +a
+elif [ -f "../.env" ]; then
+    set -a
+    source ../.env
+    set +a
+fi
+
+export CLOUDSDK_METRICS_ENVIRONMENT="${CLOUDSDK_METRICS_ENVIRONMENT:-datacloud.antigravity}"
+
+PROJECT_ID="${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || echo '')}"
+if [ -z "${PROJECT_ID}" ]; then
+    echo "ERROR: No GCP Project ID configured. Set GCP_PROJECT_ID or run 'gcloud config set project <PROJECT_ID>'" >&2
+    exit 1
+fi
 REGION="${GCP_REGION:-us-central1}"
 SERVICE_NAME="${GCP_SERVICE_NAME:-pymc-marketing-mcp}"
 REPO_NAME="${GCP_REPO_NAME:-mcp-servers}"
+BUCKET_NAME="${GCS_BUCKET_NAME:-${PROJECT_ID}-marketing-artifacts}"
 APP_VERSION="${APP_VERSION:-$(python3 -c 'import marketing_mcp; print(marketing_mcp.__version__)' 2>/dev/null || echo '0.4.0')}"
 GIT_SHA="${GIT_SHA:-$(git rev-parse --short=12 HEAD 2>/dev/null || echo 'unknown')}"
 IMAGE_TAG="${IMAGE_TAG:-${APP_VERSION}-g${GIT_SHA}}"
-API_KEY="${MARKETING_MCP_API_KEY:-mcp_live_$(openssl rand -hex 24)}"
+AUTH_ENABLED="${MARKETING_MCP_AUTH_ENABLED:-false}"
+API_KEY="${MARKETING_MCP_API_KEY:-}"
 
 echo "=========================================================="
 echo " Starting PyMC Marketing MCP Deployment to Google Cloud"
-echo " Project:       ${PROJECT_ID}"
-echo " Region:        ${REGION}"
-echo " Service Name:  ${SERVICE_NAME}"
+echo " Project:        ${PROJECT_ID}"
+echo " Region:         ${REGION}"
+echo " Service Name:   ${SERVICE_NAME}"
 echo " Storage Bucket: gs://${BUCKET_NAME}"
-echo " API Key Auth:  ${API_KEY}"
+echo " Auth Enabled:   ${AUTH_ENABLED}"
 echo "=========================================================="
 
 # 1. Set active project
@@ -74,7 +93,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --no-cpu-throttling \
     --execution-environment gen2 \
     --port 8080 \
-    --set-env-vars "MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_API_KEY=${API_KEY},MARKETING_MCP_AUTH_ENABLED=true" \
+    --set-env-vars "MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_API_KEY=${API_KEY},MARKETING_MCP_AUTH_ENABLED=${AUTH_ENABLED},MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true" \
     --add-volume "name=mcp-storage,type=cloud-storage,bucket=${BUCKET_NAME}" \
     --add-volume-mount "volume=mcp-storage,mount-path=/var/lib/marketing-mcp" \
     --allow-unauthenticated
@@ -82,15 +101,16 @@ gcloud run deploy "${SERVICE_NAME}" \
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${REGION}" --format='value(status.url)')
 
 echo "=========================================================="
-echo " Deployment Completed Successfully with Active Auth!"
+echo " Deployment Completed Successfully!"
 echo " Service Base URL:  ${SERVICE_URL}"
 echo " MCP Endpoint:      ${SERVICE_URL}/mcp"
 echo " Health Endpoint:   ${SERVICE_URL}/health"
-echo " Active API Key:    ${API_KEY}"
+echo " Auth Enabled:      ${AUTH_ENABLED}"
 echo "=========================================================="
 echo ""
 echo "Claude Desktop / Cursor / Antigravity Config Snippet:"
 echo "----------------------------------------------------------"
+if [ "${AUTH_ENABLED}" = "true" ]; then
 cat << JSONEOF
 {
   "mcpServers": {
@@ -104,8 +124,21 @@ cat << JSONEOF
 }
 JSONEOF
 echo "----------------------------------------------------------"
-echo ""
-echo "Claude Code CLI Add Command:"
+echo "Claude Code CLI:"
 echo "  claude mcp add pymc-marketing ${SERVICE_URL}/mcp --header \"Authorization: Bearer ${API_KEY}\""
+else
+cat << JSONEOF
+{
+  "mcpServers": {
+    "pymc-marketing": {
+      "url": "${SERVICE_URL}/mcp"
+    }
+  }
+}
+JSONEOF
+echo "----------------------------------------------------------"
+echo "Claude Code CLI:"
+echo "  claude mcp add pymc-marketing ${SERVICE_URL}/mcp"
+fi
 echo ""
 

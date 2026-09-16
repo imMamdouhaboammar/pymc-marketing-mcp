@@ -26,8 +26,9 @@ def safe_source_path(path: Path, max_bytes: int) -> Path:
 
 
 def safe_ingest_path(path: Path, ingest_root: Path, max_bytes: int) -> Path:
-    p = safe_source_path(path, max_bytes)
     root = Path(ingest_root).resolve()
+    target = path if path.is_absolute() else (root / path)
+    p = safe_source_path(target, max_bytes)
     try:
         p.relative_to(root)
     except ValueError as e:

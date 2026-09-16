@@ -19,6 +19,8 @@ class SecurityProfile(str, Enum):
 
     def validate_http_posture(self, host: str, auth_enabled: bool) -> None:
         """Refuse insecure HTTP deployments before Uvicorn starts."""
+        if os.getenv("MARKETING_MCP_ALLOW_ANONYMOUS_HTTP", "").lower() in ("true", "1", "yes"):
+            return
         if self is self.STDIO_LOCAL:
             public_bind = host not in ("127.0.0.1", "localhost", "::1")
             if public_bind and not auth_enabled:
@@ -148,7 +150,8 @@ class Settings(BaseModel):
         # stdio-local: refuse public HTTP binding without explicit opt-in.
         public_bind = self.host not in ("127.0.0.1", "localhost", "::1")
         http_transport = self.transport != "stdio"
-        if public_bind and http_transport and self.enforce_transport_security and not self.auth_enabled:
+        allow_anonymous = os.getenv("MARKETING_MCP_ALLOW_ANONYMOUS_HTTP", "").lower() in ("true", "1", "yes")
+        if public_bind and http_transport and self.enforce_transport_security and not self.auth_enabled and not allow_anonymous:
             raise DomainError(
                 "AUTH_REQUIRED",
                 "Refusing to serve HTTP on a public interface without authentication",

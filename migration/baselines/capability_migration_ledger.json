@@ -1,0 +1,313 @@
+{
+  "schema_version": "1.0",
+  "total_capabilities_tracked": 43,
+  "tools": [
+    {
+      "name": "archive_model",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "calibrate_mmm",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "cancel_job",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "compare_models",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "cross_validate_mmm",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "diagnose_mmm",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/diagnostics",
+      "cutover_gate": "G_DIAGNOSTICS_GATE",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "estimate_customer_lifetime_value",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/clv",
+      "cutover_gate": "G_CLV_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "evaluate_prior_sensitivity",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "fit_clv_model",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/clv",
+      "cutover_gate": "G_CLV_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "fit_mmm",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "fit_purchase_model",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/clv",
+      "cutover_gate": "G_CLV_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "fit_value_model",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/clv",
+      "cutover_gate": "G_CLV_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_channel_contributions",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_churn_risk_cohorts",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/clv",
+      "cutover_gate": "G_CLV_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_incremental_roas",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/decisions",
+      "cutover_gate": "G_DECISION_GATE",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_job_status",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_model_status",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_posterior_plots",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_response_curves",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/decisions",
+      "cutover_gate": "G_DECISION_GATE",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "inspect_dataset",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/datasets",
+      "cutover_gate": "G_DATASET_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "list_jobs",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "optimize_budget",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/decisions",
+      "cutover_gate": "G_DECISION_GATE",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "optimize_flighting",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/decisions",
+      "cutover_gate": "G_DECISION_GATE",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "predict_customer_clv",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/clv",
+      "cutover_gate": "G_CLV_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "predict_expected_purchases",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/clv",
+      "cutover_gate": "G_CLV_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "predict_expected_spend",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/clv",
+      "cutover_gate": "G_CLV_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "predict_probability_alive",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "recommend_next_measurement",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "register_dataset",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/datasets",
+      "cutover_gate": "G_DATASET_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "select_best_model",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/modeling",
+      "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "simulate_budget",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/decisions",
+      "cutover_gate": "G_DECISION_GATE",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "submit_fit_mmm_job",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "validate_dataset",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/datasets",
+      "cutover_gate": "G_DATASET_PARITY",
+      "adapter_compatibility_required": true
+    }
+  ],
+  "resources": [
+    {
+      "uri_template": "marketing://clv/{model_id}",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://datasets/{dataset_id}",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://models/{model_id}",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://models/{model_id}/diagnostics",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://models/{model_id}/lineage",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://models/{model_id}/plots/{plot_type}",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    }
+  ],
+  "dashboard_routes": [
+    {
+      "route": "/api/upload",
+      "method": "POST",
+      "journey_id": "J1_DATA_UPLOAD",
+      "source_repo": "PyMC-Dashboard-Adapter",
+      "target_owner": "apps/web/features",
+      "backend_handler": "apps/gateway/api",
+      "cutover_gate": "G_WEB_E2E"
+    },
+    {
+      "route": "/api/analyze",
+      "method": "POST",
+      "journey_id": "J2_ANALYZE_STREAM",
+      "source_repo": "PyMC-Dashboard-Adapter",
+      "target_owner": "apps/web/features",
+      "backend_handler": "apps/gateway/api",
+      "cutover_gate": "G_WEB_E2E"
+    },
+    {
+      "route": "/api/cancel-show",
+      "method": "POST",
+      "journey_id": "J3_CANCEL_EXECUTION",
+      "source_repo": "PyMC-Dashboard-Adapter",
+      "target_owner": "apps/web/features",
+      "backend_handler": "apps/gateway/api",
+      "cutover_gate": "G_WEB_E2E"
+    },
+    {
+      "route": "/api/clear-files",
+      "method": "POST",
+      "journey_id": "J4_CLEAR_SESSION",
+      "source_repo": "PyMC-Dashboard-Adapter",
+      "target_owner": "apps/web/features",
+      "backend_handler": "apps/gateway/api",
+      "cutover_gate": "G_WEB_E2E"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "repository": "imMamdouhaboammar/pymc-marketing-mcp",
+  "commit": "b2ad9fec341bc34f251c95f3b081909896e1ffb7",
+  "package_name": "pymc-marketing-mcp",
+  "version": "0.4.0",
+  "requires_python": ">=3.12,<3.14",
+  "total_capabilities": 39,
+  "stable_capabilities": [
+    "calibrate_mmm",
+    "cancel_job",
+    "compare_models",
+    "cross_validate_mmm",
+    "diagnose_mmm",
+    "estimate_customer_lifetime_value",
+    "evaluate_prior_sensitivity",
+    "fit_mmm",
+    "fit_purchase_model",
+    "fit_value_model",
+    "get_channel_contributions",
+    "get_incremental_roas",
+    "get_job_status",
+    "get_model_status",
+    "inspect_dataset",
+    "list_jobs",
+    "optimize_budget",
+    "optimize_flighting",
+    "predict_expected_purchases",
+    "predict_expected_spend",
+    "predict_probability_alive",
+    "register_dataset",
+    "simulate_budget",
+    "submit_fit_mmm_job",
+    "validate_dataset"
+  ],
+  "experimental_capabilities": [
+    "marketing://clv/{model_id}",
+    "marketing://datasets/{dataset_id}",
+    "marketing://models/{model_id}",
+    "marketing://models/{model_id}/diagnostics",
+    "marketing://models/{model_id}/lineage",
+    "marketing://models/{model_id}/plots/{plot_type}",
+    "archive_model",
+    "get_churn_risk_cohorts",
+    "get_posterior_plots",
+    "get_response_curves",
+    "recommend_next_measurement",
+    "select_best_model"
+  ],
+  "deprecated_capabilities": [
+    "fit_clv_model",
+    "predict_customer_clv"
+  ],
+  "manifest_sha256": {
+    "pyproject.toml": "991cbe796cd440910269f43be4903cba477c92c61bd3774fc0268733687f4782",
+    "uv.lock": "9a1686c209733ee00b606b50e68706c6131adb8ee7b5993f9a7a05d20db453f5",
+    "capabilities.py": "7057a2fe1b6461af29d6a5f8d3e62214257a75bf0a8b304d22e1e7bb57d79817"
+  }
+}

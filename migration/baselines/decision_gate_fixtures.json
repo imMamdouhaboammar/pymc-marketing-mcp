@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0",
+  "policy": {
+    "divergences_threshold": 0,
+    "rhat_strict_threshold": 1.01,
+    "rhat_max_threshold": 1.05,
+    "ess_bulk_warning_threshold": 400.0,
+    "ess_bulk_minimum_threshold": 50.0,
+    "coverage_94_warning_threshold": 0.80,
+    "coverage_94_minimum_threshold": 0.50,
+    "decision_statuses": ["approved", "approved_with_caution", "rejected"]
+  },
+  "fixtures": [
+    {
+      "name": "optimal_pass",
+      "metrics": {
+        "divergences": 0,
+        "max_rhat": 1.005,
+        "minimum_ess_bulk": 1200.0,
+        "posterior_predictive_coverage_94": 0.94,
+        "posterior_predictive_nrmse": 0.12
+      },
+      "expected_status": "approved",
+      "expected_decision_tools_enabled": true,
+      "expected_failures": [],
+      "expected_warnings_count": 0
+    },
+    {
+      "name": "caution_elevated_rhat",
+      "metrics": {
+        "divergences": 0,
+        "max_rhat": 1.03,
+        "minimum_ess_bulk": 650.0,
+        "posterior_predictive_coverage_94": 0.92,
+        "posterior_predictive_nrmse": 0.15
+      },
+      "expected_status": "approved_with_caution",
+      "expected_decision_tools_enabled": true,
+      "expected_failures": [],
+      "expected_warning_codes": ["ELEVATED_RHAT"]
+    },
+    {
+      "name": "caution_low_ess",
+      "metrics": {
+        "divergences": 0,
+        "max_rhat": 1.008,
+        "minimum_ess_bulk": 250.0,
+        "posterior_predictive_coverage_94": 0.91,
+        "posterior_predictive_nrmse": 0.18
+      },
+      "expected_status": "approved_with_caution",
+      "expected_decision_tools_enabled": true,
+      "expected_failures": [],
+      "expected_warning_codes": ["LOW_EFFECTIVE_SAMPLE_SIZE"]
+    },
+    {
+      "name": "block_divergences",
+      "metrics": {
+        "divergences": 4,
+        "max_rhat": 1.01,
+        "minimum_ess_bulk": 800.0,
+        "posterior_predictive_coverage_94": 0.92,
+        "posterior_predictive_nrmse": 0.14
+      },
+      "expected_status": "rejected",
+      "expected_decision_tools_enabled": false,
+      "expected_failure_metrics": ["divergences"]
+    },
+    {
+      "name": "block_high_rhat",
+      "metrics": {
+        "divergences": 0,
+        "max_rhat": 1.12,
+        "minimum_ess_bulk": 750.0,
+        "posterior_predictive_coverage_94": 0.90,
+        "posterior_predictive_nrmse": 0.16
+      },
+      "expected_status": "rejected",
+      "expected_decision_tools_enabled": false,
+      "expected_failure_metrics": ["r_hat"]
+    },
+    {
+      "name": "block_critically_low_ess",
+      "metrics": {
+        "divergences": 0,
+        "max_rhat": 1.01,
+        "minimum_ess_bulk": 32.0,
+        "posterior_predictive_coverage_94": 0.88,
+        "posterior_predictive_nrmse": 0.22
+      },
+      "expected_status": "rejected",
+      "expected_decision_tools_enabled": false,
+      "expected_failure_metrics": ["minimum_ess_bulk"]
+    },
+    {
+      "name": "block_poor_predictive_coverage",
+      "metrics": {
+        "divergences": 0,
+        "max_rhat": 1.005,
+        "minimum_ess_bulk": 900.0,
+        "posterior_predictive_coverage_94": 0.35,
+        "posterior_predictive_nrmse": 1.25
+      },
+      "expected_status": "rejected",
+      "expected_decision_tools_enabled": false,
+      "expected_failure_metrics": ["posterior_predictive_coverage_94"]
+    }
+  ]
+}

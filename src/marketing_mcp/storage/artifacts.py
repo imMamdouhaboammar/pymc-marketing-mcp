@@ -57,11 +57,22 @@ class LocalArtifactStore:
             handle.flush()
             os.fsync(handle.fileno())
         try:
-            temporary.chmod(0o600)
+            try:
+                temporary.chmod(0o600)
+            except OSError:
+                pass
             try:
                 os.link(temporary, destination)
             except FileExistsError:
                 self._verify_path(destination, ref)
+            except OSError:
+                # GCS FUSE or object storage filesystems do not support hardlinks (Errno 38 / 95)
+                try:
+                    os.replace(temporary, destination)
+                except OSError:
+                    import shutil
+
+                    shutil.move(str(temporary), str(destination))
         finally:
             temporary.unlink(missing_ok=True)
         return ref
@@ -124,7 +135,10 @@ class LocalArtifactStore:
         with tempfile.TemporaryDirectory(prefix="marketing-mcp-artifact-") as directory:
             path = Path(directory) / f"artifact{suffix}"
             path.write_bytes(data)
-            path.chmod(0o600)
+            try:
+                path.chmod(0o600)
+            except OSError:
+                pass
             yield path
 
     def probe(self) -> None:

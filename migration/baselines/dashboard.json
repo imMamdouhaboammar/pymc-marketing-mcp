@@ -1,0 +1,57 @@
+{
+  "repository": "imMamdouhaboammar/PyMC-Dashboard-Adapter",
+  "commit": "ee98c8ec93aeb31e90a4388bea01b80c06d13ba4",
+  "package_name": "echo-radio",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
+    "@google/genai": "^2.22.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "archiver": "^8.0.0",
+    "dotenv": "^17.2.3",
+    "esbuild": "^0.28.0",
+    "express": "^4.21.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "multer": "^2.2.0",
+    "pako": "^2.1.0",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@types/archiver": "^7.0.0",
+    "@types/express": "^4.17.21",
+    "@types/html2canvas": "^0.5.35",
+    "@types/jszip": "^3.4.0",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^22.14.0",
+    "@types/pako": "^2.0.4",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^10.5.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2"
+  },
+  "manifest_sha256": {
+    "package.json": "9f0444ba53959ee4915e689e91c956933d218cc1d87d992c9b79c625cf7299b8",
+    "bun.lock": "c7eee4bd95436bce388a35d91e009f382b4ae6c78e07fcb5ec246f91a523f96c",
+    "server.ts": "cddb52af921992e3b01274758f9e4fc731b7aa028e94efce225af8112d24f62d",
+    "src/App.tsx": "94a52d2558afdb0871ac434b71a92ec7d91d9ac476e783afa2372647af641542"
+  }
+}

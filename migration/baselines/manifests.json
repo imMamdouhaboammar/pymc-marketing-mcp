@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-09-15T18:37:00Z",
+  "target_monorepo": "pymc-marketing-platform",
+  "donor_repositories": {
+    "mcp": {
+      "repository": "imMamdouhaboammar/pymc-marketing-mcp",
+      "commit": "b2ad9fec341bc34f251c95f3b081909896e1ffb7",
+      "role": "scientific_engine_and_mcp_adapter"
+    },
+    "dashboard": {
+      "repository": "imMamdouhaboammar/PyMC-Dashboard-Adapter",
+      "commit": "ee98c8ec93aeb31e90a4388bea01b80c06d13ba4",
+      "role": "donor_ux_and_assistant"
+    }
+  },
+  "invariants": {
+    "no_rust_math": true,
+    "postgres_durable_truth": true,
+    "nats_redeliverable": true,
+    "diagnostic_gate_server_side": true,
+    "browser_no_direct_worker_calls": true,
+    "mcp_stable_compatibility_preserved": true
+  }
+}

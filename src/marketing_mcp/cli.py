@@ -51,13 +51,9 @@ def create_http_app(
     context_provider: Any = None,
     settings: Settings | None = None,
 ):
-    """Build the Streamable HTTP ASGI application without starting a server."""
-    app_instance = application or Application(settings)
-    ctx_provider = context_provider or RequestScopedContextProvider()
-    mcp = create_server(app_instance, context_provider=ctx_provider)
-    app = mcp.streamable_http_app(host=host)
-
-    auth_mgr = auth_manager or AuthManager.from_settings(settings or Settings.from_env())
+    actual_settings = settings or Settings.from_env()
+    app_instance = application or Application(actual_settings)
+    auth_mgr = auth_manager or AuthManager.from_settings(actual_settings)
     if auth_mgr.credential_service is None and hasattr(app_instance, "credentials"):
         auth_mgr.credential_service = app_instance.credentials
         auth_mgr.api_key_validator.credential_service = app_instance.credentials
@@ -65,6 +61,18 @@ def create_http_app(
     if api_key:
         auth_mgr.api_key_validator.add_key(api_key)
         auth_mgr.enabled = True
+
+    if context_provider is not None:
+        ctx_provider = context_provider
+    elif not auth_mgr.enabled:
+        from marketing_mcp.mcp.context import stdio_context_provider
+
+        ctx_provider = stdio_context_provider
+    else:
+        ctx_provider = RequestScopedContextProvider()
+
+    mcp = create_server(app_instance, context_provider=ctx_provider)
+    app = mcp.streamable_http_app(host=host)
 
     app.add_middleware(RequestSafetyMiddleware)
     app.add_middleware(MCPAuthMiddleware, auth_manager=auth_mgr)

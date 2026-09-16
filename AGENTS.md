@@ -108,8 +108,58 @@ Historical docs must say `historical` or clearly name their historical release s
 
 No document may mark G0-G5, H0-H6 or AQG green from assertion alone. Current-head machine evidence is required
 
+## Cloud Run & Remote MCP Deployment Architecture
+
+- **Transport**: Streamable HTTP (`MARKETING_MCP_TRANSPORT=streamable-http`) on port `8080`.
+- **Compute Sizing**: 4 vCPUs, 8GiB RAM, `--no-cpu-throttling`, 1800s timeout to accommodate PyTensor C++/BLAS JIT compilation and MCMC multi-chain sampling.
+- **Persistent Storage**: Google Cloud Storage (GCS) FUSE volume mounted at `/var/lib/marketing-mcp` for durable storage of inbox datasets and posterior NetCDF traces across container lifecycles.
+- **Fail-Closed Default**: Public binding (`0.0.0.0`) requires authentication unless explicitly overridden by `MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true` for public beta deployments.
+
+## Public Beta & FastMCP Execution Context Rules
+
+- When `AUTH_ENABLED=false` and `MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true`, the server defaults its context provider to `stdio_context_provider`.
+- FastMCP's streamable HTTP transport executes tools asynchronously in background coroutine pools where ASGI request context is decoupled. The ambient `stdio_context_provider` ensures all tools execute with valid scopes (`all_scopes()`) and default tenant ownership without dropping context.
+
+## Storage Resiliency & Cloud Storage FUSE Invariants
+
+- Cloud Storage FUSE mounts emulate POSIX filesystems without native inode hardlinks.
+- `LocalArtifactStore` must never assume `os.link` is supported. If `os.link` fails with `OSError` (Errno 38 `ENOSYS`), it must gracefully fall back to atomic rename (`os.replace` / `shutil.move`).
+- Mode flag changes (`chmod`) must tolerate filesystem-level `OSError` without aborting dataset or artifact operations.
+- Materialization context managers must write raw payload bytes to temporary disk paths before yielding to native C libraries (NetCDF4 / HDF5).
+
+## Fast Deploy Workflow
+
+Deploy to Google Cloud Run with one command using dynamic placeholders and automatic GCP project detection:
+
+```bash
+# Public beta mode (unauthenticated, ready for all AI clients)
+./scripts/fast_deploy.sh beta
+
+# Secure production mode (with auto-generated or custom API key)
+./scripts/fast_deploy.sh secure
+```
+
+The script automatically:
+1. Validates `gcloud` authentication and project context.
+2. Enables required Google Cloud APIs (`run`, `artifactregistry`, `cloudbuild`, `storage`).
+3. Provisions the Artifact Registry repository and Cloud Storage persistence bucket.
+4. Builds the container image via Google Cloud Build.
+5. Deploys to Cloud Run with GCS FUSE volume mount and optimal compute flags.
+6. Prints ready-to-copy client configuration snippets for Claude Desktop, Cursor, Windsurf, OpenCode, and Claude Code CLI.
+
+## Failure Lessons & Operational Hardening
+
+All real-world post-mortems and architectural bug fixes are codified in `Failure-lessons/`:
+- `01-fail-closed-anonymous-http-binding.md`: Container crash on 0.0.0.0 without auth.
+- `02-fastmcp-async-worker-context-decoupling.md`: Background worker 401 AUTH_REQUIRED fix.
+- `03-gcs-fuse-posix-hardlink-incompatibility.md`: Errno 38 hardlink fallback for GCS FUSE.
+- `04-relative-ingest-path-resolution-boundary.md`: Resolving relative filenames against `ingest_root`.
+- `05-netcdf-materialization-file-write-omission.md`: Ensuring payload bytes written before native NetCDF read.
+- `06-bayesian-rfm-domain-invariants.md`: Enforcing $x = 0 \implies t_x = 0$ for BG/NBD models.
+
 ## Release claim rule
 
 Before calling work production-ready, release-ready, M4-complete or equivalent, verify that `docs/release-evidence/` contains generated evidence for the exact commit and that the required CI/security/statistical/recovery/agent gates are green
 
 If that evidence is absent, describe the implementation and remaining blockers without promoting the maturity label
+

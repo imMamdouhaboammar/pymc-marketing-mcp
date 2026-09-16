@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-09-15T18:50:00Z",
+  "seed": 42,
+  "datasets": {
+    "mmm_synthetic": {
+      "file": "mmm_synthetic.csv",
+      "row_count": 104,
+      "columns": [
+        "date",
+        "meta",
+        "google",
+        "tiktok",
+        "youtube",
+        "discount",
+        "revenue"
+      ],
+      "sha256": "db1d55259131061d0e36e1b04be7d445385718890ec1fa8a8e73885635fc4e8c",
+      "date_range": [
+        "2023-01-02 00:00:00",
+        "2024-12-23 00:00:00"
+      ],
+      "channels": [
+        "meta",
+        "google",
+        "tiktok",
+        "youtube"
+      ],
+      "target_column": "revenue",
+      "truth_parameters": {
+        "meta": {
+          "alpha": 0.55,
+          "k": 160000.0,
+          "beta": 1100000.0
+        },
+        "google": {
+          "alpha": 0.25,
+          "k": 130000.0,
+          "beta": 1400000.0
+        },
+        "tiktok": {
+          "alpha": 0.35,
+          "k": 110000.0,
+          "beta": 650000.0
+        },
+        "youtube": {
+          "alpha": 0.6,
+          "k": 170000.0,
+          "beta": 800000.0
+        }
+      },
+      "true_total_iroas": {
+        "meta": 6.155594287022691,
+        "google": 6.542571400868846,
+        "tiktok": 5.707187617890071,
+        "youtube": 6.091061916036953
+      }
+    },
+    "clv_rfm_synthetic": {
+      "file": "clv_rfm_synthetic.csv",
+      "row_count": 100,
+      "columns": [
+        "customer_id",
+        "frequency",
+        "recency",
+        "T",
+        "monetary_value"
+      ],
+      "sha256": "676c8629c44485716e430563257322d68b4ace5e3179eb9983baeff1018ac564",
+      "observation_period_T": 52.0,
+      "summary": {
+        "mean_frequency": 3.48,
+        "mean_recency": 24.601714019832812,
+        "mean_monetary_value": 56.65912014241436
+      }
+    },
+    "clv_contractual_synthetic": {
+      "file": "clv_contractual_synthetic.csv",
+      "row_count": 80,
+      "columns": [
+        "customer_id",
+        "last_period",
+        "max_period",
+        "cohort_group"
+      ],
+      "sha256": "54a5aa764095c61c5d4f170da74ff0ed8b2eebb4439f199d1daf53e0174e803a",
+      "max_period": 12
+    }
+  }
+}

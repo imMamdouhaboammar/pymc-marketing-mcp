@@ -285,15 +285,43 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
             path.startswith(("/health", "/assets/"))
             or path in self.public_paths
             or path.endswith((".js", ".css", ".html", ".ico", ".svg", ".png", ".json"))
-            or not self.auth_manager.enabled
         ):
             return await call_next(request)
-
-
 
         # 2. Allow OPTIONS pre-flight for CORS
         if request.method == "OPTIONS":
             return await call_next(request)
+
+        # 3. If authentication is disabled, establish anonymous execution context
+        if not self.auth_manager.enabled:
+            auth_ctx = AuthContext(
+                authenticated=True,
+                client_id="anonymous",
+                scopes=list(all_scopes()),
+                tenant_id="default",
+                auth_type="stdio",
+            )
+            request.state.auth = auth_ctx
+            principal = Principal(
+                subject=auth_ctx.client_id,
+                auth_type="stdio",
+                scopes=all_scopes(),
+                tenant_id="default",
+            )
+            req_id = request.headers.get("x-request-id", secrets.token_hex(8))
+            exec_ctx = ExecutionContext(
+                principal=principal,
+                request_id=req_id,
+                transport="http",
+            )
+            token = set_current_execution_context(exec_ctx)
+            try:
+                return await call_next(request)
+            finally:
+                reset_current_execution_context(token)
+
+
+
 
 
         # 3. Authenticate request

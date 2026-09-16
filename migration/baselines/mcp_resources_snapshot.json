@@ -1,0 +1,41 @@
+{
+  "total": 6,
+  "resources": [
+    {
+      "uri_template": "marketing://clv/{model_id}",
+      "name": "clv_model_resource",
+      "description": "",
+      "mime_type": "text/plain"
+    },
+    {
+      "uri_template": "marketing://datasets/{dataset_id}",
+      "name": "dataset_resource",
+      "description": "",
+      "mime_type": "text/plain"
+    },
+    {
+      "uri_template": "marketing://models/{model_id}",
+      "name": "model_resource",
+      "description": "",
+      "mime_type": "text/plain"
+    },
+    {
+      "uri_template": "marketing://models/{model_id}/diagnostics",
+      "name": "diagnostics_resource",
+      "description": "",
+      "mime_type": "text/plain"
+    },
+    {
+      "uri_template": "marketing://models/{model_id}/lineage",
+      "name": "lineage_resource",
+      "description": "",
+      "mime_type": "text/plain"
+    },
+    {
+      "uri_template": "marketing://models/{model_id}/plots/{plot_type}",
+      "name": "plot_resource",
+      "description": "Serve a cached posterior plot as raw bytes (PNG).",
+      "mime_type": "text/plain"
+    }
+  ]
+}

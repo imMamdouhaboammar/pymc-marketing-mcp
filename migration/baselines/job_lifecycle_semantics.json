@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "states": {
+    "initial": "queued",
+    "active": ["queued", "running", "cancelling"],
+    "terminal": ["succeeded", "failed", "cancelled"]
+  },
+  "valid_transitions": {
+    "queued": ["running", "cancelled"],
+    "running": ["succeeded", "failed", "cancelling", "cancelled"],
+    "cancelling": ["cancelled", "failed"],
+    "succeeded": [],
+    "failed": [],
+    "cancelled": []
+  },
+  "invariants": {
+    "fencing_monotonic": true,
+    "stale_worker_rejected": true,
+    "cancellation_cooperative": true,
+    "idempotency_key_tenant_isolated": true
+  },
+  "error_codes": {
+    "invalid_state_transition": "INVALID_STATE",
+    "stale_claim_rejection": "STALE_JOB_CLAIM",
+    "job_cancelled_abort": "JOB_CANCELLED",
+    "job_not_found": "JOB_NOT_FOUND"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "scope_catalog": [
+    "marketing:read",
+    "marketing:model",
+    "marketing:decide",
+    "marketing:clv",
+    "marketing:admin",
+    "*"
+  ],
+  "matrix": [
+    {
+      "principal": { "subject": "user_a", "tenant_id": "tenant_1", "scopes": ["marketing:read"] },
+      "resource": { "owner": "user_a", "tenant_id": "tenant_1" },
+      "action": "read",
+      "expected_allow": true
+    },
+    {
+      "principal": { "subject": "user_a", "tenant_id": "tenant_1", "scopes": ["marketing:read"] },
+      "resource": { "owner": "user_b", "tenant_id": "tenant_2" },
+      "action": "read",
+      "expected_allow": false,
+      "expected_error": "AUTH_FORBIDDEN"
+    },
+    {
+      "principal": { "subject": "user_a", "tenant_id": "tenant_1", "scopes": ["marketing:read"] },
+      "resource": { "owner": "user_b", "tenant_id": "tenant_1" },
+      "action": "write",
+      "expected_allow": false,
+      "expected_error": "AUTH_FORBIDDEN"
+    },
+    {
+      "principal": { "subject": "admin_1", "tenant_id": "tenant_1", "scopes": ["marketing:admin"] },
+      "resource": { "owner": "user_b", "tenant_id": "tenant_1" },
+      "action": "write",
+      "expected_allow": true
+    },
+    {
+      "principal": null,
+      "resource": { "owner": "user_b", "tenant_id": "tenant_1" },
+      "action": "read",
+      "expected_allow": false,
+      "expected_error": "AUTH_REQUIRED"
+    }
+  ]
+}

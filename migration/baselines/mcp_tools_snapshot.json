@@ -1,0 +1,2426 @@
+{
+  "total": 33,
+  "tools": [
+    {
+      "name": "archive_model",
+      "description": "Archive a model record and update its lifecycle state.",
+      "input_schema": {
+        "$defs": {
+          "ArchiveModelInput": {
+            "properties": {
+              "model_id": {
+                "description": "Model ID to archive",
+                "title": "Model Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "ArchiveModelInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/ArchiveModelInput"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "archive_modelArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "calibrate_mmm",
+      "description": "Calibrate an existing MMM using experimental lift test measurements. Produces a new calibrated model artifact linked via lineage.",
+      "input_schema": {
+        "$defs": {
+          "CalibrateMMMInput": {
+            "properties": {
+              "model_id": {
+                "description": "Fitted base model ID to calibrate",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "lift_tests": {
+                "description": "Lift test experimental measurements",
+                "items": {
+                  "$ref": "#/$defs/LiftTestMeasurement"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "title": "Lift Tests",
+                "type": "array"
+              },
+              "sampler": {
+                "$ref": "#/$defs/SamplerConfig",
+                "description": "Sampler settings for calibration fit"
+              }
+            },
+            "required": [
+              "model_id",
+              "lift_tests"
+            ],
+            "title": "CalibrateMMMInput",
+            "type": "object"
+          },
+          "LiftTestMeasurement": {
+            "properties": {
+              "channel": {
+                "description": "Marketing channel name",
+                "title": "Channel",
+                "type": "string"
+              },
+              "geo": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional geography dimension value",
+                "title": "Geo"
+              },
+              "x": {
+                "description": "Baseline media spend or volume level during experiment",
+                "minimum": 0,
+                "title": "X",
+                "type": "number"
+              },
+              "delta_x": {
+                "description": "Spend or volume increment during experiment",
+                "exclusiveMinimum": 0,
+                "title": "Delta X",
+                "type": "number"
+              },
+              "delta_y": {
+                "description": "Measured incremental KPI response",
+                "title": "Delta Y",
+                "type": "number"
+              },
+              "sigma": {
+                "description": "Standard error/uncertainty of the measured incremental KPI",
+                "exclusiveMinimum": 0,
+                "title": "Sigma",
+                "type": "number"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Experiment description or study identifier",
+                "title": "Description"
+              }
+            },
+            "required": [
+              "channel",
+              "x",
+              "delta_x",
+              "delta_y",
+              "sigma"
+            ],
+            "title": "LiftTestMeasurement",
+            "type": "object"
+          },
+          "SamplerConfig": {
+            "properties": {
+              "draws": {
+                "default": 1000,
+                "description": "Posterior draws per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Draws",
+                "type": "integer"
+              },
+              "tune": {
+                "default": 1000,
+                "description": "Tuning/warmup iterations per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Tune",
+                "type": "integer"
+              },
+              "chains": {
+                "default": 4,
+                "description": "Number of MCMC chains",
+                "maximum": 8,
+                "minimum": 2,
+                "title": "Chains",
+                "type": "integer"
+              },
+              "target_accept": {
+                "default": 0.9,
+                "description": "Target acceptance rate for NUTS",
+                "maximum": 0.999,
+                "minimum": 0.8,
+                "title": "Target Accept",
+                "type": "number"
+              },
+              "random_seed": {
+                "default": 42,
+                "description": "Deterministic random seed",
+                "title": "Random Seed",
+                "type": "integer"
+              }
+            },
+            "title": "SamplerConfig",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/CalibrateMMMInput"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "calibrate_mmmArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "cancel_job",
+      "description": "Cancel a currently queued or running background job.",
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "cancel_jobArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "compare_models",
+      "description": "Compare diagnostics, predictive metrics, and lineage across multiple fitted MMMs.",
+      "input_schema": {
+        "$defs": {
+          "CompareModelsInput": {
+            "properties": {
+              "model_ids": {
+                "description": "List of model IDs to compare",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "minItems": 2,
+                "title": "Model Ids",
+                "type": "array"
+              }
+            },
+            "required": [
+              "model_ids"
+            ],
+            "title": "CompareModelsInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/CompareModelsInput"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "compare_modelsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "cross_validate_mmm",
+      "description": "Run rolling Time-Slice Cross-Validation with PyMC-Marketing. Evaluates out-of-sample predictive RMSE/NRMSE across multiple temporal folds.",
+      "input_schema": {
+        "$defs": {
+          "CrossValidateMMMInput": {
+            "properties": {
+              "model_id": {
+                "description": "Fitted model ID to cross-validate",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "n_init": {
+                "default": 40,
+                "description": "Initial training period count",
+                "maximum": 500,
+                "minimum": 10,
+                "title": "N Init",
+                "type": "integer"
+              },
+              "forecast_horizon": {
+                "default": 10,
+                "description": "Out-of-sample forecast window size",
+                "maximum": 52,
+                "minimum": 1,
+                "title": "Forecast Horizon",
+                "type": "integer"
+              },
+              "step_size": {
+                "default": 10,
+                "description": "Step size between rolling folds",
+                "maximum": 52,
+                "minimum": 1,
+                "title": "Step Size",
+                "type": "integer"
+              },
+              "sampler": {
+                "$ref": "#/$defs/SamplerConfig",
+                "description": "Sampler settings for fold fitting"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "CrossValidateMMMInput",
+            "type": "object"
+          },
+          "SamplerConfig": {
+            "properties": {
+              "draws": {
+                "default": 1000,
+                "description": "Posterior draws per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Draws",
+                "type": "integer"
+              },
+              "tune": {
+                "default": 1000,
+                "description": "Tuning/warmup iterations per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Tune",
+                "type": "integer"
+              },
+              "chains": {
+                "default": 4,
+                "description": "Number of MCMC chains",
+                "maximum": 8,
+                "minimum": 2,
+                "title": "Chains",
+                "type": "integer"
+              },
+              "target_accept": {
+                "default": 0.9,
+                "description": "Target acceptance rate for NUTS",
+                "maximum": 0.999,
+                "minimum": 0.8,
+                "title": "Target Accept",
+                "type": "number"
+              },
+              "random_seed": {
+                "default": 42,
+                "description": "Deterministic random seed",
+                "title": "Random Seed",
+                "type": "integer"
+              }
+            },
+            "title": "SamplerConfig",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/CrossValidateMMMInput"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "cross_validate_mmmArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "diagnose_mmm",
+      "description": "Mandatory diagnostic gate. Checks sampler health plus posterior predictive coverage, predictive error, and residual behavior before decision tools may run.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "diagnose_mmmArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "estimate_customer_lifetime_value",
+      "description": "Estimate discounted net present Customer Lifetime Value (CLV) by combining a fitted purchase model (e.g. BG/NBD) and monetary value model (e.g. Gamma-Gamma).",
+      "input_schema": {
+        "$defs": {
+          "EstimateCLVInput": {
+            "properties": {
+              "purchase_model_id": {
+                "description": "Fitted transaction/purchase model ID (e.g. BG/NBD)",
+                "title": "Purchase Model Id",
+                "type": "string"
+              },
+              "value_model_id": {
+                "description": "Fitted monetary value model ID (e.g. Gamma-Gamma)",
+                "title": "Value Model Id",
+                "type": "string"
+              },
+              "future_t": {
+                "default": 12,
+                "description": "Number of future periods to forecast",
+                "maximum": 104,
+                "minimum": 1,
+                "title": "Future T",
+                "type": "integer"
+              },
+              "discount_rate": {
+                "default": 0.0,
+                "description": "Periodic discount rate for NPV",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Discount Rate",
+                "type": "number"
+              },
+              "top_n": {
+                "anyOf": [
+                  {
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Return top N customers by predicted CLV",
+                "title": "Top N"
+              }
+            },
+            "required": [
+              "purchase_model_id",
+              "value_model_id"
+            ],
+            "title": "EstimateCLVInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/EstimateCLVInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "estimate_customer_lifetime_valueArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "evaluate_prior_sensitivity",
+      "description": "Evaluate sensitivity of commercial conclusions (channel rank order and iROAS) under alternative adstock and saturation priors.",
+      "input_schema": {
+        "$defs": {
+          "PriorSensitivityInput": {
+            "properties": {
+              "model_id": {
+                "description": "Model ID to evaluate for prior sensitivity",
+                "title": "Model Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "PriorSensitivityInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/PriorSensitivityInput"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "evaluate_prior_sensitivityArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "fit_clv_model",
+      "description": "Fit a Bayesian Customer Lifetime Value (CLV) model on RFM transaction data. (Deprecated: prefer fit_purchase_model or fit_value_model).",
+      "input_schema": {
+        "$defs": {
+          "CLVModelConfig": {
+            "properties": {
+              "model_type": {
+                "default": "bg_nbd",
+                "enum": [
+                  "bg_nbd",
+                  "gamma_gamma",
+                  "shifted_beta_geo"
+                ],
+                "title": "Model Type",
+                "type": "string"
+              },
+              "customer_id_column": {
+                "description": "Column containing unique customer identifiers",
+                "title": "Customer Id Column",
+                "type": "string"
+              },
+              "frequency_column": {
+                "description": "Column with repeat purchase count",
+                "title": "Frequency Column",
+                "type": "string"
+              },
+              "recency_column": {
+                "description": "Column with recency (time since last purchase)",
+                "title": "Recency Column",
+                "type": "string"
+              },
+              "T_column": {
+                "description": "Column with total observation period length",
+                "title": "T Column",
+                "type": "string"
+              },
+              "monetary_value_column": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Column with average monetary value per purchase (required for gamma_gamma)",
+                "title": "Monetary Value Column"
+              },
+              "cohort_column": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Column with customer cohort (required for shifted_beta_geo)",
+                "title": "Cohort Column"
+              },
+              "sampler": {
+                "$ref": "#/$defs/SamplerConfig"
+              }
+            },
+            "required": [
+              "customer_id_column",
+              "frequency_column",
+              "recency_column",
+              "T_column"
+            ],
+            "title": "CLVModelConfig",
+            "type": "object"
+          },
+          "FitCLVInput": {
+            "properties": {
+              "dataset_id": {
+                "description": "Registered dataset ID containing RFM data",
+                "title": "Dataset Id",
+                "type": "string"
+              },
+              "config": {
+                "$ref": "#/$defs/CLVModelConfig"
+              }
+            },
+            "required": [
+              "dataset_id",
+              "config"
+            ],
+            "title": "FitCLVInput",
+            "type": "object"
+          },
+          "SamplerConfig": {
+            "properties": {
+              "draws": {
+                "default": 1000,
+                "description": "Posterior draws per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Draws",
+                "type": "integer"
+              },
+              "tune": {
+                "default": 1000,
+                "description": "Tuning/warmup iterations per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Tune",
+                "type": "integer"
+              },
+              "chains": {
+                "default": 4,
+                "description": "Number of MCMC chains",
+                "maximum": 8,
+                "minimum": 2,
+                "title": "Chains",
+                "type": "integer"
+              },
+              "target_accept": {
+                "default": 0.9,
+                "description": "Target acceptance rate for NUTS",
+                "maximum": 0.999,
+                "minimum": 0.8,
+                "title": "Target Accept",
+                "type": "number"
+              },
+              "random_seed": {
+                "default": 42,
+                "description": "Deterministic random seed",
+                "title": "Random Seed",
+                "type": "integer"
+              }
+            },
+            "title": "SamplerConfig",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/FitCLVInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "fit_clv_modelArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "fit_mmm",
+      "description": "Fit a real Bayesian Marketing Mix Model with PyMC-Marketing using typed, controlled configuration. No arbitrary Python is accepted. Supports adstock types: geometric (default), delayed, weibull_cdf, weibull_pdf, binomial, none. Supports saturation types: logistic (default), tanh, tanh_baselined, michaelis_menten, hill, hill_sigmoid, inverse_scaled_logistic, log, root, none. Per-channel adstock/saturation overrides can be set via channel_priors.",
+      "input_schema": {
+        "$defs": {
+          "AdstockConfig": {
+            "properties": {
+              "type": {
+                "default": "geometric",
+                "enum": [
+                  "geometric",
+                  "delayed",
+                  "weibull_cdf",
+                  "weibull_pdf",
+                  "binomial",
+                  "none"
+                ],
+                "title": "Type",
+                "type": "string"
+              },
+              "l_max": {
+                "default": 8,
+                "description": "Maximum lag periods for adstock",
+                "maximum": 52,
+                "minimum": 1,
+                "title": "L Max",
+                "type": "integer"
+              },
+              "normalize": {
+                "default": true,
+                "description": "Whether to normalize adstock weights to sum to 1",
+                "title": "Normalize",
+                "type": "boolean"
+              }
+            },
+            "title": "AdstockConfig",
+            "type": "object"
+          },
+          "ChannelPriorConfig": {
+            "description": "Per-channel prior parameters and/or transform class selection.",
+            "properties": {
+              "adstock": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/AdstockConfig"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "saturation": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SaturationConfig"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "priors": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/PriorDistributionConfig"
+                },
+                "description": "Per-parameter prior overrides (e.g. {'adstock_alpha': PriorDistributionConfig(...)})",
+                "title": "Priors",
+                "type": "object"
+              }
+            },
+            "title": "ChannelPriorConfig",
+            "type": "object"
+          },
+          "FitMMMInput": {
+            "properties": {
+              "dataset_id": {
+                "description": "Registered dataset ID",
+                "title": "Dataset Id",
+                "type": "string"
+              },
+              "date_column": {
+                "description": "Column containing temporal dates",
+                "title": "Date Column",
+                "type": "string"
+              },
+              "target_column": {
+                "description": "Outcome KPI column (e.g. revenue, conversions)",
+                "title": "Target Column",
+                "type": "string"
+              },
+              "channel_columns": {
+                "description": "Media spend column names",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 40,
+                "minItems": 1,
+                "title": "Channel Columns",
+                "type": "array"
+              },
+              "control_columns": {
+                "description": "Non-media control columns",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "title": "Control Columns",
+                "type": "array"
+              },
+              "yearly_seasonality": {
+                "anyOf": [
+                  {
+                    "maximum": 12,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Order of Fourier yearly seasonality",
+                "title": "Yearly Seasonality"
+              },
+              "adstock": {
+                "$ref": "#/$defs/AdstockConfig",
+                "description": "Global adstock configuration (default for all channels)"
+              },
+              "saturation": {
+                "$ref": "#/$defs/SaturationConfig",
+                "description": "Global saturation configuration (default for all channels)"
+              },
+              "sampler": {
+                "$ref": "#/$defs/SamplerConfig",
+                "description": "NUTS sampler configuration"
+              },
+              "dims": {
+                "description": "Multidimensional panel dimensions (e.g. ['geo'])",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 4,
+                "title": "Dims",
+                "type": "array"
+              },
+              "channel_priors": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ChannelPriorConfig"
+                },
+                "description": "Per-channel adstock and/or saturation overrides. Keys must be a subset of channel_columns. Channels not listed use the global adstock/saturation config.",
+                "title": "Channel Priors",
+                "type": "object"
+              }
+            },
+            "required": [
+              "dataset_id",
+              "date_column",
+              "target_column",
+              "channel_columns"
+            ],
+            "title": "FitMMMInput",
+            "type": "object"
+          },
+          "PriorDistributionConfig": {
+            "properties": {
+              "dist": {
+                "default": "Beta",
+                "description": "Prior distribution family (e.g. Beta, Gamma, HalfNormal, Normal)",
+                "title": "Dist",
+                "type": "string"
+              },
+              "kwargs": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "Distribution parameters (e.g. alpha, beta, sigma, mu)",
+                "title": "Kwargs",
+                "type": "object"
+              }
+            },
+            "title": "PriorDistributionConfig",
+            "type": "object"
+          },
+          "SamplerConfig": {
+            "properties": {
+              "draws": {
+                "default": 1000,
+                "description": "Posterior draws per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Draws",
+                "type": "integer"
+              },
+              "tune": {
+                "default": 1000,
+                "description": "Tuning/warmup iterations per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Tune",
+                "type": "integer"
+              },
+              "chains": {
+                "default": 4,
+                "description": "Number of MCMC chains",
+                "maximum": 8,
+                "minimum": 2,
+                "title": "Chains",
+                "type": "integer"
+              },
+              "target_accept": {
+                "default": 0.9,
+                "description": "Target acceptance rate for NUTS",
+                "maximum": 0.999,
+                "minimum": 0.8,
+                "title": "Target Accept",
+                "type": "number"
+              },
+              "random_seed": {
+                "default": 42,
+                "description": "Deterministic random seed",
+                "title": "Random Seed",
+                "type": "integer"
+              }
+            },
+            "title": "SamplerConfig",
+            "type": "object"
+          },
+          "SaturationConfig": {
+            "properties": {
+              "type": {
+                "default": "logistic",
+                "enum": [
+                  "logistic",
+                  "tanh",
+                  "tanh_baselined",
+                  "michaelis_menten",
+                  "hill",
+                  "hill_sigmoid",
+                  "inverse_scaled_logistic",
+                  "log",
+                  "root",
+                  "none"
+                ],
+                "title": "Type",
+                "type": "string"
+              }
+            },
+            "title": "SaturationConfig",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/FitMMMInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "fit_mmmArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "fit_purchase_model",
+      "description": "Fit a Bayesian purchase/transaction frequency model (BG/NBD or Shifted Beta-Geometric). Normalizes user column names to canonical RFM attributes.",
+      "input_schema": {
+        "$defs": {
+          "FitPurchaseModelInput": {
+            "properties": {
+              "dataset_id": {
+                "description": "Registered dataset ID containing RFM data",
+                "title": "Dataset Id",
+                "type": "string"
+              },
+              "customer_id_col": {
+                "default": "customer_id",
+                "description": "Column containing unique customer identifiers",
+                "title": "Customer Id Col",
+                "type": "string"
+              },
+              "frequency_col": {
+                "default": "frequency",
+                "description": "Column with repeat purchase count",
+                "title": "Frequency Col",
+                "type": "string"
+              },
+              "recency_col": {
+                "default": "recency",
+                "description": "Column with recency (time since last purchase)",
+                "title": "Recency Col",
+                "type": "string"
+              },
+              "T_col": {
+                "default": "T",
+                "description": "Column with total observation period length",
+                "title": "T Col",
+                "type": "string"
+              },
+              "cohort_col": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Column with customer cohort (required for sBG)",
+                "title": "Cohort Col"
+              },
+              "model_type": {
+                "default": "bg_nbd",
+                "description": "Purchase model type: 'bg_nbd' (continuous) or 'shifted_beta_geo' (contractual subscription)",
+                "enum": [
+                  "bg_nbd",
+                  "shifted_beta_geo"
+                ],
+                "title": "Model Type",
+                "type": "string"
+              },
+              "sampler": {
+                "$ref": "#/$defs/SamplerConfig"
+              }
+            },
+            "required": [
+              "dataset_id"
+            ],
+            "title": "FitPurchaseModelInput",
+            "type": "object"
+          },
+          "SamplerConfig": {
+            "properties": {
+              "draws": {
+                "default": 1000,
+                "description": "Posterior draws per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Draws",
+                "type": "integer"
+              },
+              "tune": {
+                "default": 1000,
+                "description": "Tuning/warmup iterations per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Tune",
+                "type": "integer"
+              },
+              "chains": {
+                "default": 4,
+                "description": "Number of MCMC chains",
+                "maximum": 8,
+                "minimum": 2,
+                "title": "Chains",
+                "type": "integer"
+              },
+              "target_accept": {
+                "default": 0.9,
+                "description": "Target acceptance rate for NUTS",
+                "maximum": 0.999,
+                "minimum": 0.8,
+                "title": "Target Accept",
+                "type": "number"
+              },
+              "random_seed": {
+                "default": 42,
+                "description": "Deterministic random seed",
+                "title": "Random Seed",
+                "type": "integer"
+              }
+            },
+            "title": "SamplerConfig",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/FitPurchaseModelInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "fit_purchase_modelArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "fit_value_model",
+      "description": "Fit a Bayesian monetary value transaction model (Gamma-Gamma) on repeat customer spending. Requires frequency and average monetary value columns.",
+      "input_schema": {
+        "$defs": {
+          "FitValueModelInput": {
+            "properties": {
+              "dataset_id": {
+                "description": "Registered dataset ID containing monetary transaction data",
+                "title": "Dataset Id",
+                "type": "string"
+              },
+              "customer_id_col": {
+                "default": "customer_id",
+                "description": "Column containing unique customer identifiers",
+                "title": "Customer Id Col",
+                "type": "string"
+              },
+              "frequency_col": {
+                "default": "frequency",
+                "description": "Column with repeat purchase count",
+                "title": "Frequency Col",
+                "type": "string"
+              },
+              "monetary_value_col": {
+                "default": "monetary_value",
+                "description": "Column with average monetary value per transaction",
+                "title": "Monetary Value Col",
+                "type": "string"
+              },
+              "model_type": {
+                "const": "gamma_gamma",
+                "default": "gamma_gamma",
+                "description": "Value model type: 'gamma_gamma'",
+                "title": "Model Type",
+                "type": "string"
+              },
+              "sampler": {
+                "$ref": "#/$defs/SamplerConfig"
+              }
+            },
+            "required": [
+              "dataset_id"
+            ],
+            "title": "FitValueModelInput",
+            "type": "object"
+          },
+          "SamplerConfig": {
+            "properties": {
+              "draws": {
+                "default": 1000,
+                "description": "Posterior draws per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Draws",
+                "type": "integer"
+              },
+              "tune": {
+                "default": 1000,
+                "description": "Tuning/warmup iterations per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Tune",
+                "type": "integer"
+              },
+              "chains": {
+                "default": 4,
+                "description": "Number of MCMC chains",
+                "maximum": 8,
+                "minimum": 2,
+                "title": "Chains",
+                "type": "integer"
+              },
+              "target_accept": {
+                "default": 0.9,
+                "description": "Target acceptance rate for NUTS",
+                "maximum": 0.999,
+                "minimum": 0.8,
+                "title": "Target Accept",
+                "type": "number"
+              },
+              "random_seed": {
+                "default": 42,
+                "description": "Deterministic random seed",
+                "title": "Random Seed",
+                "type": "integer"
+              }
+            },
+            "title": "SamplerConfig",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/FitValueModelInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "fit_value_modelArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_channel_contributions",
+      "description": "Return posterior channel contribution summaries from the fitted PyMC-Marketing model. Does not fabricate estimates.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "get_channel_contributionsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_churn_risk_cohorts",
+      "description": "Identify customers at churn risk from a fitted CLV model. Returns customers whose Bayesian P(alive) is below the specified threshold. Lower threshold = higher confidence of churn. Default threshold: 0.3.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "threshold_p_alive": {
+            "default": 0.3,
+            "title": "Threshold P Alive",
+            "type": "number"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "get_churn_risk_cohortsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_incremental_roas",
+      "description": "Return total and marginal iROAS from PyMC-Marketing's official incrementality API, including posterior uncertainty. No ad-hoc LLM ROAS calculation.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "get_incremental_roasArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_job_status",
+      "description": "Retrieve the execution status, results, or error details of an asynchronous job.",
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "get_job_statusArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_model_status",
+      "description": "Get persisted model fit state, lineage, and safe failure information.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "get_model_statusArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_posterior_plots",
+      "description": "Generate posterior visualization plots from a fitted and approved MMM. Returns base64-encoded PNG/SVG images in the evidence envelope and caches them as MCP resources at marketing://models/{model_id}/plots/{plot_type}. Supported plot types: saturation_curves, waterfall_decomposition, actual_vs_predicted, channel_contribution_share.",
+      "input_schema": {
+        "$defs": {
+          "GetPosteriorPlotsInput": {
+            "properties": {
+              "model_id": {
+                "description": "Fitted model ID to visualize",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "plot_types": {
+                "default": [
+                  "saturation_curves",
+                  "waterfall_decomposition"
+                ],
+                "description": "Which posterior plots to generate",
+                "items": {
+                  "enum": [
+                    "saturation_curves",
+                    "waterfall_decomposition",
+                    "actual_vs_predicted",
+                    "channel_contribution_share"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "title": "Plot Types",
+                "type": "array"
+              },
+              "format": {
+                "default": "png",
+                "description": "Output image format",
+                "enum": [
+                  "png",
+                  "svg"
+                ],
+                "title": "Format",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "GetPosteriorPlotsInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/GetPosteriorPlotsInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "get_posterior_plotsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_response_curves",
+      "description": "Return response/saturation information sampled by PyMC-Marketing rather than raw posterior arrays.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "get_response_curvesArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "inspect_dataset",
+      "description": "Inspect a registered dataset before MMM configuration. Returns candidate targets, channels, controls, frequency, and data issues.",
+      "input_schema": {
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id"
+        ],
+        "title": "inspect_datasetArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_jobs",
+      "description": "List recent asynchronous background jobs for the active tenant.",
+      "input_schema": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "limit": {
+            "default": 50,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "title": "list_jobsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "optimize_budget",
+      "description": "Use PyMC-Marketing budget optimization under channel or dimension-cell constraints, then compare baseline and recommended posterior responses. Requires a diagnosed model.",
+      "input_schema": {
+        "$defs": {
+          "BudgetCellConstraint": {
+            "properties": {
+              "min": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Min"
+              },
+              "max": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max"
+              },
+              "fixed": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Fixed"
+              },
+              "channel": {
+                "title": "Channel",
+                "type": "string"
+              },
+              "dimensions": {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "title": "Dimensions",
+                "type": "object"
+              }
+            },
+            "required": [
+              "channel"
+            ],
+            "title": "BudgetCellConstraint",
+            "type": "object"
+          },
+          "BudgetOptimizationInput": {
+            "properties": {
+              "model_id": {
+                "title": "Model Id",
+                "type": "string"
+              },
+              "budget": {
+                "description": "Total budget amount to allocate",
+                "exclusiveMinimum": 0,
+                "title": "Budget",
+                "type": "number"
+              },
+              "planning_periods": {
+                "default": 8,
+                "description": "Number of future periods in planning horizon",
+                "maximum": 260,
+                "minimum": 1,
+                "title": "Planning Periods",
+                "type": "integer"
+              },
+              "constraints": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ChannelConstraint"
+                },
+                "description": "Channel-level min/max/fixed bounds",
+                "title": "Constraints",
+                "type": "object"
+              },
+              "cell_constraints": {
+                "description": "Cell-level dimension bounds",
+                "items": {
+                  "$ref": "#/$defs/BudgetCellConstraint"
+                },
+                "maxItems": 1000,
+                "title": "Cell Constraints",
+                "type": "array"
+              }
+            },
+            "required": [
+              "model_id",
+              "budget"
+            ],
+            "title": "BudgetOptimizationInput",
+            "type": "object"
+          },
+          "ChannelConstraint": {
+            "properties": {
+              "min": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Min"
+              },
+              "max": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max"
+              },
+              "fixed": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Fixed"
+              }
+            },
+            "title": "ChannelConstraint",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/BudgetOptimizationInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "optimize_budgetArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "optimize_flighting",
+      "description": "Optimize a dynamic weekly media flighting schedule over a planning horizon, accounting for adstock carryover dynamics, channel spend constraints, target iROAS floors, and profit-maximization objectives. The model must be approved or approved_with_caution before optimization. Returns a week-by-week spend table per channel, posterior response distribution, and net-profit estimates.",
+      "input_schema": {
+        "$defs": {
+          "FlightingOptimizationInput": {
+            "properties": {
+              "model_id": {
+                "description": "Approved MMM model ID to use for response estimation",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "total_budget": {
+                "description": "Total budget to allocate across all channels and weeks",
+                "exclusiveMinimum": 0,
+                "title": "Total Budget",
+                "type": "number"
+              },
+              "planning_weeks": {
+                "default": 12,
+                "description": "Planning horizon in weeks",
+                "maximum": 52,
+                "minimum": 2,
+                "title": "Planning Weeks",
+                "type": "integer"
+              },
+              "target_iroas_min": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Minimum acceptable posterior median iROAS across the planning period",
+                "title": "Target Iroas Min"
+              },
+              "margin_pct": {
+                "default": 1.0,
+                "description": "Revenue margin fraction for net-profit objective (revenue \u00d7 margin \u2212 spend)",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Margin Pct",
+                "type": "number"
+              },
+              "channel_constraints": {
+                "description": "Per-channel weekly spend floor/cap and pattern constraints",
+                "items": {
+                  "$ref": "#/$defs/WeeklyFlightingConstraint"
+                },
+                "title": "Channel Constraints",
+                "type": "array"
+              },
+              "objective": {
+                "default": "maximize_response",
+                "description": "Optimization objective function",
+                "enum": [
+                  "maximize_response",
+                  "maximize_net_profit",
+                  "target_roas"
+                ],
+                "title": "Objective",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model_id",
+              "total_budget"
+            ],
+            "title": "FlightingOptimizationInput",
+            "type": "object"
+          },
+          "WeeklyFlightingConstraint": {
+            "properties": {
+              "channel": {
+                "description": "Channel name this constraint applies to",
+                "title": "Channel",
+                "type": "string"
+              },
+              "min_weekly": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Minimum weekly spend floor",
+                "title": "Min Weekly"
+              },
+              "max_weekly": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Maximum weekly spend cap",
+                "title": "Max Weekly"
+              },
+              "pattern": {
+                "default": "flat",
+                "description": "Preferred spend pattern for this channel across the planning horizon",
+                "enum": [
+                  "flat",
+                  "frontloaded",
+                  "backloaded",
+                  "pulsed"
+                ],
+                "title": "Pattern",
+                "type": "string"
+              }
+            },
+            "required": [
+              "channel"
+            ],
+            "title": "WeeklyFlightingConstraint",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/FlightingOptimizationInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "optimize_flightingArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "predict_customer_clv",
+      "description": "Generate per-customer CLV predictions from a fitted BG/NBD model. (Deprecated: prefer predict_expected_purchases or estimate_customer_lifetime_value).",
+      "input_schema": {
+        "$defs": {
+          "PredictCLVInput": {
+            "properties": {
+              "model_id": {
+                "description": "Fitted CLV model ID",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "future_t": {
+                "default": 12,
+                "description": "Number of future periods to forecast",
+                "maximum": 104,
+                "minimum": 1,
+                "title": "Future T",
+                "type": "integer"
+              },
+              "top_n_customers": {
+                "anyOf": [
+                  {
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "If set, return only the top N customers by expected purchases",
+                "title": "Top N Customers"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "PredictCLVInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/PredictCLVInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "predict_customer_clvArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "predict_expected_purchases",
+      "description": "Predict expected future purchase counts per customer from a fitted purchase model (BG/NBD).",
+      "input_schema": {
+        "$defs": {
+          "PredictExpectedPurchasesInput": {
+            "properties": {
+              "model_id": {
+                "description": "Fitted purchase model ID (BG/NBD)",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "future_t": {
+                "default": 12,
+                "description": "Number of future periods to forecast",
+                "maximum": 104,
+                "minimum": 1,
+                "title": "Future T",
+                "type": "integer"
+              },
+              "top_n": {
+                "anyOf": [
+                  {
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Return top N customers by expected purchases",
+                "title": "Top N"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "PredictExpectedPurchasesInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/PredictExpectedPurchasesInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "predict_expected_purchasesArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "predict_expected_spend",
+      "description": "Predict average transaction monetary spend per customer from a fitted Gamma-Gamma value model.",
+      "input_schema": {
+        "$defs": {
+          "PredictExpectedSpendInput": {
+            "properties": {
+              "model_id": {
+                "description": "Fitted monetary value model ID (Gamma-Gamma)",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "top_n": {
+                "anyOf": [
+                  {
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Return top N customers by expected spend",
+                "title": "Top N"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "PredictExpectedSpendInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/PredictExpectedSpendInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "predict_expected_spendArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "predict_probability_alive",
+      "description": "Estimate probability of customer retention/alive from a fitted purchase or churn model.",
+      "input_schema": {
+        "$defs": {
+          "PredictProbabilityAliveInput": {
+            "properties": {
+              "model_id": {
+                "description": "Fitted purchase/churn model ID",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "top_n": {
+                "anyOf": [
+                  {
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Return top N customers by probability alive",
+                "title": "Top N"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "PredictProbabilityAliveInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/PredictProbabilityAliveInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "predict_probability_aliveArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "recommend_next_measurement",
+      "description": "Recommend evidence-gathering options when model/data signals imply material uncertainty. It can explicitly return that no single experiment is implied.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "recommend_next_measurementArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "register_dataset",
+      "description": "Register a local CSV or Parquet marketing dataset and return a stable dataset reference.",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "register_datasetArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "select_best_model",
+      "description": "Compare multiple fitted MMMs using PSIS-LOO, WAIC, or Bayesian stacking weights via ArviZ. All models must be fitted on the same dataset. Returns ranked specifications, LOO/WAIC scores, and recommended model ID. Methods: loo (PSIS-LOO), waic (WAIC), stacking (BMA weights), all (run all three).",
+      "input_schema": {
+        "$defs": {
+          "ModelComparisonInput": {
+            "properties": {
+              "model_ids": {
+                "description": "List of 2\u201310 model IDs to compare. All must be fitted on the same dataset.",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "minItems": 2,
+                "title": "Model Ids",
+                "type": "array"
+              },
+              "criterion": {
+                "default": "loo",
+                "description": "Information criterion: 'loo' (PSIS-LOO), 'waic', or 'both'",
+                "enum": [
+                  "loo",
+                  "waic",
+                  "both"
+                ],
+                "title": "Criterion",
+                "type": "string"
+              },
+              "weighting": {
+                "default": "stacking",
+                "description": "Model weighting method: 'stacking', 'bb-pseudo-bma', or 'pseudo-bma'",
+                "enum": [
+                  "stacking",
+                  "bb-pseudo-bma",
+                  "pseudo-bma"
+                ],
+                "title": "Weighting",
+                "type": "string"
+              },
+              "method": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Deprecated: use `criterion` and `weighting` instead",
+                "title": "Method"
+              }
+            },
+            "required": [
+              "model_ids"
+            ],
+            "title": "ModelComparisonInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/ModelComparisonInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "select_best_modelArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "simulate_budget",
+      "description": "Evaluate the exact requested channel or dimension-cell scenario with posterior response sampling. Rejected models are blocked.",
+      "input_schema": {
+        "$defs": {
+          "BudgetCellChange": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "relative",
+                  "absolute"
+                ],
+                "title": "Type",
+                "type": "string"
+              },
+              "value": {
+                "title": "Value",
+                "type": "number"
+              },
+              "channel": {
+                "title": "Channel",
+                "type": "string"
+              },
+              "dimensions": {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "title": "Dimensions",
+                "type": "object"
+              }
+            },
+            "required": [
+              "type",
+              "value",
+              "channel"
+            ],
+            "title": "BudgetCellChange",
+            "type": "object"
+          },
+          "BudgetChange": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "relative",
+                  "absolute"
+                ],
+                "title": "Type",
+                "type": "string"
+              },
+              "value": {
+                "title": "Value",
+                "type": "number"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ],
+            "title": "BudgetChange",
+            "type": "object"
+          },
+          "BudgetSimulationInput": {
+            "properties": {
+              "model_id": {
+                "title": "Model Id",
+                "type": "string"
+              },
+              "planning_periods": {
+                "default": 8,
+                "maximum": 260,
+                "minimum": 1,
+                "title": "Planning Periods",
+                "type": "integer"
+              },
+              "changes": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/BudgetChange"
+                },
+                "title": "Changes",
+                "type": "object"
+              },
+              "cell_changes": {
+                "items": {
+                  "$ref": "#/$defs/BudgetCellChange"
+                },
+                "maxItems": 1000,
+                "title": "Cell Changes",
+                "type": "array"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "BudgetSimulationInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/BudgetSimulationInput"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "simulate_budgetArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "submit_fit_mmm_job",
+      "description": "Submit an asynchronous MMM fitting job that executes in the background without blocking.",
+      "input_schema": {
+        "$defs": {
+          "AdstockConfig": {
+            "properties": {
+              "type": {
+                "default": "geometric",
+                "enum": [
+                  "geometric",
+                  "delayed",
+                  "weibull_cdf",
+                  "weibull_pdf",
+                  "binomial",
+                  "none"
+                ],
+                "title": "Type",
+                "type": "string"
+              },
+              "l_max": {
+                "default": 8,
+                "description": "Maximum lag periods for adstock",
+                "maximum": 52,
+                "minimum": 1,
+                "title": "L Max",
+                "type": "integer"
+              },
+              "normalize": {
+                "default": true,
+                "description": "Whether to normalize adstock weights to sum to 1",
+                "title": "Normalize",
+                "type": "boolean"
+              }
+            },
+            "title": "AdstockConfig",
+            "type": "object"
+          },
+          "ChannelPriorConfig": {
+            "description": "Per-channel prior parameters and/or transform class selection.",
+            "properties": {
+              "adstock": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/AdstockConfig"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "saturation": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SaturationConfig"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "priors": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/PriorDistributionConfig"
+                },
+                "description": "Per-parameter prior overrides (e.g. {'adstock_alpha': PriorDistributionConfig(...)})",
+                "title": "Priors",
+                "type": "object"
+              }
+            },
+            "title": "ChannelPriorConfig",
+            "type": "object"
+          },
+          "FitMMMInput": {
+            "properties": {
+              "dataset_id": {
+                "description": "Registered dataset ID",
+                "title": "Dataset Id",
+                "type": "string"
+              },
+              "date_column": {
+                "description": "Column containing temporal dates",
+                "title": "Date Column",
+                "type": "string"
+              },
+              "target_column": {
+                "description": "Outcome KPI column (e.g. revenue, conversions)",
+                "title": "Target Column",
+                "type": "string"
+              },
+              "channel_columns": {
+                "description": "Media spend column names",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 40,
+                "minItems": 1,
+                "title": "Channel Columns",
+                "type": "array"
+              },
+              "control_columns": {
+                "description": "Non-media control columns",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "title": "Control Columns",
+                "type": "array"
+              },
+              "yearly_seasonality": {
+                "anyOf": [
+                  {
+                    "maximum": 12,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Order of Fourier yearly seasonality",
+                "title": "Yearly Seasonality"
+              },
+              "adstock": {
+                "$ref": "#/$defs/AdstockConfig",
+                "description": "Global adstock configuration (default for all channels)"
+              },
+              "saturation": {
+                "$ref": "#/$defs/SaturationConfig",
+                "description": "Global saturation configuration (default for all channels)"
+              },
+              "sampler": {
+                "$ref": "#/$defs/SamplerConfig",
+                "description": "NUTS sampler configuration"
+              },
+              "dims": {
+                "description": "Multidimensional panel dimensions (e.g. ['geo'])",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 4,
+                "title": "Dims",
+                "type": "array"
+              },
+              "channel_priors": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ChannelPriorConfig"
+                },
+                "description": "Per-channel adstock and/or saturation overrides. Keys must be a subset of channel_columns. Channels not listed use the global adstock/saturation config.",
+                "title": "Channel Priors",
+                "type": "object"
+              }
+            },
+            "required": [
+              "dataset_id",
+              "date_column",
+              "target_column",
+              "channel_columns"
+            ],
+            "title": "FitMMMInput",
+            "type": "object"
+          },
+          "PriorDistributionConfig": {
+            "properties": {
+              "dist": {
+                "default": "Beta",
+                "description": "Prior distribution family (e.g. Beta, Gamma, HalfNormal, Normal)",
+                "title": "Dist",
+                "type": "string"
+              },
+              "kwargs": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "Distribution parameters (e.g. alpha, beta, sigma, mu)",
+                "title": "Kwargs",
+                "type": "object"
+              }
+            },
+            "title": "PriorDistributionConfig",
+            "type": "object"
+          },
+          "SamplerConfig": {
+            "properties": {
+              "draws": {
+                "default": 1000,
+                "description": "Posterior draws per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Draws",
+                "type": "integer"
+              },
+              "tune": {
+                "default": 1000,
+                "description": "Tuning/warmup iterations per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Tune",
+                "type": "integer"
+              },
+              "chains": {
+                "default": 4,
+                "description": "Number of MCMC chains",
+                "maximum": 8,
+                "minimum": 2,
+                "title": "Chains",
+                "type": "integer"
+              },
+              "target_accept": {
+                "default": 0.9,
+                "description": "Target acceptance rate for NUTS",
+                "maximum": 0.999,
+                "minimum": 0.8,
+                "title": "Target Accept",
+                "type": "number"
+              },
+              "random_seed": {
+                "default": 42,
+                "description": "Deterministic random seed",
+                "title": "Random Seed",
+                "type": "integer"
+              }
+            },
+            "title": "SamplerConfig",
+            "type": "object"
+          },
+          "SaturationConfig": {
+            "properties": {
+              "type": {
+                "default": "logistic",
+                "enum": [
+                  "logistic",
+                  "tanh",
+                  "tanh_baselined",
+                  "michaelis_menten",
+                  "hill",
+                  "hill_sigmoid",
+                  "inverse_scaled_logistic",
+                  "log",
+                  "root",
+                  "none"
+                ],
+                "title": "Type",
+                "type": "string"
+              }
+            },
+            "title": "SaturationConfig",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/FitMMMInput"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "submit_fit_mmm_jobArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "validate_dataset",
+      "description": "Run MMM-specific data quality, panel-shape, and identifiability checks. This must pass before fitting.",
+      "input_schema": {
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "date_column": {
+            "title": "Date Column",
+            "type": "string"
+          },
+          "target_column": {
+            "title": "Target Column",
+            "type": "string"
+          },
+          "channel_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channel Columns",
+            "type": "array"
+          },
+          "control_columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Control Columns"
+          },
+          "dims": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dims"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "date_column",
+          "target_column",
+          "channel_columns"
+        ],
+        "title": "validate_datasetArguments",
+        "type": "object"
+      }
+    }
+  ]
+}

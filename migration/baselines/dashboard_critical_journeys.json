@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "journeys": [
+    {
+      "id": "J1_DATA_UPLOAD",
+      "name": "Dataset Upload and Schema Inspection",
+      "endpoint": "/api/upload",
+      "method": "POST",
+      "content_type": "multipart/form-data",
+      "required_fields": ["file"],
+      "optional_fields": ["sessionId"],
+      "expected_status": 200,
+      "response_schema": {
+        "type": "object",
+        "required": ["name", "content", "size"],
+        "properties": {
+          "name": { "type": "string" },
+          "content": { "type": "string" },
+          "size": { "type": "integer" },
+          "gsUri": { "type": ["string", "null"] },
+          "url": { "type": ["string", "null"] }
+        }
+      }
+    },
+    {
+      "id": "J2_ANALYZE_STREAM",
+      "name": "Analytical Execution Stream",
+      "endpoint": "/api/analyze",
+      "method": "POST",
+      "content_type": "application/json",
+      "required_fields": ["question", "files"],
+      "optional_fields": ["datasetName", "generationId", "environmentId"],
+      "expected_status": 200,
+      "expected_content_type": "text/event-stream",
+      "stream_event_types": ["step", "log", "chunk", "result", "error"]
+    },
+    {
+      "id": "J3_CANCEL_EXECUTION",
+      "name": "Run Cancellation",
+      "endpoint": "/api/cancel-show",
+      "method": "POST",
+      "content_type": "application/json",
+      "required_fields": ["generationId"],
+      "expected_status": 200
+    },
+    {
+      "id": "J4_CLEAR_SESSION",
+      "name": "Clear Session Files",
+      "endpoint": "/api/clear-files",
+      "method": "POST",
+      "content_type": "application/json",
+      "expected_status": 200
+    }
+  ]
+}
