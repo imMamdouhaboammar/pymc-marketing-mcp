@@ -13,6 +13,11 @@ htmlcov
 /dist
 build
 *.egg-info
+target/
+**/target/
+crates/**/target/
+*.dylib
+*.so
 artifacts/*
 !artifacts/.gitkeep
 data/*
