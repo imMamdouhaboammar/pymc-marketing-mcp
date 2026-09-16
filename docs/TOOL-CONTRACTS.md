@@ -30,6 +30,10 @@ Return schema/dtype/range and candidate-role information without returning the r
 
 Validate MMM roles, temporal/panel structure and blocking data-quality conditions before fitting
 
+### `list_datasets`
+
+List all registered datasets and available inbox files on the server
+
 ## MMM/model lifecycle tools
 
 ### `fit_mmm`
@@ -192,6 +196,28 @@ Current in-process cancellation cannot be presented as proof that a separate sta
 ### `list_jobs`
 
 List recent jobs for the current execution context/tenant according to the implemented job repository policy
+
+### `poll_job_progress`
+
+Non-blocking heartbeat poll waiting up to timeout_seconds for progress to avoid AI client timeout collapses
+
+### `recover_execution_state`
+
+Recover execution state and intermediate checkpoints after an unexpected disconnect or restart
+
+### `resume_job`
+
+Resume an interrupted or failed job from its last valid checkpoint without repeating completed work
+
+## Artifact and storage tools
+
+### `export_artifact_to_sandbox`
+
+Push/stage a model or dataset artifact (up to 1GB) for the AI client sandbox to download
+
+### `cleanup_server_storage`
+
+Run server garbage collection to purge expired, delivered, or orphaned artifacts and temp files
 
 ## MCP resources
 
