@@ -706,12 +706,16 @@ class PyMCMarketingAdapter:
 
     @staticmethod
     def _distribution_summary(values: np.ndarray) -> dict[str, float]:
-        lower, median, upper = np.quantile(values, [0.03, 0.5, 0.97])
+        from marketing_mcp.accelerators import fast_compute_quantiles
+
+        vals_list = values.tolist() if isinstance(values, np.ndarray) else list(values)
+        res = fast_compute_quantiles(vals_list, [0.03, 0.5, 0.97])
+        qs = res.get("quantiles", [0.0, 0.0, 0.0])
         return {
-            "mean": float(np.mean(values)),
-            "median": float(median),
-            "lower": float(lower),
-            "upper": float(upper),
+            "mean": float(res["mean"]),
+            "median": float(qs[1]),
+            "lower": float(qs[0]),
+            "upper": float(qs[2]),
             "interval_probability": 0.94,
         }
 

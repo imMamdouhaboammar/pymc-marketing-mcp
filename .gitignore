@@ -15,3 +15,8 @@ build/
 .demo-runtime/
 graphify-out/
 .ruff_cache/
+crates/**/target/
+target/
+*.so
+*.dylib
+

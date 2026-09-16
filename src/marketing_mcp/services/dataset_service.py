@@ -33,6 +33,9 @@ class DatasetService:
         self.blobs = storage if isinstance(storage, LocalArtifactStore) else LocalArtifactStore(storage)
         self.max_bytes = max_dataset_mb * 1024 * 1024
 
+    def list(self) -> list[dict[str, Any]]:
+        return self.metadata.list_datasets()
+
     def register_bytes(
         self,
         raw: bytes,
@@ -58,7 +61,15 @@ class DatasetService:
                 next_action="Provide dataset in CSV or Parquet format",
             )
         extension = f".{fmt}"
-        frame = self._read_bytes(raw, extension)
+        if fmt == "csv":
+            from marketing_mcp.accelerators import fast_sniff_and_validate_csv
+
+            preflight = fast_sniff_and_validate_csv(raw)
+            row_count = preflight["row_count"]
+        else:
+            frame = self._read_bytes(raw, extension)
+            row_count = len(frame)
+
         fingerprint = hashlib.sha256(raw).hexdigest()
         owner = principal.subject if principal is not None else "local"
         tenant_id = principal.tenant_id if principal is not None else None
@@ -75,7 +86,7 @@ class DatasetService:
             path=ref.uri,
             fingerprint=fingerprint,
             format=fmt,
-            rows=len(frame),
+            rows=row_count,
             created_at=_utc(),
             owner=owner,
             tenant_id=tenant_id,
@@ -212,7 +223,7 @@ class DatasetService:
 
     def validate(
         self, dataset_id, date_column, target_column, channel_columns, control_columns, dims=None
-    ):
+    ) -> DatasetValidationResult:
         findings = validate_mmm_dataset(
             self.load(dataset_id),
             date_column,
@@ -225,3 +236,5 @@ class DatasetService:
         return DatasetValidationResult(
             dataset_id=dataset_id, findings=findings, valid_for_modeling=valid
         )
+
+
