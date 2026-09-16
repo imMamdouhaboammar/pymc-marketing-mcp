@@ -112,3 +112,54 @@ pub fn lttb_downsample(xs: &[f64], ys: &[f64], threshold: usize) -> (Vec<f64>, V
 
     (sampled_x, sampled_y)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sparkline_basic() {
+        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let spark = generate_sparkline(&values);
+        assert_eq!(spark.chars().count(), 8);
+        assert_eq!(spark.chars().next().unwrap(), ' ');
+        assert_eq!(spark.chars().last().unwrap(), '█');
+    }
+
+    #[test]
+    fn test_sparkline_empty_and_constant() {
+        assert_eq!(generate_sparkline(&[]), "");
+        assert_eq!(generate_sparkline(&[5.0, 5.0, 5.0]), "▄▄▄");
+    }
+
+    #[test]
+    fn test_sparkline_nan_handling() {
+        let values = vec![1.0, f64::NAN, 10.0];
+        let spark = generate_sparkline(&values);
+        assert_eq!(spark.chars().count(), 3);
+        let chars: Vec<char> = spark.chars().collect();
+        assert_eq!(chars[0], ' ');
+        assert_eq!(chars[1], ' ');
+        assert_eq!(chars[2], '█');
+    }
+
+    #[test]
+    fn test_lttb_downsample_preserves_endpoints() {
+        let xs: Vec<f64> = (0..100).map(|i| i as f64).collect();
+        let ys: Vec<f64> = xs.iter().map(|&x| x.sin()).collect();
+        let (down_x, down_y) = lttb_downsample(&xs, &ys, 10);
+        assert_eq!(down_x.len(), 10);
+        assert_eq!(down_y.len(), 10);
+        assert_eq!(down_x[0], 0.0);
+        assert_eq!(down_x[9], 99.0);
+    }
+
+    #[test]
+    fn test_lttb_under_threshold() {
+        let xs = vec![1.0, 2.0];
+        let ys = vec![10.0, 20.0];
+        let (down_x, down_y) = lttb_downsample(&xs, &ys, 5);
+        assert_eq!(down_x, xs);
+        assert_eq!(down_y, ys);
+    }
+}

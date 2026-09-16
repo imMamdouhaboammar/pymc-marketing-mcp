@@ -69,3 +69,30 @@ pub fn compute_quantiles(values: &[f64], quantiles: &[f64]) -> QuantileSummary {
         quantiles: computed_quantiles,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_quantiles_empty() {
+        let res = compute_quantiles(&[], &[0.5]);
+        assert_eq!(res.count, 0);
+        assert!(res.mean.is_nan());
+    }
+
+    #[test]
+    fn test_quantiles_linear_interpolation() {
+        // [1.0, 2.0, 3.0, 4.0, 5.0]
+        let values = vec![5.0, 1.0, 4.0, 2.0, 3.0];
+        let res = compute_quantiles(&values, &[0.0, 0.25, 0.5, 0.75, 1.0]);
+        assert_eq!(res.count, 5);
+        assert_eq!(res.min, 1.0);
+        assert_eq!(res.max, 5.0);
+        assert_eq!(res.mean, 3.0);
+        // q=0.5 -> index = 0.5 * 4 = 2 -> values[2] = 3.0
+        assert!((res.quantiles[2] - 3.0).abs() < 1e-9);
+        // q=0.25 -> index = 0.25 * 4 = 1 -> values[1] = 2.0
+        assert!((res.quantiles[1] - 2.0).abs() < 1e-9);
+    }
+}

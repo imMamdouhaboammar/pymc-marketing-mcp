@@ -56,6 +56,9 @@ pub fn compute_split_rhat(chains: &[Vec<f64>]) -> f64 {
     let w: f64 = chain_vars.iter().sum::<f64>() / m;
 
     if w <= 1e-12 {
+        if b_over_n > 1e-12 {
+            return 999.0;
+        }
         return 1.0;
     }
 
@@ -120,5 +123,60 @@ pub fn evaluate_mcmc_gates(
         decision_tools_enabled,
         failures,
         warnings,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_evaluate_mcmc_gates_approved() {
+        let rhats = vec![1.001, 1.005, 1.01];
+        let esses = vec![1200.0, 800.0, 650.0];
+        let res = evaluate_mcmc_gates(&rhats, &esses, 0);
+        assert_eq!(res.decision_status, "approved");
+        assert!(res.decision_tools_enabled);
+        assert!(res.failures.is_empty());
+        assert!(res.warnings.is_empty());
+    }
+
+    #[test]
+    fn test_evaluate_mcmc_gates_divergences_rejected() {
+        let rhats = vec![1.01];
+        let esses = vec![1000.0];
+        let res = evaluate_mcmc_gates(&rhats, &esses, 2);
+        assert_eq!(res.decision_status, "rejected");
+        assert!(!res.decision_tools_enabled);
+        assert_eq!(res.failures.len(), 1);
+        assert!(res.failures[0].contains("divergent"));
+    }
+
+    #[test]
+    fn test_evaluate_mcmc_gates_caution() {
+        let rhats = vec![1.03]; // > 1.02 but <= 1.05
+        let esses = vec![500.0];
+        let res = evaluate_mcmc_gates(&rhats, &esses, 0);
+        assert_eq!(res.decision_status, "caution");
+        assert!(res.decision_tools_enabled);
+        assert!(res.failures.is_empty());
+        assert_eq!(res.warnings.len(), 1);
+    }
+
+    #[test]
+    fn test_split_rhat_constant_chains() {
+        let c1 = vec![5.0; 10];
+        let c2 = vec![5.0; 10];
+        let rhat = compute_split_rhat(&[c1, c2]);
+        assert!((rhat - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_split_rhat_detects_non_convergence() {
+        // Two chains exploring completely different regions
+        let c1 = vec![0.0; 10];
+        let c2 = vec![100.0; 10];
+        let rhat = compute_split_rhat(&[c1, c2]);
+        assert!(rhat > 1.5);
     }
 }

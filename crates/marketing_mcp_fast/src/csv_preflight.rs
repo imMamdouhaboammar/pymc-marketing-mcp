@@ -197,3 +197,63 @@ pub fn sniff_and_validate_csv(
         date_max: max_date,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sniff_valid_csv() {
+        let csv_data = b"date,sales,tv,radio\n\
+2023-01-01,100.0,10.0,5.0\n\
+2023-01-08,120.0,15.0,7.0\n\
+2023-01-15,110.0,12.0,6.0\n\
+2023-01-22,130.0,18.0,8.0\n\
+2023-01-29,140.0,20.0,9.0\n\
+2023-02-05,150.0,22.0,10.0\n\
+2023-02-12,160.0,25.0,11.0\n\
+2023-02-19,170.0,28.0,12.0\n\
+2023-02-26,180.0,30.0,13.0\n\
+2023-03-05,190.0,32.0,14.0\n\
+2023-03-12,200.0,35.0,15.0\n\
+2023-03-19,210.0,38.0,16.0\n\
+2023-03-26,220.0,40.0,17.0\n\
+2023-04-02,230.0,42.0,18.0\n";
+
+        let chs = ["tv", "radio"];
+        let res = sniff_and_validate_csv(
+            csv_data,
+            Some("date"),
+            Some("sales"),
+            Some(&chs),
+        ).unwrap();
+
+        assert_eq!(res.row_count, 14);
+        assert!(res.is_valid_for_modeling);
+        assert!(res.validation_errors.is_empty());
+        assert_eq!(res.column_names, vec!["date", "sales", "tv", "radio"]);
+        assert_eq!(res.columns["sales"].null_count, 0);
+        assert_eq!(res.columns["sales"].min, Some(100.0));
+        assert_eq!(res.columns["sales"].max, Some(230.0));
+    }
+
+    #[test]
+    fn test_sniff_negative_spend_rejection() {
+        let mut rows = String::from("date,sales,tv\n");
+        for i in 0..15 {
+            let tv_spend = if i == 5 { -10.0 } else { 20.0 };
+            rows.push_str(&format!("2023-01-{:02},100.0,{}\n", i + 1, tv_spend));
+        }
+
+        let chs = ["tv"];
+        let res = sniff_and_validate_csv(
+            rows.as_bytes(),
+            Some("date"),
+            Some("sales"),
+            Some(&chs),
+        ).unwrap();
+
+        assert!(!res.is_valid_for_modeling);
+        assert!(res.validation_errors.iter().any(|e| e.contains("negative spend")));
+    }
+}
