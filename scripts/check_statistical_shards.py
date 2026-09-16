@@ -50,6 +50,7 @@ SHARDS: dict[str, tuple[str, ...]] = {
         "tests/statistical/test_plot_summary_consistency.py::test_plots_render_against_real_datatree_idata[waterfall_decomposition]",
         "tests/statistical/test_plot_summary_consistency.py::test_plots_render_against_real_datatree_idata[actual_vs_predicted]",
         "tests/statistical/test_plot_summary_consistency.py::test_plots_render_against_real_datatree_idata[channel_contribution_share]",
+        "tests/statistical/test_plot_summary_consistency.py::test_plots_render_against_real_datatree_idata[saturation_curves]",
     ),
 }
 

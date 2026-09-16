@@ -83,6 +83,37 @@ def migrate_003_job_leases(conn: sqlite3.Connection):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_lease ON jobs(status, lease_expires_at)")
 
 
+@migration(4, "add_job_checkpoints_and_artifact_lifecycle")
+def migrate_004_checkpoints_and_lifecycle(conn: sqlite3.Connection):
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS job_checkpoints (
+            checkpoint_id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            step INTEGER NOT NULL DEFAULT 0,
+            total_steps INTEGER NOT NULL DEFAULT 1,
+            progress_percent REAL NOT NULL DEFAULT 0.0,
+            state_data TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_checkpoints_job ON job_checkpoints(job_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS artifact_lifecycle (
+            artifact_uri TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            sha256 TEXT NOT NULL,
+            exported_at TEXT,
+            created_at TEXT NOT NULL,
+            expires_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_artifact_lifecycle_status ON artifact_lifecycle(status, expires_at);
+        """
+    )
+
+
 class MigrationRunner:
     """Applies ordered migrations and tracks schema version."""
 

@@ -24,13 +24,15 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 40 capabilities (12 experimental, 26 stable, 2 deprecated).
+**Totals:** 45 capabilities (17 experimental, 26 stable, 2 deprecated).
 
 
 ## Tools
 
 | Name | Domain | Status | Decision gate | Delegates to | Summary | Evidence tests |
 |---|---|---|---|---|---|---|
+| `cleanup_server_storage` | artifacts | experimental | not enforced | `artifacts.cleanup_storage` | Run server garbage collection to purge expired, delivered, or orphaned artifacts and temp files. | none |
+| `export_artifact_to_sandbox` | artifacts | experimental | not enforced | `artifacts.export_to_sandbox` | Push/stage a model or dataset artifact (up to 1GB) for the AI client sandbox to download. | none |
 | `estimate_customer_lifetime_value` | clv | stable | not enforced | `clv.estimate_customer_lifetime_value` | Estimate discounted lifetime value by combining a purchase model and monetary value model. | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow` |
 | `fit_clv_model` | clv | deprecated | not enforced | `clv.fit_clv` | Fit a PyMC-Marketing CLV model (legacy compatibility wrapper). | none |
 | `fit_purchase_model` | clv | stable | not enforced | `clv.fit_purchase_model` | Fit a PyMC-Marketing purchase or churn frequency model (BG/NBD or Shifted Beta-Geometric). | `tests/statistical/test_clv_real_models.py::test_real_bg_nbd_and_gamma_gamma_workflow`<br>`tests/statistical/test_clv_real_models.py::test_real_shifted_beta_geo_workflow` |
@@ -55,6 +57,9 @@ approved the model.
 | `cancel_job` | jobs | stable | not enforced | `jobs.cancel_job` | Cancel a currently queued or running background job. | `tests/unit/test_job_state_machine.py::TestJobRepositoryAndService::test_async_job_cancellation` |
 | `get_job_status` | jobs | stable | not enforced | `jobs.get_job` | Retrieve the execution status, results, or error details of an asynchronous job. | `tests/unit/test_job_state_machine.py::TestJobRepositoryAndService::test_create_and_retrieve_job` |
 | `list_jobs` | jobs | stable | not enforced | `jobs.list_jobs` | List recent asynchronous background jobs for the active tenant. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_cross_tenant_job_access_blocked` |
+| `poll_job_progress` | jobs | experimental | not enforced | `jobs.poll_job` | Non-blocking heartbeat poll waiting up to timeout_seconds for progress to avoid AI client timeout collapses. | none |
+| `recover_execution_state` | jobs | experimental | not enforced | `jobs.recover_job_state` | Recover execution state and intermediate checkpoints after an unexpected disconnect or restart. | none |
+| `resume_job` | jobs | experimental | not enforced | `jobs.resume_job` | Resume an interrupted or failed job from its last valid checkpoint without repeating completed work. | none |
 | `submit_fit_mmm_job` | jobs | stable | not enforced | `jobs.submit_job` | Submit an asynchronous MMM fitting job to run in the background without blocking. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence` |
 | `archive_model` | modeling | experimental | not enforced | `models.archive_model` | Mark a stored model as archived while preserving its artifact and lineage. | none |
 | `calibrate_mmm` | modeling | stable | not enforced | `models.calibrate` | Refit a model with experimental lift-test measurements added to the likelihood. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_lift_test_calibration_and_lineage` |

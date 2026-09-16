@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "total_capabilities_tracked": 44,
+  "total_capabilities_tracked": 49,
   "tools": [
     {
       "name": "archive_model",
@@ -21,6 +21,13 @@
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "services/analytics-worker/jobs",
       "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "cleanup_server_storage",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/artifacts",
+      "cutover_gate": "G_ARTIFACT_LEASE",
       "adapter_compatibility_required": true
     },
     {
@@ -56,6 +63,13 @@
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/modeling",
       "cutover_gate": "G_MMM_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "export_artifact_to_sandbox",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/artifacts",
+      "cutover_gate": "G_ARTIFACT_LEASE",
       "adapter_compatibility_required": true
     },
     {
@@ -171,6 +185,13 @@
       "adapter_compatibility_required": true
     },
     {
+      "name": "poll_job_progress",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_ASYNC_LIFECYCLE",
+      "adapter_compatibility_required": true
+    },
+    {
       "name": "predict_customer_clv",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/clv",
@@ -206,10 +227,24 @@
       "adapter_compatibility_required": true
     },
     {
+      "name": "recover_execution_state",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_ASYNC_LIFECYCLE",
+      "adapter_compatibility_required": true
+    },
+    {
       "name": "register_dataset",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/datasets",
       "cutover_gate": "G_DATASET_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "resume_job",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_ASYNC_LIFECYCLE",
       "adapter_compatibility_required": true
     },
     {

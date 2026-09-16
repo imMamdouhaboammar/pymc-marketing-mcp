@@ -121,6 +121,7 @@ def test_list_datasets_discovery(test_server):
     res2 = _call(server, "list_datasets", {})
     assert res2["summary"]["total_registered"] == 1
     assert len(res2["evidence"]["registered_datasets"]) == 1
+    assert len(app.datasets.list()) == 1
 
 
 def test_compare_models_reports_all_missing_ids(test_server):

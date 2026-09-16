@@ -29,9 +29,24 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
 
             async def _fit_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
                 loop = asyncio.get_running_loop()
+                app.jobs.record_checkpoint(job.job_id, "dataset_validated", progress_percent=15.0)
+                app.jobs.record_checkpoint(job.job_id, "sampling_initialized", progress_percent=30.0)
                 # Run CPU-bound PyMC fit in executor thread
-                res = await loop.run_in_executor(None, app.models.fit, config)
-                return res.model_dump()
+                res = await loop.run_in_executor(None, app.models.fit, config, principal)
+                res_dict = res.model_dump()
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "posterior_saved",
+                    progress_percent=90.0,
+                    state_data={"model_id": res.model_id, "result": res_dict},
+                )
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "diagnostics_completed",
+                    progress_percent=100.0,
+                    state_data={"model_id": res.model_id, "result": res_dict},
+                )
+                return res_dict
 
             job_rec = app.jobs.submit_job(
                 job_type="fit_mmm",
@@ -42,7 +57,7 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
             )
             return env(
                 summary=job_rec.to_dict(),
-                next_actions=["get_job_status"],
+                next_actions=["poll_job_progress", "get_job_status"],
             )
         except DomainError as e:
             return e.to_dict()
@@ -58,12 +73,78 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
             record = app.jobs.get_job(job_id, principal=principal)
             next_acts = []
             if record.status == JobStatus.SUCCEEDED:
-                next_acts = ["diagnose_mmm", "get_model_status"]
+                next_acts = ["diagnose_mmm", "get_model_status", "export_artifact_to_sandbox"]
             elif record.status == JobStatus.RUNNING:
-                next_acts = ["get_job_status", "cancel_job"]
+                next_acts = ["poll_job_progress", "get_job_status", "cancel_job"]
             return env(
                 summary=record.to_dict(),
                 next_actions=next_acts,
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="poll_job_progress",
+        description="Non-blocking heartbeat poll waiting up to timeout_seconds for progress to avoid AI client timeout collapses.",
+    )
+    async def poll_job_progress(job_id: str, timeout_seconds: int = 25):
+        try:
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("poll_job_progress")[0])
+            poll_result = await app.jobs.poll_job(
+                job_id, timeout_seconds=timeout_seconds, principal=principal
+            )
+            next_acts = []
+            if poll_result["is_terminal"]:
+                next_acts = ["diagnose_mmm", "get_model_status", "export_artifact_to_sandbox"]
+            else:
+                next_acts = ["poll_job_progress", "cancel_job"]
+            return env(summary=poll_result, next_actions=next_acts)
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="recover_execution_state",
+        description="Recover execution state and intermediate checkpoints after an unexpected disconnect or restart.",
+    )
+    async def recover_execution_state(job_id_or_key: str):
+        try:
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("recover_execution_state")[0])
+            rec_state = app.jobs.recover_job_state(job_id_or_key, principal=principal)
+            next_acts = [rec_state["recommended_action"]]
+            return env(summary=rec_state, next_actions=next_acts)
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="resume_job",
+        description="Resume an interrupted or failed job from its last valid checkpoint without repeating completed work.",
+    )
+    async def resume_job(job_id: str):
+        try:
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("resume_job")[0])
+            rec = app.jobs.get_job(job_id, principal=principal)
+            config = FitMMMInput(**rec.payload)
+
+            async def _resume_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
+                loop = asyncio.get_running_loop()
+                app.jobs.record_checkpoint(job.job_id, "sampling_initialized", progress_percent=30.0)
+                res = await loop.run_in_executor(None, app.models.fit, config, principal)
+                res_dict = res.model_dump()
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "posterior_saved",
+                    progress_percent=90.0,
+                    state_data={"model_id": res.model_id, "result": res_dict},
+                )
+                return res_dict
+
+            resumed = app.jobs.resume_job(job_id, _resume_runner, principal=principal)
+            return env(
+                summary=resumed.to_dict(),
+                next_actions=["poll_job_progress", "get_job_status"],
             )
         except DomainError as e:
             return e.to_dict()

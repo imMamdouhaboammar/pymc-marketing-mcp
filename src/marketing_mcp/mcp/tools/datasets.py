@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 from marketing_mcp.app import Application
 from marketing_mcp.errors import DomainError
@@ -28,16 +30,46 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
         name="register_dataset",
         description=(
             "Register a marketing dataset for MMM or CLV analysis and return a stable dataset reference. "
-            "Supports direct CSV text in 'content', base64-encoded CSV/Parquet in 'content_base64', "
-            "remote HTTP/HTTPS URL in 'url' or 'path', or an existing server path in 'path'."
+            "For chat sessions (Claude.ai, web clients), pass raw CSV text directly in 'content' with 'filename'. "
+            "Supports binary/parquet in 'content_base64', remote download in 'url', or server paths in 'path'."
         ),
     )
     async def register_dataset(
-        path: str | None = None,
-        content: str | None = None,
-        content_base64: str | None = None,
-        url: str | None = None,
-        filename: str | None = None,
+        content: Annotated[
+            str | None,
+            Field(
+                default=None,
+                description="Direct CSV or tabular plain-text data. Recommended for Claude.ai, ChatGPT, and remote sessions.",
+            ),
+        ] = None,
+        filename: Annotated[
+            str | None,
+            Field(
+                default=None,
+                description="Optional filename (e.g. 'campaigns.csv') to preserve file format and extension metadata.",
+            ),
+        ] = None,
+        content_base64: Annotated[
+            str | None,
+            Field(
+                default=None,
+                description="Base64-encoded file bytes for binary, gzipped, or parquet datasets.",
+            ),
+        ] = None,
+        url: Annotated[
+            str | None,
+            Field(
+                default=None,
+                description="Publicly accessible HTTP or HTTPS URL to download and ingest the dataset from.",
+            ),
+        ] = None,
+        path: Annotated[
+            str | None,
+            Field(
+                default=None,
+                description="Path to a file on the server filesystem (server-side only; client sandbox paths are rejected).",
+            ),
+        ] = None,
     ):
         try:
             principal = resolve_context().principal
@@ -156,7 +188,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
         try:
             principal = resolve_context().principal
             require_scope(principal, scopes_for_tool("list_datasets")[0])
-            registered = app.metadata.list_datasets()
+            registered = app.datasets.list()
             if principal and principal.tenant_id and principal.tenant_id != "default":
                 registered = [d for d in registered if d.get("tenant_id") == principal.tenant_id]
 
@@ -209,7 +241,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
             return env(
                 summary=r.model_dump(),
                 warnings=[x.model_dump() for x in r.issues],
-                next_actions=["validate_dataset"] if r.mmm_candidate else ["repair_dataset"],
+                next_actions=["validate_dataset"] if r.mmm_candidate else ["register_dataset"],
             )
         except DomainError as e:
             return e.to_dict()
@@ -248,7 +280,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
             return env(
                 summary={"dataset_id": dataset_id, "valid_for_modeling": r.valid_for_modeling},
                 evidence={"findings": [f.model_dump() for f in r.findings]},
-                next_actions=["fit_mmm"] if r.valid_for_modeling else ["repair_dataset"],
+                next_actions=["fit_mmm"] if r.valid_for_modeling else ["register_dataset"],
             )
         except DomainError as e:
             return e.to_dict()

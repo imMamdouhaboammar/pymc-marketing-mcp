@@ -26,7 +26,9 @@ class DecisionService:
         if not record.diagnostics:
             raise DomainError(
                 "MODEL_NOT_DIAGNOSED",
-                "Run diagnose_mmm before using decision tools",
+                f"Model '{model_id}' has not been diagnosed yet. Run diagnose_mmm before using decision tools.",
+                evidence={"model_id": model_id, "validation_state": record.validation_state},
+                next_action=f"Call diagnose_mmm(model_id='{model_id}') to run MCMC convergence diagnostics.",
             )
         DecisionGate(
             record.validation_state,
@@ -98,6 +100,102 @@ class DecisionService:
         )
         return result
 
+    def _collect_channel_identifiability_warnings(
+        self,
+        record,
+        recommended_allocation: dict[str, float] | None,
+        baseline_allocation: dict[str, float] | None,
+    ) -> tuple[list[dict[str, Any]], dict[str, str]]:
+        """Check allocated channels against upstream dataset validation findings.
+
+        Carries forward identifiability warnings (e.g. LONG_ZERO_SPEND_RUN,
+        EXTREME_OUTLIERS, HIGH_CHANNEL_CORRELATION) into budget decisions
+        so agents and users are not misled by high-confidence reallocations
+        into channels with sparse or unidentifiable history.
+        """
+        warnings: list[dict[str, Any]] = []
+        channel_confidence: dict[str, str] = {}
+
+        if not recommended_allocation:
+            return warnings, channel_confidence
+
+        dataset_id = getattr(record, "dataset_id", None)
+        cfg = getattr(record, "config", {}) or {}
+        date_col = cfg.get("date_column")
+        target_col = cfg.get("target_column")
+        channels = cfg.get("channel_columns", [])
+        controls = cfg.get("control_columns", [])
+        dims = cfg.get("dims", [])
+
+        if not (dataset_id and date_col and target_col and channels):
+            return warnings, channel_confidence
+
+        try:
+            val_res = self.modeling.datasets.validate(
+                dataset_id=dataset_id,
+                date_column=date_col,
+                target_column=target_col,
+                channel_columns=channels,
+                control_columns=controls,
+                dims=dims,
+            )
+            findings = val_res.findings
+        except Exception:
+            findings = []
+
+        channel_findings: dict[str, list[Any]] = {}
+        for f in findings:
+            ev = f.evidence if isinstance(f.evidence, dict) else {}
+            col = ev.get("column")
+            if col:
+                channel_findings.setdefault(col, []).append(f)
+            corr_channels = ev.get("channels")
+            if corr_channels and isinstance(corr_channels, list):
+                for c in corr_channels:
+                    channel_findings.setdefault(c, []).append(f)
+
+        for ch, rec_spend in recommended_allocation.items():
+            base_spend = (baseline_allocation or {}).get(ch, 0.0)
+            ch_warns = channel_findings.get(ch, [])
+
+            if ch_warns:
+                zero_run = any(f.code == "LONG_ZERO_SPEND_RUN" for f in ch_warns)
+                outliers = any(f.code == "EXTREME_OUTLIERS" for f in ch_warns)
+                confidence = (
+                    "low_sparse_history"
+                    if zero_run
+                    else ("medium_outliers" if outliers else "medium_correlated")
+                )
+                channel_confidence[ch] = confidence
+
+                for f in ch_warns:
+                    msg = (
+                        f"Channel '{ch}' was allocated ${rec_spend:,.2f} "
+                        f"(vs baseline ${base_spend:,.2f}), but the model input has dataset warning: "
+                        f"{f.code} - {f.message}. Reallocations to channels with sparse data "
+                        f"carry high estimation uncertainty."
+                    )
+                    warnings.append(
+                        {
+                            "code": "IDENTIFIABILITY_RISK",
+                            "channel": ch,
+                            "severity": "high" if (zero_run and rec_spend > 0) else "medium",
+                            "message": msg,
+                            "dataset_finding": {
+                                "code": f.code,
+                                "evidence": f.evidence,
+                                "next_action": getattr(
+                                    f, "suggested_action", getattr(f, "next_action", None)
+                                ),
+                            },
+                            "next_action": "Validate channel response with incrementality/lift tests before committing budget.",
+                        }
+                    )
+            else:
+                channel_confidence[ch] = "high"
+
+        return warnings, channel_confidence
+
     def optimize(self, input):
         model, record = self._approved(input.model_id)
         result = self.modeling.adapter_factory().optimize_budget(
@@ -127,11 +225,25 @@ class DecisionService:
                 "Optimizer did not return a recommended allocation",
                 evidence={"keys": sorted(result)},
             )
+        baseline = result.get("baseline_allocation")
+        if baseline is None:
+            try:
+                baseline = historical_allocation(model, input.planning_periods)
+            except Exception:
+                baseline = {}
+
         extrap_warnings = check_extrapolation_risk(
             model,
             allocation,
             input.planning_periods,
         )
+        ident_warnings, channel_conf = self._collect_channel_identifiability_warnings(
+            record,
+            allocation,
+            baseline,
+        )
+        combined_warnings = extrap_warnings + ident_warnings
+
         scenario_id = f"scenario_{uuid.uuid4().hex[:12]}"
         payload = {
             "scenario_id": scenario_id,
@@ -140,6 +252,8 @@ class DecisionService:
             "input": input.model_dump(),
             "result": result,
             "extrapolation_warnings": extrap_warnings,
+            "identifiability_warnings": ident_warnings,
+            "channel_confidence": channel_conf,
             "created_at": _utc(),
         }
         self.metadata.put_scenario(payload)
@@ -147,7 +261,10 @@ class DecisionService:
             {
                 "scenario_id": scenario_id,
                 "model_id": input.model_id,
-                "warnings": extrap_warnings,
+                "warnings": combined_warnings,
+                "identifiability_warnings": ident_warnings,
+                "identifiability_risks": ident_warnings,
+                "channel_confidence": channel_conf,
                 "decision_gate": self._gate_payload(record),
                 "provenance": self._provenance(input.model_id, record),
             }
@@ -175,6 +292,13 @@ class DecisionService:
             scenario,
             input.planning_periods,
         )
+        ident_warnings, channel_conf = self._collect_channel_identifiability_warnings(
+            record,
+            scenario,
+            baseline,
+        )
+        combined_warnings = extrap_warnings + ident_warnings
+
         scenario_id = f"scenario_{uuid.uuid4().hex[:12]}"
         payload = {
             "scenario_id": scenario_id,
@@ -185,9 +309,15 @@ class DecisionService:
             "scenario_allocation": scenario,
             "result": posterior_result,
             "extrapolation_warnings": extrap_warnings,
+            "identifiability_warnings": ident_warnings,
+            "channel_confidence": channel_conf,
             "created_at": _utc(),
         }
         self.metadata.put_scenario(payload)
+
+        caveats = [
+            "Scenario evaluation is conditional on the fitted MMM and its posterior uncertainty."
+        ] + [w["message"] for w in ident_warnings]
 
         return {
             "scenario_id": scenario_id,
@@ -195,11 +325,12 @@ class DecisionService:
             "baseline_allocation": baseline,
             "scenario_allocation": scenario,
             **posterior_result,
-            "warnings": extrap_warnings,
+            "warnings": combined_warnings,
+            "identifiability_warnings": ident_warnings,
+            "identifiability_risks": ident_warnings,
+            "channel_confidence": channel_conf,
             "decision_gate": self._gate_payload(record),
-            "caveats": [
-                "Scenario evaluation is conditional on the fitted MMM and its posterior uncertainty."
-            ],
+            "caveats": caveats,
             "provenance": self._provenance(input.model_id, record),
         }
 

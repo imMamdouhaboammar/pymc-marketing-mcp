@@ -49,6 +49,26 @@ class DatasetValidationResult(BaseModel):
     valid_for_modeling: bool
 
 
+class ColumnSummary(BaseModel):
+    name: str
+    dtype: str
+    non_null_count: int
+    null_count: int
+    mean: float | None = None
+    std: float | None = None
+    min: float | None = None
+    max: float | None = None
+
+
+class DatasetSummary(BaseModel):
+    rows: int
+    columns: int
+    column_summaries: list[ColumnSummary] = Field(default_factory=list)
+    date_range: dict[str, str | None] | None = None
+    total_spend: float | None = None
+    channel_spend_shares: dict[str, float] = Field(default_factory=dict)
+
+
 AdstockType = Literal[
     "geometric",
     "delayed",

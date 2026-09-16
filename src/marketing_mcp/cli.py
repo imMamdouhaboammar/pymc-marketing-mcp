@@ -12,6 +12,7 @@ from marketing_mcp import __version__
 from marketing_mcp.app import Application
 from marketing_mcp.auth import AuthManager, MCPAuthMiddleware
 from marketing_mcp.config import Settings
+from marketing_mcp.http.artifacts import create_artifact_download_handler
 from marketing_mcp.http.credentials import CredentialControlAPI
 from marketing_mcp.http.health import create_readiness_handler, liveness_handler
 from marketing_mcp.http.safety import RequestSafetyMiddleware
@@ -92,6 +93,11 @@ def create_http_app(
     app.add_route("/health", health_check, methods=["GET"])
     app.add_route("/health/live", liveness_handler, methods=["GET"])
     app.add_route("/health/ready", create_readiness_handler(app_instance), methods=["GET"])
+    app.add_route(
+        "/artifacts/{namespace}/{digest}/download",
+        create_artifact_download_handler(app_instance),
+        methods=["GET"],
+    )
     app.add_route("/", root_handler, methods=["GET"])
 
     # Mount Control Plane credential management routes

@@ -48,12 +48,19 @@ steps:
       - 'gen2'
       - '--port'
       - '8080'
+      - '--set-env-vars'
+      - 'MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_MAX_ARTIFACT_SIZE_MB=2048'
+      - '--add-volume'
+      - 'name=mcp-storage,type=cloud-storage,bucket=$_BUCKET_NAME'
+      - '--add-volume-mount'
+      - 'volume=mcp-storage,mount-path=/var/lib/marketing-mcp'
       - '--allow-unauthenticated'
 
 substitutions:
   _REGION: 'us-central1'
   _REPO_NAME: 'mcp-servers'
   _SERVICE_NAME: 'pymc-marketing-mcp'
+  _BUCKET_NAME: '${PROJECT_ID}-marketing-artifacts'
 
 images:
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'

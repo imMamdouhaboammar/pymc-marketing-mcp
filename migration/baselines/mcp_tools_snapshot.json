@@ -1,5 +1,5 @@
 {
-  "total": 34,
+  "total": 39,
   "tools": [
     {
       "name": "archive_model",
@@ -205,6 +205,26 @@
           "job_id"
         ],
         "title": "cancel_jobArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "cleanup_server_storage",
+      "description": "Run server garbage collection to purge expired, delivered, or orphaned artifacts and temp files.",
+      "input_schema": {
+        "properties": {
+          "older_than_hours": {
+            "default": 24,
+            "title": "Older Than Hours",
+            "type": "integer"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "cleanup_server_storageArguments",
         "type": "object"
       }
     },
@@ -464,6 +484,52 @@
           "input"
         ],
         "title": "evaluate_prior_sensitivityArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "export_artifact_to_sandbox",
+      "description": "Push/stage a model or dataset artifact (up to 1GB) for the AI client sandbox to download, providing streaming URLs, curl commands, python snippets, and SHA256 integrity checksums.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "artifact_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Artifact Uri"
+          },
+          "export_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Export Name"
+          }
+        },
+        "title": "export_artifact_to_sandboxArguments",
         "type": "object"
       }
     },
@@ -1658,6 +1724,28 @@
       }
     },
     {
+      "name": "poll_job_progress",
+      "description": "Non-blocking heartbeat poll waiting up to timeout_seconds for progress to avoid AI client timeout collapses.",
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 25,
+            "title": "Timeout Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "poll_job_progressArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "predict_customer_clv",
       "description": "Generate per-customer CLV predictions from a fitted BG/NBD model. (Deprecated: prefer predict_expected_purchases or estimate_customer_lifetime_value).",
       "input_schema": {
@@ -1879,6 +1967,23 @@
       }
     },
     {
+      "name": "recover_execution_state",
+      "description": "Recover execution state and intermediate checkpoints after an unexpected disconnect or restart.",
+      "input_schema": {
+        "properties": {
+          "job_id_or_key": {
+            "title": "Job Id Or Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id_or_key"
+        ],
+        "title": "recover_execution_stateArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "register_dataset",
       "description": "Register a marketing dataset for MMM or CLV analysis and return a stable dataset reference. Supports direct CSV text in 'content', base64-encoded CSV/Parquet in 'content_base64', remote HTTP/HTTPS URL in 'url' or 'path', or an existing server path in 'path'.",
       "input_schema": {
@@ -1945,6 +2050,23 @@
           }
         },
         "title": "register_datasetArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "resume_job",
+      "description": "Resume an interrupted or failed job from its last valid checkpoint without repeating completed work.",
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "resume_jobArguments",
         "type": "object"
       }
     },

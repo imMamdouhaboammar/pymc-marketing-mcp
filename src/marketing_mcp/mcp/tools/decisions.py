@@ -136,6 +136,10 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             return env(
                 summary=r,
                 warnings=r.get("warnings", []),
+                evidence={
+                    "identifiability_risks": r.get("identifiability_risks", []),
+                    "channel_confidence": r.get("channel_confidence", {}),
+                },
                 provenance=r.get("provenance", {}),
             )
         except DomainError as e:

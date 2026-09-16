@@ -20,3 +20,12 @@ target/
 *.so
 *.dylib
 
+*.db-shm
+*.db-wal
+.env*
+*.env
+*.pem
+*.key
+*credentials*.json
+*service_account*.json
+*service-account*.json

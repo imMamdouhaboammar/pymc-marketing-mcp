@@ -110,6 +110,23 @@ if ! gcloud storage buckets describe "gs://${BUCKET_NAME}" >/dev/null 2>&1; then
         --uniform-bucket-level-access > /dev/null
 fi
 
+# Apply 7-day TTL lifecycle policy for temp and cached artifacts
+cat << 'LIFECYCLE_EOF' > /tmp/gcs_lifecycle.json
+{
+  "rule": [
+    {
+      "action": {"type": "Delete"},
+      "condition": {
+        "age": 7,
+        "matchesPrefix": ["inbox/tmp", "artifacts/tmp"]
+      }
+    }
+  ]
+}
+LIFECYCLE_EOF
+gcloud storage buckets update "gs://${BUCKET_NAME}" --lifecycle-file=/tmp/gcs_lifecycle.json >/dev/null 2>&1 || true
+rm -f /tmp/gcs_lifecycle.json
+
 # 5. Build Image via Cloud Build
 echo -e "${BLUE}==> [4/5] Building container image via Google Cloud Build...${NC}"
 gcloud builds submit --tag "${IMAGE_URI}" . --quiet
@@ -129,7 +146,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --no-cpu-throttling \
     --execution-environment gen2 \
     --port 8080 \
-    --set-env-vars "MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_API_KEY=${API_KEY},MARKETING_MCP_AUTH_ENABLED=${AUTH_ENABLED},MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=${ALLOW_ANONYMOUS}" \
+    --set-env-vars "MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_API_KEY=${API_KEY},MARKETING_MCP_AUTH_ENABLED=${AUTH_ENABLED},MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=${ALLOW_ANONYMOUS},GCS_BUCKET_NAME=${BUCKET_NAME},MARKETING_MCP_MAX_ARTIFACT_SIZE_MB=2048" \
     --add-volume "name=mcp-storage,type=cloud-storage,bucket=${BUCKET_NAME}" \
     --add-volume-mount "volume=mcp-storage,mount-path=/var/lib/marketing-mcp" \
     --allow-unauthenticated \

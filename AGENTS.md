@@ -126,8 +126,11 @@ No document may mark G0-G5, H0-H6 or AQG green from assertion alone. Current-hea
 - `LocalArtifactStore` must never assume `os.link` is supported. If `os.link` fails with `OSError` (Errno 38 `ENOSYS`), it must gracefully fall back to atomic rename (`os.replace` / `shutil.move`).
 - Mode flag changes (`chmod`) must tolerate filesystem-level `OSError` without aborting dataset or artifact operations.
 - Materialization context managers must write raw payload bytes to temporary disk paths before yielding to native C libraries (NetCDF4 / HDF5).
+- Multi-gigabyte artifacts (up to 2GB) must be streamed and hashed in 1MB chunks using `read_chunks` and `put_stream`. Never use `read_bytes` for traces or large datasets.
+- Use `materialize()` with `symlink_to` rather than copying files into `/tmp`, preventing RAM exhaustion on Cloud Run's in-memory `tmpfs`.
+- Resumable downloads are served via `GET /artifacts/{namespace}/{digest}/download` with HTTP Range (`206 Partial Content`) support.
 
-## Fast Deploy Workflow
+## Fast Deploy Workflow & Credential Hygiene
 
 Deploy to Google Cloud Run with one command using dynamic placeholders and automatic GCP project detection:
 
@@ -139,6 +142,11 @@ Deploy to Google Cloud Run with one command using dynamic placeholders and autom
 ./scripts/fast_deploy.sh secure
 ```
 
+**Credential & Configuration Hygiene**:
+- **Zero Hardcoded Secrets**: Never commit `.env` files, API keys, service account JSON files, or personal emails to git.
+- **Dynamic Placeholders**: Scripts must always resolve configuration dynamically via `${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || echo '')}` and `${GCS_BUCKET_NAME:-${PROJECT_ID}-pymc-mcp-artifacts}`.
+- Automated 7-day TTL lifecycle policies are applied to GCS persistence buckets for temporary files.
+
 The script automatically:
 1. Validates `gcloud` authentication and project context.
 2. Enables required Google Cloud APIs (`run`, `artifactregistry`, `cloudbuild`, `storage`).
@@ -146,6 +154,15 @@ The script automatically:
 4. Builds the container image via Google Cloud Build.
 5. Deploys to Cloud Run with GCS FUSE volume mount and optimal compute flags.
 6. Prints ready-to-copy client configuration snippets for Claude Desktop, Cursor, Windsurf, OpenCode, and Claude Code CLI.
+
+## Resilience, Checkpoints & Sandbox Tools
+
+The following resilient tools are exposed to prevent MCP connection dropouts and simplify sandbox export:
+- `poll_job_progress(job_id, timeout_seconds=5)`: Non-blocking heartbeat polling across MCMC sub-stages.
+- `recover_execution_state(job_id)`: Inspects recorded checkpoints after container restarts.
+- `resume_job(job_id)`: Resumes execution of failed/interrupted jobs from the latest valid checkpoint.
+- `export_artifact_to_sandbox(digest, namespace, client_sandbox_path)`: Provides direct download URLs, resumable `curl` commands, SHA256 checksum verification, and Python load scripts.
+- `cleanup_server_storage(max_age_hours=24)`: Purges `/tmp` scratch directories, expired delivered artifacts, and orphan blobs.
 
 ## Failure Lessons & Operational Hardening
 
@@ -157,10 +174,16 @@ All real-world post-mortems and architectural bug fixes are codified in `Failure
 - `05-netcdf-materialization-file-write-omission.md`: Ensuring payload bytes written before native NetCDF read.
 - `06-bayesian-rfm-domain-invariants.md`: Enforcing $x = 0 \implies t_x = 0$ for BG/NBD models.
 - `07-remote-client-sandbox-data-ingestion.md`: Multi-modal data ingestion (content, base64, url) and actionable error diagnostics.
+- `08-large-artifact-streaming-and-ram-limits.md`: 1GB chunked streaming, HTTP Range requests, and zero-RAM symlink materialization.
+- `09-mcp-call-collapse-and-intermediate-checkpointing.md`: Intermediate stage checkpoints and bounded heartbeat polling to prevent HTTP timeouts.
+- `10-state-recovery-and-crash-resumption.md`: State machine transitions from FAILED/CANCELLED and automatic crash recovery on startup.
+- `11-artifact-sandbox-push-and-server-garbage-collection.md`: Direct curl/SHA256 sandbox export and automated server-side garbage collection.
+- `12-saturation-curves-response-fidelity-and-decision-caveats.md`: Saturation curve rendering, response curve granularity, and propagating data sparsity warnings to budget optimization.
 
 ## Release claim rule
 
 Before calling work production-ready, release-ready, M4-complete or equivalent, verify that `docs/release-evidence/` contains generated evidence for the exact commit and that the required CI/security/statistical/recovery/agent gates are green
 
 If that evidence is absent, describe the implementation and remaining blockers without promoting the maturity label
+
 

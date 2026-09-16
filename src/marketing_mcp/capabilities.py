@@ -34,6 +34,7 @@ CAPABILITY_DOMAINS: tuple[str, ...] = (
     "plots",
     "clv",
     "jobs",
+    "artifacts",
 )
 
 
@@ -433,6 +434,41 @@ _INVENTORY: tuple[Capability, ...] = (
         evidence_test_ids=(
             "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_cross_tenant_job_access_blocked",
         ),
+    ),
+    _tool(
+        "poll_job_progress",
+        "jobs",
+        "Non-blocking heartbeat poll waiting up to timeout_seconds for progress to avoid AI client timeout collapses.",
+        delegates_to="jobs.poll_job",
+        status="experimental",
+    ),
+    _tool(
+        "recover_execution_state",
+        "jobs",
+        "Recover execution state and intermediate checkpoints after an unexpected disconnect or restart.",
+        delegates_to="jobs.recover_job_state",
+        status="experimental",
+    ),
+    _tool(
+        "resume_job",
+        "jobs",
+        "Resume an interrupted or failed job from its last valid checkpoint without repeating completed work.",
+        delegates_to="jobs.resume_job",
+        status="experimental",
+    ),
+    _tool(
+        "export_artifact_to_sandbox",
+        "artifacts",
+        "Push/stage a model or dataset artifact (up to 1GB) for the AI client sandbox to download.",
+        delegates_to="artifacts.export_to_sandbox",
+        status="experimental",
+    ),
+    _tool(
+        "cleanup_server_storage",
+        "artifacts",
+        "Run server garbage collection to purge expired, delivered, or orphaned artifacts and temp files.",
+        delegates_to="artifacts.cleanup_storage",
+        status="experimental",
     ),
     # --- resources --------------------------------------------------------------------------
     _resource(

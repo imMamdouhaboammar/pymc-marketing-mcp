@@ -74,6 +74,23 @@ if ! gcloud storage buckets describe "gs://${BUCKET_NAME}" >/dev/null 2>&1; then
         --uniform-bucket-level-access
 fi
 
+echo "--> Applying GCS bucket lifecycle policy for automatic artifact cleanup..."
+cat << 'LIFECYCLE_EOF' > /tmp/mcp-gcs-lifecycle.json
+{
+  "rule": [
+    {
+      "action": {"type": "Delete"},
+      "condition": {
+        "age": 7,
+        "matchesPrefix": ["artifacts/temp/"]
+      }
+    }
+  ]
+}
+LIFECYCLE_EOF
+gcloud storage buckets update "gs://${BUCKET_NAME}" --lifecycle-file=/tmp/mcp-gcs-lifecycle.json >/dev/null 2>&1 || true
+rm -f /tmp/mcp-gcs-lifecycle.json
+
 # 5. Build and submit container image via Cloud Build
 echo "--> Building container image via Google Cloud Build..."
 gcloud builds submit --tag "${IMAGE_URI}" .
@@ -93,7 +110,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --no-cpu-throttling \
     --execution-environment gen2 \
     --port 8080 \
-    --set-env-vars "MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_API_KEY=${API_KEY},MARKETING_MCP_AUTH_ENABLED=${AUTH_ENABLED},MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true" \
+    --set-env-vars "MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_API_KEY=${API_KEY},MARKETING_MCP_AUTH_ENABLED=${AUTH_ENABLED},MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true,GCS_BUCKET_NAME=${BUCKET_NAME},MARKETING_MCP_MAX_ARTIFACT_SIZE_MB=2048" \
     --add-volume "name=mcp-storage,type=cloud-storage,bucket=${BUCKET_NAME}" \
     --add-volume-mount "volume=mcp-storage,mount-path=/var/lib/marketing-mcp" \
     --allow-unauthenticated

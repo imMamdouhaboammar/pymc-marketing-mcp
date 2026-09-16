@@ -62,8 +62,14 @@ TOOL_SCOPES: dict[str, str] = {
     # asynchronous jobs
     "submit_fit_mmm_job": "marketing:model",
     "get_job_status": "marketing:read",
+    "poll_job_progress": "marketing:read",
+    "recover_execution_state": "marketing:read",
+    "resume_job": "marketing:model",
     "cancel_job": "marketing:model",
     "list_jobs": "marketing:read",
+    # artifacts & sandbox delivery
+    "export_artifact_to_sandbox": "marketing:read",
+    "cleanup_server_storage": "marketing:admin",
     # administration
     "archive_model": "marketing:admin",
 }

@@ -22,6 +22,7 @@ EXPECTED_TOOLS = frozenset(
         "register_dataset",
         "inspect_dataset",
         "validate_dataset",
+        "list_datasets",
         "fit_mmm",
         "get_model_status",
         "diagnose_mmm",
@@ -50,8 +51,13 @@ EXPECTED_TOOLS = frozenset(
         "select_best_model",
         "submit_fit_mmm_job",
         "get_job_status",
+        "poll_job_progress",
+        "recover_execution_state",
+        "resume_job",
         "cancel_job",
         "list_jobs",
+        "export_artifact_to_sandbox",
+        "cleanup_server_storage",
     }
 )
 

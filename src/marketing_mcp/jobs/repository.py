@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from marketing_mcp.errors import DomainError
-from marketing_mcp.jobs.models import JobRecord, JobStatus
+from marketing_mcp.jobs.models import JobCheckpoint, JobRecord, JobStatus
 from marketing_mcp.jobs.state import validate_transition
 
 
@@ -53,6 +53,9 @@ class JobRepository(Protocol):
     ) -> JobRecord: ...
     def request_cancellation(self, job_id: str) -> JobRecord: ...
     def recover_stale_running_jobs(self) -> int: ...
+    def save_checkpoint(self, checkpoint: JobCheckpoint) -> None: ...
+    def get_checkpoints(self, job_id: str) -> list[JobCheckpoint]: ...
+    def get_latest_checkpoint(self, job_id: str) -> JobCheckpoint | None: ...
 
 
 class SQLiteJobRepository:
@@ -310,8 +313,72 @@ class SQLiteJobRepository:
             self.conn.rollback()
             raise
 
+    def save_checkpoint(self, checkpoint: JobCheckpoint) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO job_checkpoints (
+                checkpoint_id, job_id, stage, step, total_steps,
+                progress_percent, state_data, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                checkpoint.checkpoint_id,
+                checkpoint.job_id,
+                checkpoint.stage,
+                checkpoint.step,
+                checkpoint.total_steps,
+                checkpoint.progress_percent,
+                json.dumps(checkpoint.state_data),
+                checkpoint.created_at,
+            ),
+        )
+        self.conn.commit()
+
+    def get_checkpoints(self, job_id: str) -> list[JobCheckpoint]:
+        try:
+            rows = self.conn.execute(
+                "SELECT * FROM job_checkpoints WHERE job_id = ? ORDER BY created_at ASC",
+                (job_id,),
+            ).fetchall()
+            return [
+                JobCheckpoint(
+                    checkpoint_id=r["checkpoint_id"],
+                    job_id=r["job_id"],
+                    stage=r["stage"],
+                    step=r["step"],
+                    total_steps=r["total_steps"],
+                    progress_percent=r["progress_percent"],
+                    state_data=json.loads(r["state_data"]) if r["state_data"] else {},
+                    created_at=r["created_at"],
+                )
+                for r in rows
+            ]
+        except Exception:
+            return []
+
+    def get_latest_checkpoint(self, job_id: str) -> JobCheckpoint | None:
+        try:
+            r = self.conn.execute(
+                "SELECT * FROM job_checkpoints WHERE job_id = ? ORDER BY created_at DESC LIMIT 1",
+                (job_id,),
+            ).fetchone()
+            if not r:
+                return None
+            return JobCheckpoint(
+                checkpoint_id=r["checkpoint_id"],
+                job_id=r["job_id"],
+                stage=r["stage"],
+                step=r["step"],
+                total_steps=r["total_steps"],
+                progress_percent=r["progress_percent"],
+                state_data=json.loads(r["state_data"]) if r["state_data"] else {},
+                created_at=r["created_at"],
+            )
+        except Exception:
+            return None
+
     def recover_stale_running_jobs(self) -> int:
-        """Recover only attempts whose explicit worker lease has expired."""
+        """Recover stale attempts and reconcile interrupted jobs using checkpoints."""
         now = datetime.now(UTC).isoformat()
         retry_error = json.dumps(
             {"code": "WORKER_LEASE_EXPIRED", "message": "Worker lease expired; job was requeued."}
@@ -319,8 +386,39 @@ class SQLiteJobRepository:
         failed_error = json.dumps(
             {"code": "WORKER_ATTEMPTS_EXHAUSTED", "message": "Worker retries were exhausted."}
         )
+        recovered = 0
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+
+            # Reconcile unleased in-process running jobs interrupted by container/server restart
+            unleased_running = self.conn.execute(
+                "SELECT * FROM jobs WHERE status = 'running' AND lease_expires_at IS NULL"
+            ).fetchall()
+            for row in unleased_running:
+                job_id = row["job_id"]
+                latest_cp = self.get_latest_checkpoint(job_id)
+                if latest_cp and latest_cp.stage in ("posterior_saved", "diagnostics_completed"):
+                    # Checkpoint shows model was already fitted and saved before restart!
+                    rec_result = latest_cp.state_data.get("result") or {"recovered": True, "stage": latest_cp.stage}
+                    self.conn.execute(
+                        "UPDATE jobs SET status = 'succeeded', result = ?, updated_at = ? WHERE job_id = ?",
+                        (json.dumps(rec_result), now, job_id),
+                    )
+                    recovered += 1
+                else:
+                    interrupted_err = json.dumps(
+                        {
+                            "code": "PROCESS_INTERRUPTED",
+                            "message": "Process interrupted due to server restart. State cached for resumption.",
+                            "last_checkpoint": latest_cp.to_dict() if latest_cp else None,
+                        }
+                    )
+                    self.conn.execute(
+                        "UPDATE jobs SET status = 'failed', error = ?, updated_at = ? WHERE job_id = ?",
+                        (interrupted_err, now, job_id),
+                    )
+                    recovered += 1
+
             requeued = self.conn.execute(
                 """
                 UPDATE jobs
@@ -352,12 +450,13 @@ class SQLiteJobRepository:
                 (now, now),
             ).rowcount
             self.conn.commit()
-            return requeued + failed + cancelled
+            return recovered + requeued + failed + cancelled
         except Exception:
             self.conn.rollback()
             raise
 
     def _row_to_record(self, row) -> JobRecord:
+        cps = self.get_checkpoints(row["job_id"])
         return JobRecord(
             job_id=row["job_id"],
             job_type=row["job_type"],
@@ -375,4 +474,5 @@ class SQLiteJobRepository:
             fence_token=row["fence_token"],
             attempts=row["attempts"],
             max_attempts=row["max_attempts"],
+            checkpoints=cps,
         )

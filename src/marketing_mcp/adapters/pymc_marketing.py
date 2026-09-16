@@ -533,7 +533,68 @@ class PyMCMarketingAdapter:
     def response_curves(self, model) -> dict[str, Any]:
         if hasattr(model, "sample_saturation_curve"):
             da = model.sample_saturation_curve()
-            return {"summary": self._small_summary(da), "method": "sample_saturation_curve"}
+            channel_curves: dict[str, Any] = {}
+            if "channel" in getattr(da, "dims", ()):
+                channels = da.coords["channel"].values.tolist()
+                grid_dim = "x" if "x" in da.dims else (da.dims[-1] if da.dims else None)
+                x_vals = (
+                    da.coords[grid_dim].values.tolist()
+                    if grid_dim and grid_dim in getattr(da, "coords", {})
+                    else list(range(da.shape[-1]))
+                )
+
+                # Cap points for compact and readable JSON response
+                step = max(1, len(x_vals) // 50)
+                selected_indices = list(range(0, len(x_vals), step))
+                if (len(x_vals) - 1) not in selected_indices:
+                    selected_indices.append(len(x_vals) - 1)
+
+                sub_x = [round(float(x_vals[i]), 4) for i in selected_indices]
+
+                for ch in channels:
+                    ch_da = da.sel(channel=ch)
+                    reduce_dims = [d for d in ch_da.dims if d in ("chain", "draw")]
+                    if reduce_dims:
+                        med = ch_da.median(dim=reduce_dims)
+                        q03 = ch_da.quantile(0.03, dim=reduce_dims)
+                        q97 = ch_da.quantile(0.97, dim=reduce_dims)
+                    else:
+                        med = ch_da
+                        q03 = ch_da
+                        q97 = ch_da
+
+                    if grid_dim:
+                        med_vals = [round(float(med.isel({grid_dim: i}).values), 4) for i in selected_indices]
+                        lower_vals = [round(float(q03.isel({grid_dim: i}).values), 4) for i in selected_indices]
+                        upper_vals = [round(float(q97.isel({grid_dim: i}).values), 4) for i in selected_indices]
+                    else:
+                        med_vals = [round(float(v), 4) for v in med.values.flatten()[: len(sub_x)]]
+                        lower_vals = [round(float(v), 4) for v in q03.values.flatten()[: len(sub_x)]]
+                        upper_vals = [round(float(v), 4) for v in q97.values.flatten()[: len(sub_x)]]
+
+                    max_resp = round(float(np.nanmax(med_vals)), 4) if med_vals else 0.0
+                    half_resp = max_resp / 2.0
+                    half_idx = 0
+                    for idx, val in enumerate(med_vals):
+                        if val >= half_resp:
+                            half_idx = idx
+                            break
+                    half_spend = sub_x[half_idx] if sub_x else 0.0
+
+                    channel_curves[str(ch)] = {
+                        "spend_grid": sub_x,
+                        "median_response": med_vals,
+                        "lower_94": lower_vals,
+                        "upper_94": upper_vals,
+                        "max_response_median": max_resp,
+                        "half_saturation_spend": half_spend,
+                    }
+
+            return {
+                "channels": channel_curves,
+                "summary": self._small_summary(da),
+                "method": "sample_saturation_curve",
+            }
         raise DomainError(
             "RESPONSE_CURVES_UNAVAILABLE", "No compatible response-curve API is available"
         )
