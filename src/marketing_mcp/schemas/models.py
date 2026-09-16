@@ -59,6 +59,7 @@ class ColumnSummary(BaseModel):
     std: float | None = None
     min: float | None = None
     max: float | None = None
+    sparkline: str | None = None
 
 
 class DatasetSummary(BaseModel):

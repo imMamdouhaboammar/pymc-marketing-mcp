@@ -102,3 +102,7 @@ def test_summarize_dataset_frame_pure(synthetic_mmm_df: pd.DataFrame):
     assert "google" in summary.channel_spend_shares
     total_share = sum(summary.channel_spend_shares.values())
     assert pytest.approx(total_share, rel=1e-3) == 1.0
+
+    meta_col = next(c for c in summary.column_summaries if c.name == "meta")
+    assert meta_col.sparkline is not None
+    assert len(meta_col.sparkline) > 0

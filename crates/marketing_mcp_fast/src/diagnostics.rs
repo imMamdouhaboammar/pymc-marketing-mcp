@@ -1,4 +1,9 @@
-//! Fast MCMC convergence diagnostics and decision gate evaluation in Rust.
+//! Internal benchmark MCMC convergence diagnostics and test fixture utilities.
+//!
+//! # ARCHITECTURAL INVARIANT: NON-AUTHORITATIVE
+//! Statistical decision gate authority, threshold policies (R-hat, ESS, divergences),
+//! and model approval/rejection reside 100% in Python (`marketing_mcp.domain.diagnostics.engine`).
+//! Rust functions here are retained strictly for internal benchmark comparisons and test fixtures.
 
 use serde::{Deserialize, Serialize};
 

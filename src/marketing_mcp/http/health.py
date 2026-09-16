@@ -26,11 +26,15 @@ def _dependency_check(checks: dict[str, Any], name: str, probe) -> bool:
     return True
 
 
+from marketing_mcp.accelerators import get_engine_info
+
+
 def check_readiness(app: Application) -> tuple[bool, dict[str, Any]]:
     """Probe configured backends without exposing implementation details."""
     checks: dict[str, Any] = {}
     database_ok = _dependency_check(checks, "database", app.persistence.probe)
     artifacts_ok = _dependency_check(checks, "artifact_storage", app.artifacts.probe)
+    checks["interaction_engine"] = get_engine_info()
     return database_ok and artifacts_ok, checks
 
 

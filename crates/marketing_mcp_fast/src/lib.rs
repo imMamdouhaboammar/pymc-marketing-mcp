@@ -7,13 +7,120 @@ use pyo3::types::{PyDict, PyList};
 
 mod csv_preflight;
 mod diagnostics;
+mod engine;
 mod quantiles;
 mod sparklines;
 
 use csv_preflight::sniff_and_validate_csv;
 use diagnostics::{compute_split_rhat, evaluate_mcmc_gates};
+use engine::{admit_and_validate_request, DEFAULT_MAX_REQUEST_SIZE};
 use quantiles::compute_quantiles;
 use sparklines::{generate_sparkline as rust_generate_sparkline, lttb_downsample};
+
+#[pyfunction]
+#[pyo3(signature = (raw_bytes, max_size=None, tenant_id=None))]
+fn fast_admit_request(
+    py: Python,
+    raw_bytes: &[u8],
+    max_size: Option<usize>,
+    tenant_id: Option<String>,
+) -> PyResult<PyObject> {
+    let limit = max_size.unwrap_or(DEFAULT_MAX_REQUEST_SIZE);
+    let dict = PyDict::new(py);
+    match admit_and_validate_request(raw_bytes, limit, tenant_id.as_deref()) {
+        Ok(admitted) => {
+            dict.set_item("admitted", true)?;
+            dict.set_item("request_id", admitted.request_id)?;
+            dict.set_item("jsonrpc", admitted.jsonrpc)?;
+            dict.set_item("method", admitted.method)?;
+            dict.set_item("tool_name", admitted.tool_name)?;
+            dict.set_item("payload_size", admitted.payload_size)?;
+            dict.set_item("is_notification", admitted.is_notification)?;
+            dict.set_item("error", py.None())?;
+        }
+        Err(err) => {
+            dict.set_item("admitted", false)?;
+            let err_dict = PyDict::new(py);
+            err_dict.set_item("code", err.code)?;
+            err_dict.set_item("category", err.category)?;
+            err_dict.set_item("message", err.message)?;
+            err_dict.set_item("error_id", err.error_id)?;
+            err_dict.set_item("request_id", err.request_id)?;
+            err_dict.set_item("tenant_id", err.tenant_id)?;
+            err_dict.set_item("retryable", err.retryable)?;
+            err_dict.set_item("actionable", err.actionable)?;
+            dict.set_item("error", err_dict)?;
+        }
+    }
+    Ok(dict.into())
+}
+
+#[pyfunction]
+fn fast_parse_range_header(header: &str, file_size: u64) -> Option<(u64, u64, u64)> {
+    engine::parse_range_header(header, file_size)
+}
+
+#[pyfunction]
+#[pyo3(signature = (payload_size, max_size=None, tenant_id=None))]
+fn fast_admit_job(
+    py: Python,
+    payload_size: usize,
+    max_size: Option<usize>,
+    tenant_id: Option<String>,
+) -> PyResult<PyObject> {
+    let limit = max_size.unwrap_or(engine::DEFAULT_MAX_REQUEST_SIZE);
+    let dict = PyDict::new(py);
+    match engine::admit_job_submission(payload_size, limit, tenant_id.as_deref()) {
+        Ok(adm) => {
+            dict.set_item("admitted", true)?;
+            dict.set_item("job_id", adm.job_id)?;
+            dict.set_item("status", adm.status)?;
+            dict.set_item("admitted_at", adm.admitted_at)?;
+            dict.set_item("recommended_poll_interval_ms", adm.recommended_poll_interval_ms)?;
+            dict.set_item("error", py.None())?;
+        }
+        Err(err) => {
+            dict.set_item("admitted", false)?;
+            let err_dict = PyDict::new(py);
+            err_dict.set_item("code", err.code)?;
+            err_dict.set_item("category", err.category)?;
+            err_dict.set_item("message", err.message)?;
+            err_dict.set_item("error_id", err.error_id)?;
+            err_dict.set_item("retryable", err.retryable)?;
+            dict.set_item("error", err_dict)?;
+        }
+    }
+    Ok(dict.into())
+}
+
+#[pyfunction]
+#[pyo3(signature = (job_id, in_process=true))]
+fn fast_acknowledge_cancellation(
+    py: Python,
+    job_id: &str,
+    in_process: bool,
+) -> PyResult<PyObject> {
+    let dict = PyDict::new(py);
+    match engine::acknowledge_job_cancellation(job_id, in_process) {
+        Ok(ack) => {
+            dict.set_item("acknowledged", true)?;
+            dict.set_item("job_id", ack.job_id)?;
+            dict.set_item("status", ack.status)?;
+            dict.set_item("acknowledged_at", ack.acknowledged_at)?;
+            dict.set_item("fence_triggered", ack.fence_triggered)?;
+            dict.set_item("error", py.None())?;
+        }
+        Err(err) => {
+            dict.set_item("acknowledged", false)?;
+            let err_dict = PyDict::new(py);
+            err_dict.set_item("code", err.code)?;
+            err_dict.set_item("category", err.category)?;
+            err_dict.set_item("message", err.message)?;
+            dict.set_item("error", err_dict)?;
+        }
+    }
+    Ok(dict.into())
+}
 
 #[pyfunction]
 fn get_version() -> &'static str {
@@ -66,7 +173,7 @@ fn fast_sniff_and_validate_csv(
         date_col.as_deref(),
         target_col.as_deref(),
         ch_refs.as_deref(),
-    ).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+    ).map_err(pyo3::exceptions::PyValueError::new_err)?;
 
     let dict = PyDict::new(py);
     dict.set_item("row_count", res.row_count)?;
@@ -117,12 +224,59 @@ fn fast_compute_split_rhat(chains: Vec<Vec<f64>>) -> f64 {
     compute_split_rhat(&chains)
 }
 
+fn py_to_serde_value(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
+    if obj.is_none() {
+        Ok(serde_json::Value::Null)
+    } else if let Ok(b) = obj.extract::<bool>() {
+        Ok(serde_json::Value::Bool(b))
+    } else if let Ok(i) = obj.extract::<i64>() {
+        Ok(serde_json::Value::Number(i.into()))
+    } else if let Ok(f) = obj.extract::<f64>() {
+        if f.is_nan() || f.is_infinite() {
+            Ok(serde_json::Value::Null)
+        } else if let Some(n) = serde_json::Number::from_f64(f) {
+            Ok(serde_json::Value::Number(n))
+        } else {
+            Ok(serde_json::Value::Null)
+        }
+    } else if let Ok(s) = obj.extract::<String>() {
+        Ok(serde_json::Value::String(s))
+    } else if let Ok(dict) = obj.downcast::<pyo3::types::PyDict>() {
+        let mut map = serde_json::Map::new();
+        for (k, v) in dict.iter() {
+            let key_str = k.extract::<String>()?;
+            let val = py_to_serde_value(&v)?;
+            map.insert(key_str, val);
+        }
+        Ok(serde_json::Value::Object(map))
+    } else if let Ok(list) = obj.downcast::<pyo3::types::PyList>() {
+        let mut vec = Vec::with_capacity(list.len());
+        for item in list.iter() {
+            vec.push(py_to_serde_value(&item)?);
+        }
+        Ok(serde_json::Value::Array(vec))
+    } else if let Ok(tuple) = obj.downcast::<pyo3::types::PyTuple>() {
+        let mut vec = Vec::with_capacity(tuple.len());
+        for item in tuple.iter() {
+            vec.push(py_to_serde_value(&item)?);
+        }
+        Ok(serde_json::Value::Array(vec))
+    } else {
+        let s = obj.str()?.extract::<String>()?;
+        Ok(serde_json::Value::String(s))
+    }
+}
+
 #[pyfunction]
-fn fast_serialize_json(py: Python, obj: PyObject) -> PyResult<String> {
-    // Uses serde_json for fast string dump via python's json module or pyo3
-    let json_module = py.import("json")?;
-    let res = json_module.call_method1("dumps", (obj,))?;
-    res.extract::<String>()
+fn fast_serialize_json(obj: &Bound<'_, PyAny>) -> PyResult<String> {
+    let value = py_to_serde_value(obj)?;
+    serde_json::to_string(&value).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn fast_serialize_json_bytes(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    let value = py_to_serde_value(obj)?;
+    serde_json::to_vec(&value).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
 #[pymodule]
@@ -136,5 +290,10 @@ fn marketing_mcp_fast(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fast_mcmc_diagnostics, m)?)?;
     m.add_function(wrap_pyfunction!(fast_compute_split_rhat, m)?)?;
     m.add_function(wrap_pyfunction!(fast_serialize_json, m)?)?;
+    m.add_function(wrap_pyfunction!(fast_serialize_json_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(fast_admit_request, m)?)?;
+    m.add_function(wrap_pyfunction!(fast_parse_range_header, m)?)?;
+    m.add_function(wrap_pyfunction!(fast_admit_job, m)?)?;
+    m.add_function(wrap_pyfunction!(fast_acknowledge_cancellation, m)?)?;
     Ok(())
 }

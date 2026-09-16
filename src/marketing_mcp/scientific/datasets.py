@@ -155,6 +155,17 @@ def summarize_dataset_frame(
         is_num = pd.api.types.is_numeric_dtype(series)
         non_null = int(series.count())
         null_count = int(series.isna().sum())
+        sparkline = None
+        if is_num and non_null > 0:
+            try:
+                from marketing_mcp.accelerators import generate_sparkline
+
+                vals = [float(x) for x in series.dropna()]
+                if vals:
+                    sparkline = generate_sparkline(vals)
+            except Exception:
+                sparkline = None
+
         col_summary = ColumnSummary(
             name=str(col),
             dtype=str(series.dtype),
@@ -164,6 +175,7 @@ def summarize_dataset_frame(
             std=float(series.std()) if is_num and non_null > 1 else None,
             min=float(series.min()) if is_num and non_null > 0 else None,
             max=float(series.max()) if is_num and non_null > 0 else None,
+            sparkline=sparkline,
         )
         column_summaries.append(col_summary)
 

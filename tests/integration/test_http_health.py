@@ -107,3 +107,13 @@ def test_no_module_declares_an_independent_release_version_literal():
         "release-version literals must derive from marketing_mcp.__version__:\n"
         + "\n".join(offenders)
     )
+
+
+def test_health_endpoint_reports_interaction_engine_state(tmp_path):
+    status, _headers, body = _call_asgi(_http_app(tmp_path), "/health")
+    assert status == 200
+    payload = json.loads(body)
+    assert "interaction_engine" in payload
+    assert "backend" in payload["interaction_engine"]
+    assert "rust_accelerated" in payload["interaction_engine"]
+

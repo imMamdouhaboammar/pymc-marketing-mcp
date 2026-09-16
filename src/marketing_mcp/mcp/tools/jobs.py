@@ -28,12 +28,34 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
         principal = resolve_context().principal
         require_scope(principal, scopes_for_tool("submit_fit_mmm_job")[0])
 
+        payload_dict = config.model_dump()
+        from marketing_mcp.accelerators import fast_admit_job
+        import json
+
+        payload_bytes_len = len(json.dumps(payload_dict).encode("utf-8"))
+        tenant_id = principal.tenant_id if principal else None
+        adm = fast_admit_job(payload_bytes_len, max_size=50 * 1024 * 1024, tenant_id=tenant_id)
+        if not adm.get("admitted"):
+            err = adm.get("error") or {}
+            raise DomainError(
+                err.get("code", "PAYLOAD_TOO_LARGE"),
+                err.get("message", "Job payload exceeds limit"),
+            )
+
         async def _fit_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
             loop = asyncio.get_running_loop()
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
             app.jobs.record_checkpoint(job.job_id, "dataset_validated", progress_percent=15.0)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
             app.jobs.record_checkpoint(job.job_id, "sampling_initialized", progress_percent=30.0)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
             # Run CPU-bound PyMC fit in executor thread
             res = await loop.run_in_executor(None, app.models.fit, config, principal)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
             res_dict = res.model_dump()
             app.jobs.record_checkpoint(
                 job.job_id,
@@ -41,9 +63,11 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
                 progress_percent=90.0,
                 state_data={"model_id": res.model_id, "result": res_dict},
             )
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
             app.jobs.record_checkpoint(
                 job.job_id,
-                "fit_completed",
+                "diagnostics_completed",
                 progress_percent=100.0,
                 state_data={"model_id": res.model_id, "result": res_dict},
             )
@@ -51,7 +75,7 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
 
         job_rec = app.jobs.submit_job(
             job_type="fit_mmm",
-            payload=config.model_dump(),
+            payload=payload_dict,
             runner_fn=_fit_runner,
             principal=principal,
             idempotency_key=idempotency_key,
@@ -123,8 +147,14 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
 
         async def _resume_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
             loop = asyncio.get_running_loop()
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
             app.jobs.record_checkpoint(job.job_id, "sampling_initialized", progress_percent=30.0)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
             res = await loop.run_in_executor(None, app.models.fit, config, principal)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
             res_dict = res.model_dump()
             app.jobs.record_checkpoint(
                 job.job_id,
@@ -148,8 +178,20 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
     async def cancel_job(job_id: str):
         principal = resolve_context().principal
         require_scope(principal, scopes_for_tool("cancel_job")[0])
+        from marketing_mcp.accelerators import fast_acknowledge_cancellation
+
+        ack = fast_acknowledge_cancellation(job_id, in_process=True)
+        if not ack.get("acknowledged"):
+            err = ack.get("error") or {}
+            raise DomainError(
+                err.get("code", "INVALID_JOB_ID"),
+                err.get("message", "Invalid job id"),
+            )
+
         cancelled = app.jobs.cancel_job(job_id, principal=principal)
-        return env(summary=cancelled.to_dict())
+        summary_dict = cancelled.to_dict()
+        summary_dict["fence_triggered"] = ack.get("fence_triggered", True)
+        return env(summary=summary_dict)
 
     @mcp.tool(
         name="list_jobs",

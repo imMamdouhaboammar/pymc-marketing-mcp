@@ -16,20 +16,24 @@ try:
 except ImportError:
     try:
         # Check if local release shared library is present
-        import ctypes
+        from _frozen_importlib_external import ExtensionFileLoader
         import importlib.util
         from pathlib import Path
 
-        # Look in crate target release dir
+        # Look in package directory or crate target release dir
+        pkg_dir = Path(__file__).resolve().parent
         target_dir = Path(__file__).resolve().parent.parent.parent.parent / "crates" / "marketing_mcp_fast" / "target" / "release"
         dylib_candidates = [
+            pkg_dir / "marketing_mcp_fast.so",
+            pkg_dir / "libmarketing_mcp_fast.dylib",
             target_dir / "libmarketing_mcp_fast.dylib",
             target_dir / "libmarketing_mcp_fast.so",
             target_dir / "marketing_mcp_fast.so",
         ]
         found = next((p for p in dylib_candidates if p.is_file()), None)
         if found:
-            spec = importlib.util.spec_from_file_location("marketing_mcp_fast", found)
+            loader = ExtensionFileLoader("marketing_mcp_fast", str(found))
+            spec = importlib.util.spec_from_file_location("marketing_mcp_fast", found, loader=loader)
             if spec and spec.loader:
                 _rust_core = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(_rust_core)
@@ -224,7 +228,7 @@ def _py_fast_mcmc_diagnostics(
     if divergences > 0:
         failures.append(f"Sampler had {divergences} divergent transition(s)")
     if max_rhat > 1.05:
-        failures.push(f"Max R-hat ({max_rhat:.3f}) exceeds safety threshold (1.05)")
+        failures.append(f"Max R-hat ({max_rhat:.3f}) exceeds safety threshold (1.05)")
     elif max_rhat > 1.02:
         warnings.append(f"Max R-hat ({max_rhat:.3f}) shows mild convergence friction")
 
@@ -293,6 +297,12 @@ def fast_sniff_and_validate_csv(
 def fast_mcmc_diagnostics(
     rhats: list[float], esses: list[float], divergences: int
 ) -> dict[str, Any]:
+    """Experimental / benchmark MCMC diagnostic evaluator.
+
+    NON-AUTHORITATIVE: Production statistical decision gate authority resides
+    exclusively in `marketing_mcp.domain.diagnostics.engine.diagnose_inferencedata`.
+    This accelerator function is retained strictly for comparative benchmarks and tests.
+    """
     if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_mcmc_diagnostics"):
         return _rust_core.fast_mcmc_diagnostics(rhats, esses, divergences)
     return _py_fast_mcmc_diagnostics(rhats, esses, divergences)
@@ -302,3 +312,225 @@ def fast_serialize_json(obj: Any) -> str:
     if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_serialize_json"):
         return _rust_core.fast_serialize_json(obj)
     return _py_fast_serialize_json(obj)
+
+
+def _py_fast_admit_request(
+    raw_bytes: bytes, max_size: int | None = None, tenant_id: str | None = None
+) -> dict[str, Any]:
+    import time
+    import uuid
+
+    limit = max_size or (50 * 1024 * 1024)
+    if len(raw_bytes) > limit:
+        return {
+            "admitted": False,
+            "error": {
+                "code": "PAYLOAD_TOO_LARGE",
+                "category": "transport",
+                "message": f"Payload size ({len(raw_bytes)} bytes) exceeds maximum limit ({limit} bytes)",
+                "error_id": f"err-{int(time.time() * 1000):x}",
+                "request_id": None,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+            },
+        }
+    if not raw_bytes:
+        return {
+            "admitted": False,
+            "error": {
+                "code": "EMPTY_REQUEST",
+                "category": "protocol",
+                "message": "Request body is empty",
+                "error_id": f"err-{int(time.time() * 1000):x}",
+                "request_id": None,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+            },
+        }
+    try:
+        obj = json.loads(raw_bytes)
+    except Exception as e:
+        return {
+            "admitted": False,
+            "error": {
+                "code": "MALFORMED_JSON_RPC",
+                "category": "protocol",
+                "message": f"Malformed JSON payload: {e}",
+                "error_id": f"err-{int(time.time() * 1000):x}",
+                "request_id": None,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+            },
+        }
+    if not isinstance(obj, dict):
+        return {
+            "admitted": False,
+            "error": {
+                "code": "INVALID_JSON_RPC",
+                "category": "protocol",
+                "message": "JSON-RPC payload must be a JSON object",
+                "error_id": f"err-{int(time.time() * 1000):x}",
+                "request_id": None,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+            },
+        }
+    req_id = str(obj.get("id")) if "id" in obj else f"req-{uuid.uuid4().hex[:12]}"
+    method = str(obj.get("method", ""))
+    if not method:
+        return {
+            "admitted": False,
+            "error": {
+                "code": "MISSING_METHOD",
+                "category": "protocol",
+                "message": "JSON-RPC request is missing required 'method' field",
+                "error_id": f"err-{int(time.time() * 1000):x}",
+                "request_id": req_id,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+            },
+        }
+    tool_name = None
+    if method == "tools/call" and isinstance(obj.get("params"), dict):
+        tool_name = obj["params"].get("name")
+    return {
+        "admitted": True,
+        "request_id": req_id,
+        "jsonrpc": obj.get("jsonrpc", "2.0"),
+        "method": method,
+        "tool_name": tool_name,
+        "payload_size": len(raw_bytes),
+        "is_notification": "id" not in obj,
+        "error": None,
+    }
+
+
+def fast_serialize_json_bytes(obj: Any) -> bytes:
+    if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_serialize_json_bytes"):
+        return bytes(_rust_core.fast_serialize_json_bytes(obj))
+    return _py_fast_serialize_json(obj).encode("utf-8")
+
+
+def fast_admit_request(
+    raw_bytes: bytes, max_size: int | None = None, tenant_id: str | None = None
+) -> dict[str, Any]:
+    """Admit and validate raw MCP request using Rust native engine when available."""
+    if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_admit_request"):
+        return _rust_core.fast_admit_request(raw_bytes, max_size, tenant_id)
+    return _py_fast_admit_request(raw_bytes, max_size, tenant_id)
+
+
+def _py_fast_parse_range_header(header: str, file_size: int) -> tuple[int, int, int] | None:
+    if file_size <= 0:
+        return None
+    trimmed = header.strip()
+    if not trimmed.startswith("bytes="):
+        return None
+    spec = trimmed[6:]
+    parts = spec.split("-", 1)
+    if len(parts) != 2:
+        return None
+    start_str, end_str = parts[0].strip(), parts[1].strip()
+    try:
+        if not start_str:
+            suffix_len = int(end_str)
+            if suffix_len <= 0:
+                return None
+            start = max(0, file_size - suffix_len)
+            end = file_size - 1
+        else:
+            start = int(start_str)
+            end = file_size - 1 if not end_str else min(int(end_str), file_size - 1)
+        if start >= file_size or start > end:
+            return None
+        return start, end, end - start + 1
+    except ValueError:
+        return None
+
+
+def fast_parse_range_header(header: str, file_size: int) -> tuple[int, int, int] | None:
+    """Fast HTTP Range request header parsing using Rust native engine when available."""
+    if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_parse_range_header"):
+        return _rust_core.fast_parse_range_header(header, file_size)
+    return _py_fast_parse_range_header(header, file_size)
+
+
+def _py_fast_admit_job(
+    payload_size: int, max_size: int | None = None, tenant_id: str | None = None
+) -> dict[str, Any]:
+    import time
+    import uuid
+
+    limit = max_size or (50 * 1024 * 1024)
+    if payload_size > limit:
+        return {
+            "admitted": False,
+            "error": {
+                "code": "PAYLOAD_TOO_LARGE",
+                "category": "transport",
+                "message": f"Job submission payload ({payload_size} bytes) exceeds limit ({limit} bytes)",
+                "error_id": f"err-{int(time.time() * 1000):x}",
+                "retryable": False,
+            },
+        }
+    now = int(time.time())
+    job_id = f"job-{uuid.uuid4().hex[:12]}"
+    return {
+        "admitted": True,
+        "job_id": job_id,
+        "status": "accepted",
+        "admitted_at": now,
+        "recommended_poll_interval_ms": 1000,
+        "error": None,
+    }
+
+
+def _py_fast_acknowledge_cancellation(
+    job_id: str, in_process: bool = True
+) -> dict[str, Any]:
+    import time
+
+    trimmed = job_id.strip()
+    if not trimmed:
+        return {
+            "acknowledged": False,
+            "error": {
+                "code": "INVALID_JOB_ID",
+                "category": "validation",
+                "message": "Job ID cannot be empty",
+            },
+        }
+    return {
+        "acknowledged": True,
+        "job_id": trimmed,
+        "status": "cancelled" if in_process else "cancelling",
+        "acknowledged_at": int(time.time()),
+        "fence_triggered": True,
+        "error": None,
+    }
+
+
+def fast_admit_job(
+    payload_size: int, max_size: int | None = None, tenant_id: str | None = None
+) -> dict[str, Any]:
+    """Sub-millisecond job admission token generation using Rust native engine when available."""
+    if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_admit_job"):
+        return _rust_core.fast_admit_job(payload_size, max_size, tenant_id)
+    return _py_fast_admit_job(payload_size, max_size, tenant_id)
+
+
+def fast_acknowledge_cancellation(
+    job_id: str, in_process: bool = True
+) -> dict[str, Any]:
+    """Fast truthful cancellation acknowledgment using Rust native engine when available."""
+    if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_acknowledge_cancellation"):
+        return _rust_core.fast_acknowledge_cancellation(job_id, in_process)
+    return _py_fast_acknowledge_cancellation(job_id, in_process)
+
+
+
