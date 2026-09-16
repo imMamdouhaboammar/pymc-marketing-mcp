@@ -1,9 +1,18 @@
 # ---------------------------------------------------------
 # Stage 1: Build native Rust acceleration extension
 # ---------------------------------------------------------
-FROM rust:1-slim AS rust-builder
+FROM python:3.12-slim AS rust-builder
 
 WORKDIR /build
+
+# Install Rust toolchain and build tools in target Python 3.12 environment
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Copy crate sources and Cargo manifests
 COPY crates ./crates

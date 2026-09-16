@@ -25,7 +25,9 @@ except ImportError:
         target_dir = Path(__file__).resolve().parent.parent.parent.parent / "crates" / "marketing_mcp_fast" / "target" / "release"
         dylib_candidates = [
             pkg_dir / "marketing_mcp_fast.so",
+            pkg_dir / "libmarketing_mcp_fast.so",
             pkg_dir / "libmarketing_mcp_fast.dylib",
+            pkg_dir / "marketing_mcp_fast.dylib",
             target_dir / "libmarketing_mcp_fast.dylib",
             target_dir / "libmarketing_mcp_fast.so",
             target_dir / "marketing_mcp_fast.so",
