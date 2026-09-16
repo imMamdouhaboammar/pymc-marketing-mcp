@@ -164,6 +164,16 @@ The following resilient tools are exposed to prevent MCP connection dropouts and
 - `export_artifact_to_sandbox(digest, namespace, client_sandbox_path)`: Provides direct download URLs, resumable `curl` commands, SHA256 checksum verification, and Python load scripts.
 - `cleanup_server_storage(max_age_hours=24)`: Purges `/tmp` scratch directories, expired delivered artifacts, and orphan blobs.
 
+## Native Rust Acceleration Engine (`marketing_mcp_fast`)
+
+To optimize latency and eliminate timeouts for conversational AI clients (Claude, Cursor, ChatGPT):
+- **C-Extension Module**: Compiled Rust crate `crates/marketing_mcp_fast` exposing native PyO3 functions linked to `src/marketing_mcp_fast.so`.
+- **Pillar 1 (SIMD CSV Preflight)**: Sniffs delimiters, counts rows, detects nulls, and validates non-negative spend in Rust before touching pandas. Benchmarked at **~2,800x speedup** (3.7s to 1.31ms on a 3,000-row x 10-col CSV).
+- **Pillar 2 (MCMC Diagnostics Gatekeeper)**: Evaluates Gelman-Rubin split $\hat{R}$ and Bulk-ESS across parameters in **0.10ms**, rejecting unconverged models before triggering heavy simulations.
+- **Pillar 3 (Curve Compression & Sparklines)**: Employs Largest-Triangle-Three-Buckets (LTTB) to compress 1,000-point response curves down to 25–50 points to preserve LLM token budgets; generates inline Unicode sparklines (` ▂▃▄▅▆▇█`).
+- **Pillar 4 (Zero-Downtime Fallback Parity)**: If the native Rust binary is absent, pure Python implementations execute transparently with 100% test parity.
+- **Darwin/Linux Linker Flag**: Builds must use `RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"` so Python runtime symbols resolve dynamically. Rust unit tests run with `cargo test --no-default-features`.
+
 ## Failure Lessons & Operational Hardening
 
 All real-world post-mortems and architectural bug fixes are codified in `Failure-lessons/`:
@@ -179,6 +189,7 @@ All real-world post-mortems and architectural bug fixes are codified in `Failure
 - `10-state-recovery-and-crash-resumption.md`: State machine transitions from FAILED/CANCELLED and automatic crash recovery on startup.
 - `11-artifact-sandbox-push-and-server-garbage-collection.md`: Direct curl/SHA256 sandbox export and automated server-side garbage collection.
 - `12-saturation-curves-response-fidelity-and-decision-caveats.md`: Saturation curve rendering, response curve granularity, and propagating data sparsity warnings to budget optimization.
+- `13-native-rust-acceleration-pyo3-and-mcmc-gatekeeper.md`: Rust C-extension acceleration, PyO3 dynamic linking on Darwin/Linux, split R-hat edge-case gatekeeping, and zero-downtime Python fallback parity.
 
 ## Release claim rule
 

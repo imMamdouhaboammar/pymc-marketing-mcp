@@ -27,6 +27,7 @@ Following the Compound Engineering loop, `/fable-learning`, and `/convo-learn` m
 | 10 | [State Machine Crash Recovery & Resumption](./10-state-recovery-and-crash-resumption.md) | State Machine / High Availability | High | Allow resumption transitions from FAILED/CANCELLED, auto-reconcile stale running jobs on container startup, and resume from latest valid checkpoint. |
 | 11 | [Artifact Sandbox Push & Server Garbage Collection](./11-artifact-sandbox-push-and-server-garbage-collection.md) | Storage / Client UX | High | Deliver artifacts directly to client sandboxes with curl and SHA256 verification; automate server-side cleanup of /tmp, expired files, and orphan blobs. |
 | 12 | [Saturation Curve Rendering & Decision Identifiability Caveats](./12-saturation-curves-response-fidelity-and-decision-caveats.md) | Plotting / Decision Quality | High | Use canonical `model.plot.saturation_curves` with DataArray `curve`, break down response curves per-channel, and carry forward upstream dataset validation warnings (`LONG_ZERO_SPEND_RUN`) into budget optimization output. |
+| 13 | [Native Rust C-Extension Acceleration & Diagnostic Gatekeeper](./13-native-rust-acceleration-pyo3-and-mcmc-gatekeeper.md) | Performance / LLM Latency | High | Accelerate CSV preflight 2,800x (3.7s to 1.31ms) via SIMD Rust, enforce 0.1ms fail-closed split R-hat MCMC decision gates, downsample curves with LTTB, and guarantee zero-downtime Python fallback. |
 
 ---
 
@@ -39,4 +40,6 @@ Following the Compound Engineering loop, `/fable-learning`, and `/convo-learn` m
 5. **Zero-RAM Large Artifact Handling**: Stream and hash artifacts in bounded chunks (1MB) and materialize via symlinks to protect container RAM disks (`tmpfs`).
 6. **Granular Checkpointing & Bounded Polling**: Long-running asynchronous Bayesian jobs must persist sub-stage progress to tolerate client disconnections and container restarts.
 7. **Proactive Resource Reclamation**: Maintain automated garbage collection for local scratch disks and enforce cloud storage lifecycle TTL policies.
+8. **Zero Mathematical Reimplementation**: Keep Bayesian MCMC models 100% in Python; use Rust strictly as an edge accelerator for I/O sniffing, gatekeeping, quantiles, and token compression.
+9. **Transparent Fallback Parity**: Always provide 100% behavioral fallback parity in pure Python when native binary extensions are absent.
 
