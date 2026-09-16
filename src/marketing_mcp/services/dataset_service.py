@@ -126,41 +126,115 @@ class DatasetService:
         return self._read_bytes(data, f".{record['format']}")
 
     def inspect(self, dataset_id: str) -> DatasetInspection:
-        from marketing_mcp.scientific.datasets import inspect_dataset_frame
-
         df = self.load(dataset_id)
-        return inspect_dataset_frame(df, dataset_id=dataset_id)
+        possible_dates = []
+        for c in df.columns:
+            if "date" in c.lower() or "week" in c.lower():
+                possible_dates.append(c)
+        date_col = possible_dates[0] if possible_dates else None
+        freq = None
+        start = end = None
+        missing = []
+        issues = []
+        if date_col:
+            dates = (
+                pd.to_datetime(df[date_col], errors="coerce")
+                .dropna()
+                .sort_values()
+                .drop_duplicates()
+            )
+            start = dates.min().date().isoformat() if len(dates) else None
+            end = dates.max().date().isoformat() if len(dates) else None
+            if len(dates) >= 3:
+                deltas = dates.diff().dropna().dt.days
+                med = float(deltas.median())
+                freq = (
+                    "daily"
+                    if med <= 1.5
+                    else "weekly"
+                    if med <= 8
+                    else "monthly"
+                    if med <= 35
+                    else "irregular"
+                )
+                if freq == "weekly":
+                    expected = pd.date_range(
+                        dates.min(), dates.max(), freq=pd.Timedelta(days=round(med))
+                    )
+                    missing = [d.date().isoformat() for d in expected.difference(dates)[:100]]
+        numeric = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+        targets = [
+            c
+            for c in numeric
+            if any(k in c.lower() for k in ["revenue", "sales", "orders", "target", "conversion"])
+        ]
+        channels = [
+            c
+            for c in numeric
+            if any(
+                k in c.lower()
+                for k in [
+                    "spend",
+                    "meta",
+                    "google",
+                    "tiktok",
+                    "youtube",
+                    "facebook",
+                    "search",
+                    "media",
+                    "tv",
+                    "radio",
+                ]
+            )
+            and c not in targets
+        ]
+        controls = [
+            c
+            for c in numeric
+            if c not in targets + channels
+            and any(
+                k in c.lower()
+                for k in ["discount", "price", "holiday", "promo", "season", "competitor", "macro"]
+            )
+        ]
+        if missing:
+            issues.append(
+                Finding(
+                    severity="warning",
+                    code="MISSING_PERIODS",
+                    message="Potential missing periods detected",
+                    evidence={"count": len(missing)},
+                    suggested_action="Validate continuity before modeling",
+                )
+            )
+        candidate = bool(date_col and targets and channels and len(df) >= 52)
+        return DatasetInspection(
+            dataset_id=dataset_id,
+            rows=len(df),
+            frequency=freq,
+            date_range={"start": start, "end": end},
+            possible_targets=targets,
+            possible_channels=channels,
+            possible_controls=controls,
+            missing_periods=missing,
+            issues=issues,
+            mmm_candidate=candidate,
+        )
 
     def validate(
         self, dataset_id, date_column, target_column, channel_columns, control_columns, dims=None
     ) -> DatasetValidationResult:
-        from marketing_mcp.scientific.datasets import validate_dataset_frame
-
-        df = self.load(dataset_id)
-        return validate_dataset_frame(
-            df=df,
-            date_column=date_column,
-            target_column=target_column,
-            channel_columns=channel_columns,
-            control_columns=control_columns or [],
+        findings = validate_mmm_dataset(
+            self.load(dataset_id),
+            date_column,
+            target_column,
+            channel_columns,
+            control_columns,
             dims=dims or [],
-            dataset_id=dataset_id,
+        )
+        valid = not any(f.severity == "error" for f in findings)
+        return DatasetValidationResult(
+            dataset_id=dataset_id, findings=findings, valid_for_modeling=valid
         )
 
-    def summarize(
-        self,
-        dataset_id: str,
-        date_column: str | None = None,
-        channel_columns: list[str] | None = None,
-        target_column: str | None = None,
-    ):
-        from marketing_mcp.scientific.datasets import summarize_dataset_frame
-
-        df = self.load(dataset_id)
-        return summarize_dataset_frame(
-            df=df,
-            date_column=date_column,
-            channel_columns=channel_columns,
-            target_column=target_column,
-        )
 
