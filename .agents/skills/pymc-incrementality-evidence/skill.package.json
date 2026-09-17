@@ -1,0 +1,65 @@
+{
+  "schema_version": "1",
+  "name": "pymc-incrementality-evidence",
+  "version": "1.0.0",
+  "domain": "mmm-evidence",
+  "summary": "Interpret server-produced channel contributions, iROAS, response curves, and next-measurement evidence without overstating causality.",
+  "triggers": [
+    "how much did Meta contribute",
+    "show incremental ROAS",
+    "which channels are saturated"
+  ],
+  "negative_triggers": [
+    "move 40% of TV budget to Search",
+    "compare these two specifications",
+    "fit an MMM"
+  ],
+  "primary_tools": [
+    "get_channel_contributions",
+    "get_incremental_roas",
+    "get_response_curves",
+    "recommend_next_measurement"
+  ],
+  "secondary_tools": [
+    "get_model_status"
+  ],
+  "deprecated_tools": [],
+  "administrative_tools": [],
+  "required_resources": [
+    "marketing://models/{model_id}",
+    "marketing://models/{model_id}/diagnostics"
+  ],
+  "prerequisites": [],
+  "gates": [
+    "diagnostic_gate"
+  ],
+  "forbidden_before": [
+    {
+      "operations": [
+        "get_incremental_roas"
+      ],
+      "until": "diagnostic_gate"
+    }
+  ],
+  "fallback_skills": [
+    "pymc-diagnostics-gate"
+  ],
+  "continuations": [
+    "pymc-budget-optimization",
+    "pymc-lift-calibration"
+  ],
+  "maturity": "experimental",
+  "authoritative_sources": [
+    "../../references/scientific-answer-contract.md",
+    "../../references/scientific-source-ledger.md"
+  ],
+  "files": {
+    "references": [],
+    "examples": [],
+    "templates": [],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": []
+  }
+}

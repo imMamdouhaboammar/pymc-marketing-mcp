@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-artifact-delivery-trigger",
+      "type": "should_trigger",
+      "query": "give me the posterior artifact",
+      "expected_skill": "pymc-artifact-delivery"
+    },
+    {
+      "id": "pymc-artifact-delivery-near-miss",
+      "type": "should_not_trigger",
+      "query": "fit my MMM",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-artifact-delivery-ambiguous",
+      "type": "ambiguous",
+      "query": "I need the results file, but I do not know whether the model finished or which artifact exists.",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-artifact-delivery-multi",
+      "type": "multi_intent",
+      "query": "Diagnose model mmm_12, then give me its posterior plot artifact if the model artifact exists.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-artifact-delivery-recovery",
+      "type": "recovery",
+      "query": "The plot request failed after the model completed; check the stored artifact instead of recomputing model results.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": []
+}

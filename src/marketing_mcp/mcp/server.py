@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from mcp.server.caching import CacheHint
+
 from marketing_mcp.app import Application
 from marketing_mcp.mcp.resources import register_resources
+from marketing_mcp.mcp.skills import register_skill_delivery
 from marketing_mcp.mcp.tools.artifacts import register_artifacts_tools
 from marketing_mcp.mcp.tools.clv import register_clv_tools
 from marketing_mcp.mcp.tools.datasets import register_datasets_tools
@@ -25,9 +28,15 @@ def create_server(app: Application | None = None, context_provider=None):
             "Never invent or hallucinate posterior estimates. Always diagnose fitted MMMs "
             "before using budget simulation or optimization tools."
         ),
+        cache_hints={
+            "tools/list": CacheHint(ttl_ms=300_000, scope="private"),
+            "resources/list": CacheHint(ttl_ms=300_000, scope="private"),
+            "resources/templates/list": CacheHint(ttl_ms=300_000, scope="private"),
+        },
     )
 
     register_resources(mcp, app, context_provider=context_provider)
+    register_skill_delivery(mcp, app, context_provider=context_provider)
     register_clv_tools(mcp, app, context_provider=context_provider)
     register_model_selection_tools(mcp, app, context_provider=context_provider)
     register_decisions_tools(mcp, app, context_provider=context_provider)

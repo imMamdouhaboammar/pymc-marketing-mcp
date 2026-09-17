@@ -116,7 +116,7 @@ def test_decision_gate_claim_drift_is_detected():
 def test_decision_gate_claim_matching_code_is_accepted():
     marker = (
         "<!-- drift-check: decision-gated-tools = "
-        "optimize_budget, optimize_flighting, simulate_budget -->\n"
+        "get_incremental_roas, optimize_budget, optimize_flighting, simulate_budget -->\n"
     )
     assert check_decision_gate_claims(marker, path="docs/FAKE.md") == []
 

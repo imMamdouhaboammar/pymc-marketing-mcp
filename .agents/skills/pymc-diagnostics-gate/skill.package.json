@@ -1,24 +1,64 @@
 {
+  "schema_version": "1",
   "name": "pymc-diagnostics-gate",
-  "version": "2.0.0",
-  "description": "Bayesian MCMC convergence diagnostics and decision quality gate for PyMC-Marketing",
-  "entrypoint": "SKILL.md",
+  "version": "2.1.0",
+  "domain": "mmm-diagnostics",
+  "summary": "Diagnose fitted MMMs, explain rejection/caution states, and enforce the repository\u2019s decision gate without bypasses.",
+  "triggers": [
+    "why was my MMM rejected",
+    "my fit has divergences",
+    "R-hat or ESS looks bad"
+  ],
+  "negative_triggers": [
+    "compare model specifications by LOO",
+    "move spend to Meta",
+    "validate my CSV"
+  ],
+  "primary_tools": [
+    "diagnose_mmm"
+  ],
+  "secondary_tools": [
+    "get_model_status"
+  ],
+  "deprecated_tools": [],
+  "administrative_tools": [],
+  "required_resources": [
+    "marketing://models/{model_id}",
+    "marketing://models/{model_id}/diagnostics"
+  ],
+  "prerequisites": [],
+  "gates": [
+    "diagnostic_gate"
+  ],
+  "forbidden_before": [
+    {
+      "operations": [
+        "get_incremental_roas",
+        "simulate_budget",
+        "optimize_budget",
+        "optimize_flighting"
+      ],
+      "until": "diagnostic_gate"
+    }
+  ],
+  "fallback_skills": [],
+  "continuations": [
+    "pymc-model-validation",
+    "pymc-incrementality-evidence",
+    "pymc-budget-optimization"
+  ],
+  "maturity": "stable",
+  "authoritative_sources": [
+    "../../references/scientific-answer-contract.md",
+    "../../references/scientific-source-ledger.md"
+  ],
   "files": {
-    "references": [
-      "references/mcmc-troubleshooting.md",
-      "references/information-criteria-guide.md"
-    ],
-    "templates": [
-      "templates/remediation-checklist.md"
-    ],
-    "examples": [
-      "examples/divergence-remediation-walkthrough.md"
-    ],
+    "references": [],
+    "examples": [],
+    "templates": [],
     "evals": [
       "evals/evals.json"
     ],
-    "scripts": [
-      "scripts/gate_evaluator.py"
-    ]
+    "scripts": []
   }
 }

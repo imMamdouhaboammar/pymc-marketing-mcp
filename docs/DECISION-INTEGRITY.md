@@ -4,7 +4,7 @@ This document describes the current decision-safety contract implemented around 
 
 The goal is not to label every posterior output as safe for action. The service separates descriptive model evidence from decision-grade operations and blocks the latter when diagnostics reject the model
 
-<!-- drift-check: decision-gated-tools = optimize_budget, optimize_flighting, simulate_budget -->
+<!-- drift-check: decision-gated-tools = get_incremental_roas, optimize_budget, optimize_flighting, simulate_budget -->
 
 ## Decision states
 

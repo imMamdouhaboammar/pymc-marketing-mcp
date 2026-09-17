@@ -1,0 +1,90 @@
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-job-resilience-trigger",
+      "type": "should_trigger",
+      "query": "the MMM fit timed out",
+      "expected_skill": "pymc-job-resilience"
+    },
+    {
+      "id": "pymc-job-resilience-near-miss",
+      "type": "should_not_trigger",
+      "query": "fit a quick synchronous MMM",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-job-resilience-ambiguous",
+      "type": "ambiguous",
+      "query": "The fit stopped responding; I cannot tell whether the server is still running the job.",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-job-resilience-multi",
+      "type": "multi_intent",
+      "query": "Recover the disconnected fit, resume only if the persisted state permits it, then diagnose the resulting model.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-job-resilience-recovery",
+      "type": "recovery",
+      "query": "The client disconnected after submit_fit_mmm_job; recover the existing execution state before considering a new submission.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": [
+    {
+      "id": "recover-before-resubmit",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state"
+        },
+        {
+          "tool": "resume_job"
+        }
+      ],
+      "max_consecutive_polls": 2
+    },
+    {
+      "id": "invalid-unbounded-polling",
+      "expected_valid": false,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "tool": "poll_job_progress"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resubmit-before-recovery",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "submit_fit_mmm_job"
+        }
+      ]
+    }
+  ]
+}

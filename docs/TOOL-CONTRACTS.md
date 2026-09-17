@@ -219,6 +219,14 @@ Push/stage a model or dataset artifact (up to 1GB) for the AI client sandbox to 
 
 Run server garbage collection to purge expired, delivered, or orphaned artifacts and temp files
 
+## Scientific Skill guidance
+
+### `get_skill_guidance`
+
+Experimental model-callable fallback for MCP hosts that do not automatically expose resources to the model. With `task`, it routes to one compact specialist Skill and returns resource URIs plus bounded alternatives. With `skill_name`, it returns only the explicitly registered Skill package, manifest, and content hash. It requires `marketing:read`, does not execute statistical calculations, and cannot read arbitrary filesystem paths.
+
+The server intentionally does not invent a `skills/list` protocol method. Standard MCP resources/resource templates provide lazy full-content delivery; prompts are not added because they would duplicate workflow text and many clients present prompts as user-selected primitives.
+
 ## MCP resources
 
 Current resource templates include
@@ -229,6 +237,14 @@ Current resource templates include
 - `marketing://models/{model_id}/lineage`
 - `marketing://models/{model_id}/plots/{plot_type}`
 - `marketing://clv/{model_id}`
+- `marketing://skills`
+- `marketing://skills/{skill_name}`
+- `marketing://skills/{skill_name}/manifest`
+- `marketing://skills/tool-map`
+- `marketing://skills/workflow-map`
+- `marketing://skills/decision-gates`
+- `marketing://skills/references/scientific-answer-contract`
+- `marketing://skills/references/scientific-source-ledger`
 
 Current hardening note: these resources are public MCP resource contracts, but their request-scoped principal/scope/object-authorization path is not yet proven to match protected tool authorization. Remote production release is blocked until H2 closes
 

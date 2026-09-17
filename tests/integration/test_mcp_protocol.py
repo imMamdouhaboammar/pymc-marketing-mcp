@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import uvicorn
 from mcp.client.session import ClientSession
@@ -64,13 +65,38 @@ def test_mcp_stdio_client_discovery_and_tools(tmp_path):
                 "select_best_model",
             }
             assert expected_tools.issubset(tool_names)
+            assert "get_skill_guidance" in tool_names
+
+            resources = await session.list_resources()
+            resource_uris = {str(r.uri) for r in resources.resources}
+            assert "marketing://skills" in resource_uris
+
+            templates = await session.list_resource_templates()
+            template_uris = {str(r.uri_template) for r in templates.resource_templates}
+            assert "marketing://skills/{skill_name}" in template_uris
+            assert "marketing://skills/{skill_name}/manifest" in template_uris
+
+            catalog = await session.read_resource("marketing://skills")
+            catalog_data = json.loads(catalog.contents[0].text)
+            assert len(catalog_data["skills"]) == 11
+
+            selected = await session.read_resource("marketing://skills/pymc-model-validation")
+            assert "# PyMC Model Validation" in selected.contents[0].text
+            manifest = await session.read_resource("marketing://skills/pymc-model-validation/manifest")
+            manifest_data = json.loads(manifest.contents[0].text)
+            assert manifest_data["name"] == "pymc-model-validation"
+
+            routed = await session.call_tool(
+                "get_skill_guidance",
+                arguments={"task": "Which MMM specification should I trust?"},
+            )
+            routed_data = json.loads(routed.content[0].text)
+            assert routed_data["summary"]["recommended_skill"] == "pymc-model-validation"
 
             # 2. Tool invocation: register_dataset
             reg_res = await session.call_tool("register_dataset", arguments={"path": str(csv_path)})
             assert len(reg_res.content) > 0
             assert "dataset_id" in reg_res.content[0].text
-            import json
-
             reg_data = json.loads(reg_res.content[0].text)
             dataset_id = reg_data["summary"]["dataset_id"]
 
@@ -138,8 +164,6 @@ def test_mcp_streamable_http_roundtrip(tmp_path):
                     "recommend_next_measurement",
                     arguments={"model_id": "missing_model"},
                 )
-                import json
-
                 err = json.loads(res.content[0].text)
                 assert err["error"]["code"] == "MODEL_NOT_FOUND"
         finally:

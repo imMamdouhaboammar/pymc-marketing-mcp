@@ -1,25 +1,79 @@
 {
+  "schema_version": "1",
   "name": "pymc-mmm-workflow",
-  "version": "2.0.0",
-  "description": "Full 6-stage Bayesian Media Mix Modeling lifecycle with PyMC-Marketing",
-  "entrypoint": "SKILL.md",
+  "version": "2.1.0",
+  "domain": "mmm-lifecycle",
+  "summary": "Run the principal constrained MMM lifecycle through registered datasets, fitting, state inspection, diagnosis, and specialist continuations.",
+  "triggers": [
+    "fit a media mix model",
+    "run MMM analysis",
+    "build an MMM from validated marketing data"
+  ],
+  "negative_triggers": [
+    "why was my MMM rejected",
+    "compare these fitted specifications",
+    "optimize my media budget"
+  ],
+  "primary_tools": [
+    "fit_mmm"
+  ],
+  "secondary_tools": [
+    "get_model_status"
+  ],
+  "deprecated_tools": [],
+  "administrative_tools": [],
+  "required_resources": [
+    "marketing://datasets/{dataset_id}",
+    "marketing://models/{model_id}"
+  ],
+  "prerequisites": [
+    "validated registered dataset with explicit date, target, channel, control, and dimension roles"
+  ],
+  "gates": [
+    "dataset_validation_passed",
+    "diagnostic_gate"
+  ],
+  "forbidden_before": [
+    {
+      "operations": [
+        "fit_mmm"
+      ],
+      "until": "dataset_validation_passed"
+    },
+    {
+      "operations": [
+        "get_incremental_roas",
+        "simulate_budget",
+        "optimize_budget",
+        "optimize_flighting"
+      ],
+      "until": "diagnostic_gate"
+    }
+  ],
+  "fallback_skills": [
+    "pymc-dataset-readiness",
+    "pymc-job-resilience"
+  ],
+  "continuations": [
+    "pymc-diagnostics-gate",
+    "pymc-model-validation",
+    "pymc-incrementality-evidence",
+    "pymc-budget-optimization",
+    "pymc-lift-calibration",
+    "pymc-artifact-delivery"
+  ],
+  "maturity": "stable",
+  "authoritative_sources": [
+    "../../references/scientific-answer-contract.md",
+    "../../references/scientific-source-ledger.md"
+  ],
   "files": {
-    "references": [
-      "references/transforms-guide.md",
-      "references/panel-mmm-guide.md"
-    ],
-    "templates": [
-      "templates/fit-mmm-input.json",
-      "templates/executive-brief.md"
-    ],
-    "examples": [
-      "examples/e-commerce-mmm-walkthrough.md"
-    ],
+    "references": [],
+    "examples": [],
+    "templates": [],
     "evals": [
       "evals/evals.json"
     ],
-    "scripts": [
-      "scripts/dataset_precheck.py"
-    ]
+    "scripts": []
   }
 }

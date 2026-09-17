@@ -24,7 +24,7 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 45 capabilities (17 experimental, 26 stable, 2 deprecated).
+**Totals:** 54 capabilities (26 experimental, 26 stable, 2 deprecated).
 
 
 ## Tools
@@ -47,7 +47,7 @@ approved the model.
 | `register_dataset` | datasets | stable | not enforced | `datasets.register_file` | Register a CSV/Parquet file from the allowed ingest directory and fingerprint it. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists` |
 | `validate_dataset` | datasets | stable | not enforced | `datasets.validate` | Check a dataset against MMM modeling requirements and report blocking issues. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists` |
 | `get_channel_contributions` | decisions | stable | not enforced | `decisions.contributions` | Report posterior channel contributions with uncertainty intervals. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling` |
-| `get_incremental_roas` | decisions | stable | not enforced | `decisions.iroas` | Report total and marginal incremental ROAS per channel with uncertainty. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling` |
+| `get_incremental_roas` | decisions | stable | required | `decisions.iroas` | Report total and marginal incremental ROAS per channel with uncertainty. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling` |
 | `get_response_curves` | decisions | experimental | not enforced | `decisions.response_curves` | Report saturation response curves per channel. | none |
 | `optimize_budget` | decisions | stable | required | `decisions.optimize` | Allocate a fixed budget under channel constraints using the PyMC-Marketing optimizer. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow`<br>`tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling`<br>`tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts` |
 | `optimize_flighting` | decisions | stable | required | `decisions.optimize_flighting` | Build a multi-period weekly spend schedule and evaluate it against the model. | `tests/statistical/test_flighting_optimization.py::test_real_dynamic_flighting_optimization` |
@@ -70,6 +70,7 @@ approved the model.
 | `get_model_status` | modeling | stable | not enforced | `models.status` | Report stored state, configuration, and diagnostics summary for a model. | `tests/integration/test_persistence_lifecycle.py::test_full_persistence_lifecycle_across_restarts` |
 | `select_best_model` | modeling | experimental | not enforced | `models.select_best_model` | Rank models by information criterion and Bayesian model-averaging weights. | none |
 | `get_posterior_plots` | plots | experimental | not enforced | `plots.generate_all` | Render headless posterior plot artifacts (PNG/SVG) for a fitted model. | none |
+| `get_skill_guidance` | skills | experimental | not enforced | `skillpack.resolve_guidance` | Route a task to one scientific workflow skill or fetch one selected skill package. | none |
 
 
 ## Resources
@@ -82,3 +83,11 @@ approved the model.
 | `marketing://models/{model_id}` | modeling | experimental | not enforced | `` | Stored model record, configuration, and provenance. | none |
 | `marketing://models/{model_id}/lineage` | modeling | experimental | not enforced | `` | Parent/child lineage chain for a model. | none |
 | `marketing://models/{model_id}/plots/{plot_type}` | plots | experimental | not enforced | `plots.get_cached_plot` | Rendered posterior plot artifact for a model. | none |
+| `marketing://skills` | skills | experimental | not enforced | `` | Compact deterministic catalog of available scientific workflow skills. | none |
+| `marketing://skills/decision-gates` | skills | experimental | not enforced | `` | Decision-gated tool map derived from the public capability registry. | none |
+| `marketing://skills/references/scientific-answer-contract` | skills | experimental | not enforced | `` | Shared contract for communicating scientific analytical results and uncertainty. | none |
+| `marketing://skills/references/scientific-source-ledger` | skills | experimental | not enforced | `` | Versioned source ledger for scientific rules used by the Skill Pack. | none |
+| `marketing://skills/tool-map` | skills | experimental | not enforced | `` | Machine-readable classification of every public MCP tool into skill guidance. | none |
+| `marketing://skills/workflow-map` | skills | experimental | not enforced | `` | Compact prerequisites, gates, continuations, and fallback workflow map. | none |
+| `marketing://skills/{skill_name}` | skills | experimental | not enforced | `` | Canonical operational SKILL.md content for one allowed skill name. | none |
+| `marketing://skills/{skill_name}/manifest` | skills | experimental | not enforced | `` | Machine-readable manifest for one allowed scientific workflow skill. | none |

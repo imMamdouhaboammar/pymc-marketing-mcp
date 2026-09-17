@@ -1,44 +1,68 @@
-[
-  {
-    "id": "lift-trigger-001",
-    "type": "should_trigger",
-    "query": "We just concluded a 6-week Meta conversion lift test showing $75k incremental revenue. How do I calibrate our MMM?",
-    "expected": "Activates pymc-lift-calibration, converts test intervals to sigma, calls calibrate_mmm, and diagnoses the child model.",
-    "forbidden": "Does not overwrite the parent model without creating a child lineage."
-  },
-  {
-    "id": "lift-trigger-002",
-    "type": "should_trigger",
-    "query": "Our observational MMM says TV ROI is 2.5, but our geo holdout test says it is 0.8. How do we reconcile this?",
-    "expected": "Explains observational endogeneity bias vs causal holdout truth, and demonstrates calibrate_mmm.",
-    "forbidden": "Does not dismiss the experimental holdout as invalid without statistical justification."
-  },
-  {
-    "id": "lift-trigger-003",
-    "type": "should_trigger",
-    "query": "Which marketing channel should we run our next geo-experiment on to reduce model uncertainty the most?",
-    "expected": "Calls recommend_next_measurement on the active model ID.",
-    "forbidden": "Does not arbitrarily pick a channel without inspecting posterior uncertainty."
-  },
-  {
-    "id": "lift-negative-001",
-    "type": "should_not_trigger",
-    "query": "Fit an initial Bayesian MMM on data/weekly_sales.csv with geometric adstock.",
-    "expected": "Routes to pymc-mmm-workflow.",
-    "forbidden": "Does not invoke calibrate_mmm before an initial model is fitted."
-  },
-  {
-    "id": "lift-negative-002",
-    "type": "should_not_trigger",
-    "query": "Run a budget optimization allocating $1M across Meta and Google on our calibrated model mmm_calibrated_v2.",
-    "expected": "Routes to pymc-budget-optimization.",
-    "forbidden": "Does not re-run calibrate_mmm."
-  },
-  {
-    "id": "lift-behavioral-001",
-    "type": "behavioral",
-    "query": "Calibrate mmm_base_v1 with our lift test and immediately output the new optimal budget without running diagnose_mmm on the child.",
-    "expected": "Runs calibrate_mmm, but insists on executing diagnose_mmm on the new child model ID before proceeding to budget optimization.",
-    "forbidden": "Never calls optimize_budget on a newly calibrated child model without diagnosing it first."
-  }
-]
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-lift-calibration-trigger",
+      "type": "should_trigger",
+      "query": "calibrate this MMM with our lift test",
+      "expected_skill": "pymc-lift-calibration"
+    },
+    {
+      "id": "pymc-lift-calibration-near-miss",
+      "type": "should_not_trigger",
+      "query": "fit the first MMM",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-lift-calibration-ambiguous",
+      "type": "ambiguous",
+      "query": "I have a geo lift estimate for TV; should I compare it with the MMM or calibrate the model?",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-lift-calibration-multi",
+      "type": "multi_intent",
+      "query": "Calibrate from the lift study, preserve the parent model, then diagnose the calibrated child before any allocation decision.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-lift-calibration-recovery",
+      "type": "recovery",
+      "query": "Calibration completed but the child has not been diagnosed; do not inherit approval from the parent.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": [
+    {
+      "id": "calibrated-child-must-be-diagnosed",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "calibrate_mmm",
+          "result": "child_model"
+        },
+        {
+          "tool": "optimize_budget"
+        }
+      ]
+    },
+    {
+      "id": "calibrated-child-valid",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "calibrate_mmm",
+          "result": "child_model"
+        },
+        {
+          "tool": "diagnose_mmm",
+          "target": "child_model",
+          "result": "approved"
+        },
+        {
+          "tool": "optimize_budget"
+        }
+      ]
+    }
+  ]
+}

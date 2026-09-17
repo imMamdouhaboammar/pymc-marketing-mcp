@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "total_capabilities_tracked": 49,
+  "total_capabilities_tracked": 52,
   "tools": [
     {
       "name": "archive_model",
@@ -147,6 +147,13 @@
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/decisions",
       "cutover_gate": "G_DECISION_GATE",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_skill_guidance",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT",
       "adapter_compatibility_required": true
     },
     {
@@ -309,6 +316,18 @@
     },
     {
       "uri_template": "marketing://models/{model_id}/plots/{plot_type}",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://skills/{skill_name}",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://skills/{skill_name}/manifest",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "apps/gateway/resources",
       "cutover_gate": "G_RESOURCE_CONTRACT"

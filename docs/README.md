@@ -24,6 +24,7 @@ A test file existing in the repository is not enough to mark a release gate gree
 - `API-COMPATIBILITY.md`: declared dependency ranges and how compatibility is proven
 - `TOOL-CONTRACTS.md`: public MCP tool/resource contracts and maturity notes
 - `CAPABILITIES.md`: generated public capability inventory
+- `SCIENTIFIC-SKILLS.md`: generated Skill delivery architecture and complete capability-to-Skill coverage matrix
 - `DECISION-INTEGRITY.md`: decision gate semantics and statistical decision policy
 - `STATISTICAL-SAFETY.md`: non-negotiable statistical safety rules
 - `STATISTICAL-TESTING.md`: statistical test methodology and evidence rules

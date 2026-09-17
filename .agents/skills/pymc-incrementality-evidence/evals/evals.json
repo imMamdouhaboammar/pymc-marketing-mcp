@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-incrementality-evidence-trigger",
+      "type": "should_trigger",
+      "query": "how much did Meta contribute",
+      "expected_skill": "pymc-incrementality-evidence"
+    },
+    {
+      "id": "pymc-incrementality-evidence-near-miss",
+      "type": "should_not_trigger",
+      "query": "move 40% of TV budget to Search",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-incrementality-evidence-ambiguous",
+      "type": "ambiguous",
+      "query": "Which channel caused sales, and how certain is the model about that?",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-incrementality-evidence-multi",
+      "type": "multi_intent",
+      "query": "Show Meta contribution and marginal iROAS, then tell me what evidence is still missing before calling it causal.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-incrementality-evidence-recovery",
+      "type": "recovery",
+      "query": "The iROAS request is blocked by diagnostics; fall back to permitted descriptive evidence without presenting it as decision-grade.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": []
+}

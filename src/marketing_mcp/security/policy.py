@@ -33,6 +33,7 @@ TOOL_SCOPES: dict[str, str] = {
     "list_datasets": "marketing:read",
     "validate_dataset": "marketing:read",
     "recommend_next_measurement": "marketing:read",
+    "get_skill_guidance": "marketing:read",
     # modeling lifecycle
     "register_dataset": "marketing:model",
     "fit_mmm": "marketing:model",

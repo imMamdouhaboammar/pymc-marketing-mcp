@@ -1,0 +1,56 @@
+{
+  "schema_version": "1",
+  "name": "pymc-marketing-router",
+  "version": "1.0.0",
+  "domain": "routing",
+  "summary": "Route PyMC Marketing MCP questions to the smallest specialist workflow without doing the analysis itself.",
+  "triggers": [
+    "which workflow should I use",
+    "what can PyMC Marketing MCP do",
+    "route this marketing science task"
+  ],
+  "negative_triggers": [
+    "fit my MMM now",
+    "optimize this approved model",
+    "recover this timed out fit"
+  ],
+  "primary_tools": [
+    "get_skill_guidance"
+  ],
+  "secondary_tools": [],
+  "deprecated_tools": [],
+  "administrative_tools": [],
+  "required_resources": [
+    "marketing://skills"
+  ],
+  "prerequisites": [],
+  "gates": [],
+  "forbidden_before": [],
+  "fallback_skills": [],
+  "continuations": [
+    "pymc-dataset-readiness",
+    "pymc-mmm-workflow",
+    "pymc-diagnostics-gate",
+    "pymc-model-validation",
+    "pymc-incrementality-evidence",
+    "pymc-budget-optimization",
+    "pymc-lift-calibration",
+    "pymc-clv-customer-analytics",
+    "pymc-job-resilience",
+    "pymc-artifact-delivery"
+  ],
+  "maturity": "experimental",
+  "authoritative_sources": [
+    "../../references/scientific-answer-contract.md",
+    "../../references/scientific-source-ledger.md"
+  ],
+  "files": {
+    "references": [],
+    "examples": [],
+    "templates": [],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": []
+  }
+}

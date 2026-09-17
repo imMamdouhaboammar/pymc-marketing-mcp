@@ -74,6 +74,12 @@ Dataset
 
 See `docs/DECISION-INTEGRITY.md` for the exact policy
 
+## Scientific Skill knowledge surface
+
+The canonical procedural guidance lives in validated `.agents/skills/*` packages. The MCP server bundles the same manifests and `SKILL.md` content at build time and exposes it lazily through standard resources plus the compact `get_skill_guidance` fallback tool. This keeps procedural scientific guidance distinct from tool schemas and keeps statistical computation in application/PyMC-Marketing code.
+
+The static catalog, selected Skill resources, manifests, tool/workflow/gate maps, shared scientific references, deterministic content hashes, and private list-cache hints are described in generated `docs/SCIENTIFIC-SKILLS.md`. No non-standard `skills/list` RPC is advertised. MCP prompts are intentionally omitted because resources plus the model-callable router provide the smaller cross-host interoperability surface without duplicating workflow text.
+
 ## Budget data flow
 
 ```text

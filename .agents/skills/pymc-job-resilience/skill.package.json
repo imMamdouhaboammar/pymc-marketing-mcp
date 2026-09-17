@@ -1,0 +1,56 @@
+{
+  "schema_version": "1",
+  "name": "pymc-job-resilience",
+  "version": "1.0.0",
+  "domain": "jobs",
+  "summary": "Manage long-running MMM fitting jobs with bounded polling, persisted-state recovery, resume/cancel semantics, and no duplicate resubmission after disconnects.",
+  "triggers": [
+    "the MMM fit timed out",
+    "recover the job after disconnect",
+    "resume this fitting job"
+  ],
+  "negative_triggers": [
+    "fit a quick synchronous MMM",
+    "show posterior plots",
+    "optimize a diagnosed model"
+  ],
+  "primary_tools": [
+    "submit_fit_mmm_job",
+    "get_job_status",
+    "poll_job_progress",
+    "recover_execution_state",
+    "resume_job",
+    "cancel_job",
+    "list_jobs"
+  ],
+  "secondary_tools": [
+    "get_model_status"
+  ],
+  "deprecated_tools": [],
+  "administrative_tools": [],
+  "required_resources": [],
+  "prerequisites": [],
+  "gates": [],
+  "forbidden_before": [],
+  "fallback_skills": [
+    "pymc-mmm-workflow"
+  ],
+  "continuations": [
+    "pymc-diagnostics-gate",
+    "pymc-artifact-delivery"
+  ],
+  "maturity": "experimental",
+  "authoritative_sources": [
+    "../../references/scientific-answer-contract.md",
+    "../../references/scientific-source-ledger.md"
+  ],
+  "files": {
+    "references": [],
+    "examples": [],
+    "templates": [],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": []
+  }
+}

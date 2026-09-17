@@ -1,5 +1,5 @@
 {
-  "total": 6,
+  "total": 8,
   "resources": [
     {
       "uri_template": "marketing://clv/{model_id}",
@@ -36,6 +36,18 @@
       "name": "plot_resource",
       "description": "Serve a cached posterior plot as raw bytes (PNG).",
       "mime_type": "text/plain"
+    },
+    {
+      "uri_template": "marketing://skills/{skill_name}",
+      "name": "skill_resource",
+      "description": "Canonical operational SKILL.md content for one explicitly registered skill.",
+      "mime_type": "text/markdown"
+    },
+    {
+      "uri_template": "marketing://skills/{skill_name}/manifest",
+      "name": "skill_manifest_resource",
+      "description": "Machine-readable manifest for one explicitly registered scientific skill.",
+      "mime_type": "application/json"
     }
   ]
 }

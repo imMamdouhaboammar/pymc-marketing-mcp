@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "ForbiddenRule": {
+      "properties": {
+        "operations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Operations",
+          "type": "array"
+        },
+        "until": {
+          "title": "Until",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operations",
+        "until"
+      ],
+      "title": "ForbiddenRule",
+      "type": "object"
+    },
+    "ManifestFiles": {
+      "properties": {
+        "evals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evals",
+          "type": "array"
+        },
+        "examples": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Examples",
+          "type": "array"
+        },
+        "references": {
+          "items": {
+            "type": "string"
+          },
+          "title": "References",
+          "type": "array"
+        },
+        "scripts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scripts",
+          "type": "array"
+        },
+        "templates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Templates",
+          "type": "array"
+        }
+      },
+      "title": "ManifestFiles",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "administrative_tools": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Administrative Tools",
+      "type": "array"
+    },
+    "authoritative_sources": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Authoritative Sources",
+      "type": "array"
+    },
+    "continuations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Continuations",
+      "type": "array"
+    },
+    "deprecated_tools": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Deprecated Tools",
+      "type": "array"
+    },
+    "domain": {
+      "title": "Domain",
+      "type": "string"
+    },
+    "fallback_skills": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Fallback Skills",
+      "type": "array"
+    },
+    "files": {
+      "$ref": "#/$defs/ManifestFiles"
+    },
+    "forbidden_before": {
+      "items": {
+        "$ref": "#/$defs/ForbiddenRule"
+      },
+      "title": "Forbidden Before",
+      "type": "array"
+    },
+    "gates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Gates",
+      "type": "array"
+    },
+    "maturity": {
+      "default": "stable",
+      "enum": [
+        "stable",
+        "experimental",
+        "deprecated"
+      ],
+      "title": "Maturity",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "negative_triggers": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Negative Triggers",
+      "type": "array"
+    },
+    "prerequisites": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Prerequisites",
+      "type": "array"
+    },
+    "primary_tools": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Primary Tools",
+      "type": "array"
+    },
+    "required_resources": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Resources",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "secondary_tools": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Secondary Tools",
+      "type": "array"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "triggers": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Triggers",
+      "type": "array"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "version",
+    "domain",
+    "summary",
+    "triggers"
+  ],
+  "title": "SkillManifest",
+  "type": "object"
+}

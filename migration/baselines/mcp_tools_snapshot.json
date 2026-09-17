@@ -1,5 +1,5 @@
 {
-  "total": 39,
+  "total": 40,
   "tools": [
     {
       "name": "archive_model",
@@ -1349,6 +1349,40 @@
       }
     },
     {
+      "name": "get_skill_guidance",
+      "description": "Route a marketing-science task to one workflow skill, or fetch one named skill. Use this when the client has not already loaded marketing://skills guidance.",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task"
+          },
+          "skill_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skill Name"
+          }
+        },
+        "title": "get_skill_guidanceArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "inspect_dataset",
       "description": "Inspect a registered dataset before MMM configuration. Returns candidate targets, channels, controls, frequency, and data issues.",
       "input_schema": {
@@ -1623,7 +1657,7 @@
               },
               "margin_pct": {
                 "default": 1.0,
-                "description": "Revenue margin fraction for net-profit objective (revenue \u00d7 margin \u2212 spend)",
+                "description": "Revenue margin fraction for net-profit objective (revenue × margin − spend)",
                 "maximum": 1.0,
                 "minimum": 0.0,
                 "title": "Margin Pct",
@@ -2078,7 +2112,7 @@
           "ModelComparisonInput": {
             "properties": {
               "model_ids": {
-                "description": "List of 2\u201310 model IDs to compare. All must be fitted on the same dataset.",
+                "description": "List of 2–10 model IDs to compare. All must be fitted on the same dataset.",
                 "items": {
                   "type": "string"
                 },

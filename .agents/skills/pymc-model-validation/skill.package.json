@@ -1,0 +1,62 @@
+{
+  "schema_version": "1",
+  "name": "pymc-model-validation",
+  "version": "1.0.0",
+  "domain": "mmm-validation",
+  "summary": "Evaluate predictive performance, prior sensitivity, and model comparison without confusing those checks with diagnosis or causality.",
+  "triggers": [
+    "compare these MMM specifications",
+    "run time-slice cross-validation",
+    "check prior sensitivity",
+    "which MMM specification should I trust"
+  ],
+  "negative_triggers": [
+    "why did diagnose_mmm reject this fit",
+    "what is Meta contribution",
+    "optimize the budget"
+  ],
+  "primary_tools": [
+    "cross_validate_mmm",
+    "evaluate_prior_sensitivity",
+    "compare_models",
+    "select_best_model"
+  ],
+  "secondary_tools": [
+    "get_model_status"
+  ],
+  "deprecated_tools": [],
+  "administrative_tools": [
+    "archive_model"
+  ],
+  "required_resources": [
+    "marketing://models/{model_id}",
+    "marketing://models/{model_id}/diagnostics",
+    "marketing://models/{model_id}/lineage"
+  ],
+  "prerequisites": [
+    "completed fitted models; comparison candidates must satisfy the server comparison contract"
+  ],
+  "gates": [
+    "same_dataset_comparison"
+  ],
+  "forbidden_before": [],
+  "fallback_skills": [],
+  "continuations": [
+    "pymc-diagnostics-gate",
+    "pymc-incrementality-evidence"
+  ],
+  "maturity": "experimental",
+  "authoritative_sources": [
+    "../../references/scientific-answer-contract.md",
+    "../../references/scientific-source-ledger.md"
+  ],
+  "files": {
+    "references": [],
+    "examples": [],
+    "templates": [],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": []
+  }
+}

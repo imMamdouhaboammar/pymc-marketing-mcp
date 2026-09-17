@@ -35,6 +35,7 @@ CAPABILITY_DOMAINS: tuple[str, ...] = (
     "clv",
     "jobs",
     "artifacts",
+    "skills",
 )
 
 
@@ -250,6 +251,7 @@ _INVENTORY: tuple[Capability, ...] = (
         "Report total and marginal incremental ROAS per channel with uncertainty.",
         delegates_to="decisions.iroas",
         status="stable",
+        decision_gate_required=True,
         evidence_test_ids=(
             "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
             "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
@@ -470,6 +472,14 @@ _INVENTORY: tuple[Capability, ...] = (
         delegates_to="artifacts.cleanup_storage",
         status="experimental",
     ),
+    # --- scientific skill guidance ----------------------------------------------------------
+    _tool(
+        "get_skill_guidance",
+        "skills",
+        "Route a task to one scientific workflow skill or fetch one selected skill package.",
+        delegates_to="skillpack.resolve_guidance",
+        status="experimental",
+    ),
     # --- resources --------------------------------------------------------------------------
     _resource(
         "marketing://datasets/{dataset_id}",
@@ -501,6 +511,46 @@ _INVENTORY: tuple[Capability, ...] = (
         "marketing://clv/{model_id}",
         "clv",
         "Stored CLV model record and configuration.",
+    ),
+    _resource(
+        "marketing://skills",
+        "skills",
+        "Compact deterministic catalog of available scientific workflow skills.",
+    ),
+    _resource(
+        "marketing://skills/{skill_name}",
+        "skills",
+        "Canonical operational SKILL.md content for one allowed skill name.",
+    ),
+    _resource(
+        "marketing://skills/{skill_name}/manifest",
+        "skills",
+        "Machine-readable manifest for one allowed scientific workflow skill.",
+    ),
+    _resource(
+        "marketing://skills/tool-map",
+        "skills",
+        "Machine-readable classification of every public MCP tool into skill guidance.",
+    ),
+    _resource(
+        "marketing://skills/workflow-map",
+        "skills",
+        "Compact prerequisites, gates, continuations, and fallback workflow map.",
+    ),
+    _resource(
+        "marketing://skills/decision-gates",
+        "skills",
+        "Decision-gated tool map derived from the public capability registry.",
+    ),
+    _resource(
+        "marketing://skills/references/scientific-answer-contract",
+        "skills",
+        "Shared contract for communicating scientific analytical results and uncertainty.",
+    ),
+    _resource(
+        "marketing://skills/references/scientific-source-ledger",
+        "skills",
+        "Versioned source ledger for scientific rules used by the Skill Pack.",
     ),
 )
 

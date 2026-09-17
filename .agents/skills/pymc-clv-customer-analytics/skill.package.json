@@ -1,25 +1,58 @@
 {
+  "schema_version": "1",
   "name": "pymc-clv-customer-analytics",
-  "version": "2.0.0",
-  "description": "Bayesian Customer Lifetime Value, repeat purchase modeling, and churn cohorts for PyMC-Marketing",
-  "entrypoint": "SKILL.md",
+  "version": "2.1.0",
+  "domain": "clv",
+  "summary": "Use the current explicit PyMC-Marketing CLV tools for purchase frequency, survival/alive probability, monetary value, and combined customer lifetime value.",
+  "triggers": [
+    "estimate customer lifetime value",
+    "predict probability alive",
+    "fit a BG/NBD purchase model",
+    "who is likely to churn",
+    "churn risk"
+  ],
+  "negative_triggers": [
+    "run a media mix model",
+    "optimize the media budget",
+    "compare MMM specifications"
+  ],
+  "primary_tools": [
+    "fit_purchase_model",
+    "fit_value_model",
+    "predict_expected_purchases",
+    "predict_probability_alive",
+    "predict_expected_spend",
+    "estimate_customer_lifetime_value",
+    "get_churn_risk_cohorts"
+  ],
+  "secondary_tools": [],
+  "deprecated_tools": [
+    "fit_clv_model",
+    "predict_customer_clv"
+  ],
+  "administrative_tools": [],
+  "required_resources": [
+    "marketing://clv/{model_id}"
+  ],
+  "prerequisites": [],
+  "gates": [],
+  "forbidden_before": [],
+  "fallback_skills": [],
+  "continuations": [
+    "pymc-artifact-delivery"
+  ],
+  "maturity": "stable",
+  "authoritative_sources": [
+    "../../references/scientific-answer-contract.md",
+    "../../references/scientific-source-ledger.md"
+  ],
   "files": {
-    "references": [
-      "references/btyd-math.md",
-      "references/cohort-segmentation.md"
-    ],
-    "templates": [
-      "templates/fit-clv-models-input.json",
-      "templates/clv-segment-report.md"
-    ],
-    "examples": [
-      "examples/ecommerce-clv-walkthrough.md"
-    ],
+    "references": [],
+    "examples": [],
+    "templates": [],
     "evals": [
       "evals/evals.json"
     ],
-    "scripts": [
-      "scripts/rfm_summary.py"
-    ]
+    "scripts": []
   }
 }
