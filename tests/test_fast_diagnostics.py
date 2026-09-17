@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import time
-import numpy as np
 import pytest
 
 from marketing_mcp.accelerators import (
     fast_mcmc_diagnostics,
-    is_rust_accelerated,
 )
 
 

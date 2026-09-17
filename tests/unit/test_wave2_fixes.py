@@ -1,11 +1,12 @@
-import pytest
 import sqlite3
+
+import pytest
+
 from marketing_mcp.errors import DomainError
-from marketing_mcp.jobs.models import JobRecord, JobStatus
-from marketing_mcp.jobs.service import JobService
 from marketing_mcp.jobs.repository import SQLiteJobRepository
-from marketing_mcp.storage.gc import StorageGarbageCollector
+from marketing_mcp.jobs.service import JobService
 from marketing_mcp.storage.artifacts import LocalArtifactStore
+from marketing_mcp.storage.gc import StorageGarbageCollector
 
 
 def test_storage_gc_sql_syntax_fix(tmp_path):

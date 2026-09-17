@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from pathlib import Path
+
 import pytest
 
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings
-from marketing_mcp.mcp.context import ExecutionContext, stdio_context_provider
+from marketing_mcp.mcp.context import stdio_context_provider
 from marketing_mcp.mcp.server import create_server
 
 
@@ -51,7 +51,7 @@ def test_server(tmp_path):
 
 
 def test_register_dataset_direct_csv_content(test_server):
-    server, app, _ = test_server
+    server, _app, _ = test_server
     csv_text = "date,revenue,meta_spend,google_spend\n2026-01-01,1000,200,300\n2026-01-02,1200,250,350\n"
     res = _call(server, "register_dataset", {"content": csv_text, "filename": "campaign_data.csv"})
 
@@ -68,7 +68,7 @@ def test_register_dataset_direct_csv_content(test_server):
 
 
 def test_register_dataset_direct_base64_content(test_server):
-    server, app, _ = test_server
+    server, _app, _ = test_server
     csv_text = "date,revenue,meta\n2026-01-01,500,100\n"
     b64_content = base64.b64encode(csv_text.encode("utf-8")).decode("ascii")
 
@@ -79,7 +79,7 @@ def test_register_dataset_direct_base64_content(test_server):
 
 
 def test_register_dataset_client_sandbox_error_diagnostics(test_server):
-    server, app, _ = test_server
+    server, _app, _ = test_server
     sandbox_path = "/mnt/user-data/uploads/complex_ads_sample_data.csv"
     res = _call(server, "register_dataset", {"path": sandbox_path})
 
@@ -93,7 +93,7 @@ def test_register_dataset_client_sandbox_error_diagnostics(test_server):
 
 
 def test_register_dataset_missing_server_file_echoes_path(test_server):
-    server, app, _ = test_server
+    server, _app, _ = test_server
     missing_file = "nonexistent_ads.csv"
     res = _call(server, "register_dataset", {"path": missing_file})
 
@@ -106,7 +106,7 @@ def test_register_dataset_missing_server_file_echoes_path(test_server):
 
 
 def test_list_datasets_discovery(test_server):
-    server, app, inbox = test_server
+    server, app, _inbox = test_server
     # 1. Initially lists the seeded inbox file and 0 registered
     res = _call(server, "list_datasets", {})
     assert "summary" in res
@@ -125,7 +125,7 @@ def test_list_datasets_discovery(test_server):
 
 
 def test_compare_models_reports_all_missing_ids(test_server):
-    server, app, _ = test_server
+    server, _app, _ = test_server
     fake_ids = ["mdl_fake_1", "mdl_fake_2", "mdl_fake_3"]
     res = _call(server, "compare_models", {"input": {"model_ids": fake_ids}})
 
@@ -138,7 +138,7 @@ def test_compare_models_reports_all_missing_ids(test_server):
 
 
 def test_metadata_not_found_populates_evidence_and_next_action(test_server):
-    server, app, _ = test_server
+    server, _app, _ = test_server
     res = _call(server, "inspect_dataset", {"dataset_id": "ds_nonexistent_999"})
 
     assert "error" in res
@@ -150,7 +150,7 @@ def test_metadata_not_found_populates_evidence_and_next_action(test_server):
 
 
 def test_decision_gate_blocks_undiagnosed_model(test_server):
-    server, app, _ = test_server
+    server, _app, _ = test_server
     # Direct optimize_budget with missing or undiagnosed model
     res = _call(server, "optimize_budget", {"config": {"model_id": "mdl_missing", "budget": 10000}})
     assert "error" in res

@@ -54,7 +54,9 @@
     "marketing://skills/references/scientific-source-ledger"
   ],
   "files": {
-    "references": [],
+    "references": [
+      "references/triangulation-framework.md"
+    ],
     "examples": [],
     "templates": [],
     "evals": [

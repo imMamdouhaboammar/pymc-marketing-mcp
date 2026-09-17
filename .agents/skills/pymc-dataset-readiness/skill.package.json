@@ -46,6 +46,8 @@
     "evals": [
       "evals/evals.json"
     ],
-    "scripts": []
+    "scripts": [
+      "scripts/dataset_precheck.py"
+    ]
   }
 }

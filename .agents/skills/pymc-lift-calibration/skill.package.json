@@ -59,12 +59,21 @@
     "marketing://skills/references/scientific-source-ledger"
   ],
   "files": {
-    "references": [],
-    "examples": [],
-    "templates": [],
+    "references": [
+      "references/experiment-design.md"
+    ],
+    "examples": [
+      "examples/tv-geo-experiment-calibration-walkthrough.md"
+    ],
+    "templates": [
+      "templates/calibration-checklist.md",
+      "templates/lift-test-input.json"
+    ],
     "evals": [
       "evals/evals.json"
     ],
-    "scripts": []
+    "scripts": [
+      "scripts/lift_test_validator.py"
+    ]
   }
 }

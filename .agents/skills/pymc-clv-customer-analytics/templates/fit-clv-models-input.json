@@ -1,0 +1,21 @@
+{
+  "dataset_id": "ds_ecommerce_rfm_2026",
+  "purchase_model": {
+    "model_type": "bg_nbd",
+    "customer_id_column": "customer_id",
+    "frequency_column": "frequency",
+    "recency_column": "recency",
+    "T_column": "T",
+    "sampler": {
+      "draws": 1000,
+      "tune": 1000,
+      "chains": 4,
+      "target_accept": 0.9
+    }
+  },
+  "value_model": {
+    "customer_id_column": "customer_id",
+    "frequency_column": "frequency",
+    "monetary_value_column": "monetary_value"
+  }
+}

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-import numpy as np
+
 import pandas as pd
 import pytest
 import xarray as xr
+from pymc_marketing.mmm.budget_optimizer import MinimizeException
 
 from marketing_mcp.adapters.pymc_marketing import PyMCMarketingAdapter
 from marketing_mcp.errors import DomainError
-from pymc_marketing.mmm.budget_optimizer import MinimizeException
 
 
 class FlakyOptimizer:

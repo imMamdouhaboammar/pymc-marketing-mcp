@@ -10,7 +10,6 @@ from typing import Any
 from pydantic import ValidationError
 
 from marketing_mcp.errors import (
-    ERROR_CATALOG,
     DomainError,
     ErrorCategory,
     ErrorSeverity,

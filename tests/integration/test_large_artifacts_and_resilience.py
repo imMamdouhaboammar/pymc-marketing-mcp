@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import tempfile
 import time
 from pathlib import Path
@@ -13,9 +12,8 @@ from starlette.testclient import TestClient
 from marketing_mcp.app import Application
 from marketing_mcp.cli import create_http_app
 from marketing_mcp.config import Settings
-from marketing_mcp.jobs.models import JobCheckpoint, JobRecord, JobStatus
+from marketing_mcp.jobs.models import JobRecord, JobStatus
 from marketing_mcp.mcp.server import create_server
-from marketing_mcp.repositories.models import ArtifactRef
 from marketing_mcp.storage.artifacts import LocalArtifactStore
 from marketing_mcp.storage.gc import StorageGarbageCollector
 
@@ -93,9 +91,9 @@ def test_checkpoint_persistence_and_chronological_retrieval(app_instance):
     app_instance.job_repo.create_job(job)
 
     # Record intermediate checkpoints
-    cp1 = app_instance.jobs.record_checkpoint(job_id, "dataset_validated", progress_percent=15.0)
-    cp2 = app_instance.jobs.record_checkpoint(job_id, "sampling_initialized", progress_percent=35.0)
-    cp3 = app_instance.jobs.record_checkpoint(
+    app_instance.jobs.record_checkpoint(job_id, "dataset_validated", progress_percent=15.0)
+    app_instance.jobs.record_checkpoint(job_id, "sampling_initialized", progress_percent=35.0)
+    app_instance.jobs.record_checkpoint(
         job_id, "posterior_saved", progress_percent=90.0, state_data={"model_id": "mmm_recovered"}
     )
 

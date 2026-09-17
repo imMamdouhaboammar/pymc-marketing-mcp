@@ -16,9 +16,9 @@ import asyncio
 import json
 import random
 from datetime import date, timedelta
+
 import numpy as np
 import pandas as pd
-import pytest
 
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings

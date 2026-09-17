@@ -29,8 +29,9 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
         require_scope(principal, scopes_for_tool("submit_fit_mmm_job")[0])
 
         payload_dict = config.model_dump()
-        from marketing_mcp.accelerators import fast_admit_job
         import json
+
+        from marketing_mcp.accelerators import fast_admit_job
 
         payload_bytes_len = len(json.dumps(payload_dict).encode("utf-8"))
         tenant_id = principal.tenant_id if principal else None

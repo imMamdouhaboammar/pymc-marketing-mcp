@@ -44,7 +44,9 @@
   "files": {
     "references": [],
     "examples": [],
-    "templates": [],
+    "templates": [
+      "templates/executive-brief.md"
+    ],
     "evals": [
       "evals/evals.json"
     ],

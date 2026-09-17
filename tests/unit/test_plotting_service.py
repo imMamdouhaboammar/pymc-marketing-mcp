@@ -264,7 +264,7 @@ class TestSaturationCurvesStrategies:
         svc = PlottingService(tmp_path)
         model = _make_fake_model()
         # Force render failure
-        setattr(svc, "_render_saturation_curves", MagicMock(side_effect=RuntimeError("GPU OOM")))
+        svc._render_saturation_curves = MagicMock(side_effect=RuntimeError("GPU OOM"))
         with pytest.raises(DomainError) as exc_info:
             svc.generate_plot(model, "m_sat3", "saturation_curves")
         err = exc_info.value

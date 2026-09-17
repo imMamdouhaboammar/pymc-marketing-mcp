@@ -10,6 +10,6 @@ from marketing_mcp.scientific.datasets import (
 
 __all__ = [
     "inspect_dataset_frame",
-    "validate_dataset_frame",
     "summarize_dataset_frame",
+    "validate_dataset_frame",
 ]

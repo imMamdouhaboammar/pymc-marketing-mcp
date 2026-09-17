@@ -67,8 +67,8 @@ def get_error_diagnostic(error_id: str) -> dict[str, Any] | None:
 
 
 __all__ = [
-    "ErrorDiagnosticRegistry",
     "GLOBAL_ERROR_REGISTRY",
+    "ErrorDiagnosticRegistry",
     "get_error_diagnostic",
     "record_error_diagnostic",
 ]

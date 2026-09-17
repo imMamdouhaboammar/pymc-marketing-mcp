@@ -6,6 +6,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from marketing_mcp.errors import DomainError
 from marketing_mcp.repositories.models import ArtifactRef
@@ -257,6 +258,7 @@ class LocalArtifactStore:
             return None
         try:
             from datetime import timedelta
+
             from google.cloud import storage
 
             client = storage.Client()

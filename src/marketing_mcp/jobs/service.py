@@ -8,7 +8,7 @@ from typing import Any
 
 from marketing_mcp.errors import DomainError
 from marketing_mcp.jobs.executor import AsyncioJobExecutor, JobExecutor
-from marketing_mcp.jobs.models import JobRecord, JobStatus
+from marketing_mcp.jobs.models import JobCheckpoint, JobRecord, JobStatus
 from marketing_mcp.jobs.repository import JobRepository
 from marketing_mcp.security.ownership import authorize_job
 from marketing_mcp.security.principal import Principal
@@ -66,8 +66,6 @@ class JobService:
         total_steps: int = 1,
         state_data: dict[str, Any] | None = None,
     ) -> JobCheckpoint:
-        from marketing_mcp.jobs.models import JobCheckpoint
-
         cp = JobCheckpoint(
             checkpoint_id=f"cp-{uuid.uuid4().hex[:10]}",
             job_id=job_id,

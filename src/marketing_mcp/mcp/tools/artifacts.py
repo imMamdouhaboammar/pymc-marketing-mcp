@@ -55,7 +55,7 @@ def register_artifacts_tools(mcp, app: Application, context_provider=None) -> No
             parts = artifact_uri[len(prefix):].split("/")
             if len(parts) != 2:
                 raise DomainError("INPUT_INVALID", "Malformed artifact URI")
-            namespace, digest = parts
+            _namespace, digest = parts
             ref = ArtifactRef(
                 uri=artifact_uri,
                 sha256=digest,

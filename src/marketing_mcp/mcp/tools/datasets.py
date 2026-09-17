@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -14,12 +18,6 @@ from marketing_mcp.mcp.envelope import env
 from marketing_mcp.security import safe_ingest_path
 from marketing_mcp.security.ownership import authorize_dataset
 from marketing_mcp.security.policy import require_scope, scopes_for_tool
-
-
-import base64
-import urllib.error
-import urllib.parse
-import urllib.request
 
 
 def register_datasets_tools(mcp, app: Application, context_provider: Any = None) -> None:
@@ -115,7 +113,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
 
             # 3. HTTP / HTTPS URL download with SSRF protection & streaming byte caps
             target_url = url or (
-                path if (path and (path.startswith("http://") or path.startswith("https://"))) else None
+                path if (path and (path.startswith(("http://", "https://")))) else None
             )
             if target_url is not None:
                 max_allowed_bytes = app.settings.max_dataset_mb * 1024 * 1024
@@ -192,11 +190,10 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 registered = [d for d in registered if d.get("tenant_id") == caller_tenant]
 
             inbox_files = []
-            if is_admin or is_stdio:
-                if app.settings.ingest_dir.exists():
-                    for f in sorted(app.settings.ingest_dir.iterdir()):
-                        if f.is_file() and f.suffix.lower() in {".csv", ".parquet"}:
-                            inbox_files.append({"name": f.name, "size_bytes": f.stat().st_size})
+            if (is_admin or is_stdio) and app.settings.ingest_dir.exists():
+                for f in sorted(app.settings.ingest_dir.iterdir()):
+                    if f.is_file() and f.suffix.lower() in {".csv", ".parquet"}:
+                        inbox_files.append({"name": f.name, "size_bytes": f.stat().st_size})
 
             return env(
                 summary={

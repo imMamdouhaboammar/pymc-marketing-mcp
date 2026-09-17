@@ -912,7 +912,7 @@ class PyMCMarketingAdapter:
             "fallback_used": fallback_used,
             "initialization_strategy": winning_strategy,
             "constraint_validation": constraint_val,
-            "objective_value": float(getattr(result, "fun", 0.0)) if hasattr(result, "fun") and getattr(result, "fun") is not None else None,
+            "objective_value": float(getattr(result, "fun", 0.0)) if hasattr(result, "fun") and result.fun is not None else None,
             "planning_start": str(dates.min().date()),
             "planning_end": str(dates.max().date()),
         }

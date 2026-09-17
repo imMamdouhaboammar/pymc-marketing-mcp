@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import math
+
 import pytest
 
 from marketing_mcp.accelerators import (
     compress_curve_lttb,
     fast_compute_quantiles,
-    fast_mcmc_diagnostics,
     fast_serialize_json,
-    fast_sniff_and_validate_csv,
     generate_sparkline,
     get_engine_info,
     is_rust_accelerated,

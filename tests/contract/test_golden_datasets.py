@@ -6,9 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-import pytest
 
 GOLDEN_DIR = Path(__file__).resolve().parent.parent.parent / "migration" / "baselines" / "golden_datasets"
 

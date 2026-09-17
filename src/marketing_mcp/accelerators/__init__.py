@@ -16,8 +16,8 @@ try:
 except ImportError:
     try:
         # Check if local release shared library is present
-        from _frozen_importlib_external import ExtensionFileLoader
         import importlib.util
+        from _frozen_importlib_external import ExtensionFileLoader
         from pathlib import Path
 
         # Look in package directory or crate target release dir
@@ -78,7 +78,7 @@ def _py_generate_sparkline(values: list[float]) -> str:
             out.append("▄")
         else:
             norm = max(0.0, min(1.0, (v - min_v) / rng))
-            idx = min(7, int(round(norm * 7.0)))
+            idx = min(7, round(norm * 7.0))
             out.append(blocks[idx])
     return "".join(out)
 
@@ -96,14 +96,14 @@ def _py_compress_curve_lttb(
     a_idx = 0
 
     for i in range(max_points - 2):
-        c_start = min(n - 1, int(math.floor((i + 1) * every)) + 1)
-        c_end = min(n, int(math.floor((i + 2) * every)) + 1)
+        c_start = min(n - 1, math.floor((i + 1) * every) + 1)
+        c_end = min(n, math.floor((i + 2) * every) + 1)
         c_len = max(1, c_end - c_start)
         avg_x = sum(xs[c_start:c_end]) / c_len
         avg_y = sum(ys[c_start:c_end]) / c_len
 
-        b_start = min(n - 1, int(math.floor(i * every)) + 1)
-        b_end = min(n, int(math.floor((i + 1) * every)) + 1)
+        b_start = min(n - 1, math.floor(i * every) + 1)
+        b_end = min(n, math.floor((i + 1) * every) + 1)
 
         ax = xs[a_idx]
         ay = ys[a_idx]
@@ -157,6 +157,7 @@ def _py_fast_sniff_and_validate_csv(
     channel_cols: list[str] | None = None,
 ) -> dict[str, Any]:
     from io import BytesIO
+
     import pandas as pd
 
     df = pd.read_csv(BytesIO(csv_bytes))

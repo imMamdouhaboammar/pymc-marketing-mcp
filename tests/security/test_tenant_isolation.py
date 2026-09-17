@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
+
 import pytest
 
 from marketing_mcp.app import Application
@@ -66,7 +66,7 @@ def multi_tenant_env(tmp_path):
 
 
 def test_tenant_a_cannot_see_other_tenants_or_inbox(multi_tenant_env):
-    server, app = multi_tenant_env
+    server, _app = multi_tenant_env
     ctx_a = ExecutionContext(
         principal=Principal(subject="user_a", auth_type="api_key", tenant_id="tenant_a", scopes=frozenset(["marketing:read"]))
     )
@@ -80,7 +80,7 @@ def test_tenant_a_cannot_see_other_tenants_or_inbox(multi_tenant_env):
 
 
 def test_default_tenant_cannot_bypass_isolation(multi_tenant_env):
-    server, app = multi_tenant_env
+    server, _app = multi_tenant_env
     ctx_def = ExecutionContext(
         principal=Principal(subject="user_def", auth_type="api_key", tenant_id="default", scopes=frozenset(["marketing:read"]))
     )
@@ -93,7 +93,7 @@ def test_default_tenant_cannot_bypass_isolation(multi_tenant_env):
 
 
 def test_admin_and_stdio_can_see_all_datasets_and_inbox(multi_tenant_env):
-    server, app = multi_tenant_env
+    server, _app = multi_tenant_env
     # Stdio local caller
     ctx_stdio = ExecutionContext(
         principal=Principal(subject="local", auth_type="stdio", scopes=frozenset(["marketing:read"]))

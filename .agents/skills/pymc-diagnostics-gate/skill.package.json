@@ -53,12 +53,20 @@
     "marketing://skills/references/scientific-source-ledger"
   ],
   "files": {
-    "references": [],
-    "examples": [],
-    "templates": [],
+    "references": [
+      "references/mcmc-troubleshooting.md"
+    ],
+    "examples": [
+      "examples/divergence-remediation-walkthrough.md"
+    ],
+    "templates": [
+      "templates/remediation-checklist.md"
+    ],
     "evals": [
       "evals/evals.json"
     ],
-    "scripts": []
+    "scripts": [
+      "scripts/gate_evaluator.py"
+    ]
   }
 }

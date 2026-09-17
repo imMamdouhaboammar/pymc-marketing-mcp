@@ -57,8 +57,6 @@ def verify_artifact_download_token(
         data = json.loads(raw_payload)
         if time.time() > data.get("exp", 0):
             return False
-        if data.get("ns") != expected_namespace or data.get("sha") != expected_digest:
-            return False
-        return True
+        return not (data.get("ns") != expected_namespace or data.get("sha") != expected_digest)
     except Exception:
         return False

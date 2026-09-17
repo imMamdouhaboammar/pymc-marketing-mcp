@@ -1,0 +1,30 @@
+{
+  "dataset_id": "ds_retail_weekly_2026",
+  "date_column": "date",
+  "target_column": "revenue",
+  "channel_columns": [
+    "tv_spend",
+    "search_brand_spend",
+    "search_nonbrand_spend",
+    "meta_spend"
+  ],
+  "control_columns": [
+    "holiday_event",
+    "macro_economic_index"
+  ],
+  "yearly_seasonality": 2,
+  "adstock": {
+    "type": "geometric",
+    "l_max": 8
+  },
+  "saturation": {
+    "type": "logistic"
+  },
+  "sampler": {
+    "draws": 1000,
+    "tune": 1000,
+    "chains": 4,
+    "target_accept": 0.90,
+    "random_seed": 42
+  }
+}

@@ -9,6 +9,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 
 from marketing_mcp import __version__
+from marketing_mcp.accelerators import get_engine_info
 from marketing_mcp.app import Application
 from marketing_mcp.auth import AuthManager, MCPAuthMiddleware
 from marketing_mcp.config import Settings
@@ -18,8 +19,6 @@ from marketing_mcp.http.health import create_readiness_handler, liveness_handler
 from marketing_mcp.http.safety import RequestSafetyMiddleware
 from marketing_mcp.mcp.context import RequestScopedContextProvider
 from marketing_mcp.mcp.server import create_server
-
-from marketing_mcp.accelerators import get_engine_info
 
 SERVICE_NAME = "pymc-marketing-mcp"
 
@@ -170,9 +169,10 @@ def main():
 
     error_id_to_lookup = getattr(args, "error_id", None) or args.flag_error_id
     if error_id_to_lookup:
-        from marketing_mcp.observability.errors import GLOBAL_ERROR_REGISTRY
         import json
         import sys
+
+        from marketing_mcp.observability.errors import GLOBAL_ERROR_REGISTRY
 
         rec = GLOBAL_ERROR_REGISTRY.lookup(error_id_to_lookup)
         if not rec:

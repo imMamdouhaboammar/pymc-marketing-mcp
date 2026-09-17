@@ -1,9 +1,9 @@
-import os
 import pytest
 from starlette.testclient import TestClient
+
 from marketing_mcp.app import Application
-from marketing_mcp.config import Settings
 from marketing_mcp.cli import create_http_app
+from marketing_mcp.config import Settings
 from marketing_mcp.errors import DomainError
 
 

@@ -47,12 +47,22 @@
     "marketing://skills/references/scientific-source-ledger"
   ],
   "files": {
-    "references": [],
-    "examples": [],
-    "templates": [],
+    "references": [
+      "references/btyd-math.md",
+      "references/cohort-segmentation.md"
+    ],
+    "examples": [
+      "examples/ecommerce-clv-walkthrough.md"
+    ],
+    "templates": [
+      "templates/clv-segment-report.md",
+      "templates/fit-clv-models-input.json"
+    ],
     "evals": [
       "evals/evals.json"
     ],
-    "scripts": []
+    "scripts": [
+      "scripts/rfm_summary.py"
+    ]
   }
 }

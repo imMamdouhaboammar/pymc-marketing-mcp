@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from marketing_mcp.domain.decisions.allocation import (
     apply_changes,
@@ -95,7 +96,7 @@ class DecisionService:
         # Connect native LTTB compression and sparkline for AI client context efficiency
         from marketing_mcp.accelerators import compress_curve_lttb, generate_sparkline
         channel_curves = result.get("channel_curves") or result.get("curves") or {}
-        for ch_name, ch_data in channel_curves.items():
+        for ch_data in channel_curves.values():
             if isinstance(ch_data, dict):
                 spends = ch_data.get("spend_grid")
                 medians = ch_data.get("median_response")

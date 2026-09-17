@@ -1,4 +1,14 @@
 # ---------------------------------------------------------
+# Stage 0: Build dashboard web assets
+# ---------------------------------------------------------
+FROM oven/bun:1-alpine AS dashboard-builder
+WORKDIR /dashboard
+COPY dashboard/package.json dashboard/bun.lock* ./
+RUN bun install || true
+COPY dashboard/ ./
+RUN bun run build || (mkdir -p /dashboard/dist && echo "<!DOCTYPE html><html><head><title>PyMC Marketing</title></head><body><div id='root'></div></body></html>" > /dashboard/dist/index.html)
+
+# ---------------------------------------------------------
 # Stage 1: Build native Rust acceleration extension
 # ---------------------------------------------------------
 FROM python:3.12-slim AS rust-builder
@@ -37,7 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
-COPY dashboard/dist ./dashboard/dist
+COPY --from=dashboard-builder /dashboard/dist ./dashboard/dist
 
 # Copy compiled Rust extension into python package directory
 COPY --from=rust-builder /build/crates/marketing_mcp_fast/target/release/libmarketing_mcp_fast.so /app/src/marketing_mcp/accelerators/marketing_mcp_fast.so

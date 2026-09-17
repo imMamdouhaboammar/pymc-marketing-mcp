@@ -10,8 +10,8 @@ from pathlib import Path
 import httpx2
 import jwt
 import uvicorn
-from jwt.algorithms import RSAAlgorithm
 from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.algorithms import RSAAlgorithm
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from starlette.applications import Starlette
