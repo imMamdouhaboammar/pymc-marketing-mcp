@@ -43,8 +43,8 @@
   ],
   "maturity": "stable",
   "authoritative_sources": [
-    "../../references/scientific-answer-contract.md",
-    "../../references/scientific-source-ledger.md"
+    "marketing://skills/references/scientific-answer-contract",
+    "marketing://skills/references/scientific-source-ledger"
   ],
   "files": {
     "references": [],

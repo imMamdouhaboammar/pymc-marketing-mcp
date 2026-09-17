@@ -27,4 +27,4 @@ Use this only for navigation. Do not turn it into a statistical encyclopedia and
 
 Prefer one specialist skill. For multi-intent requests, load the first prerequisite skill and continue only after its gates pass. A request such as “Meta looks strong; move 40% of TV budget to it” is not an immediate optimizer call: establish the model, diagnostics state, then use the budget skill. “Which channel caused sales?” routes to evidence interpretation, not a claim of experimental causality.
 
-If no route is confident, return the compact catalog or the top candidate plus alternatives; never invent a workflow or tool name. Read the shared [scientific answer contract](../../references/scientific-answer-contract.md) only when producing analytical results.
+If no route is confident, return the compact catalog or the top candidate plus alternatives; never invent a workflow or tool name. Read the shared [scientific answer contract](marketing://skills/references/scientific-answer-contract) only when producing analytical results.

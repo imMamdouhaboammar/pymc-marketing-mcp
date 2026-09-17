@@ -111,6 +111,13 @@ def test_routing_evals_drive_the_runtime_router():
 
     registry = SkillRegistry.from_source_tree()
     checked = 0
+    counts_by_type: dict[str, int] = {
+        "should_trigger": 0,
+        "should_not_trigger": 0,
+        "ambiguous": 0,
+        "multi_intent": 0,
+        "recovery": 0,
+    }
     for record in registry._records.values():
         assert record.package_dir is not None
         for relative in record.manifest.files.evals:
@@ -118,14 +125,28 @@ def test_routing_evals_drive_the_runtime_router():
                 (record.package_dir / relative).read_text(encoding="utf-8")
             )
             for case in payload.routing_cases:
-                routed, _ = registry.recommend(case.query)
+                routed, alternatives = registry.recommend(case.query)
+                assert routed is not None
+                assert isinstance(alternatives, list)
+                counts_by_type[case.type] += 1
                 if case.type == "should_trigger":
                     assert routed.manifest.name == case.expected_skill, case.id
-                    checked += 1
                 elif case.type == "should_not_trigger":
                     assert routed.manifest.name != record.manifest.name, case.id
-                    checked += 1
-    assert checked >= 22
+                    if case.expected_skill:
+                        assert routed.manifest.name == case.expected_skill, case.id
+                elif case.type in {"ambiguous", "multi_intent", "recovery"}:
+                    assert len(case.query) > 0
+                    assert case.expected_behavior is not None
+                checked += 1
+
+    assert all(count > 0 for count in counts_by_type.values()), counts_by_type
+    assert counts_by_type["should_trigger"] >= 20
+    assert counts_by_type["should_not_trigger"] >= 11
+    assert counts_by_type["ambiguous"] >= 11
+    assert counts_by_type["multi_intent"] >= 11
+    assert counts_by_type["recovery"] >= 11
+    assert checked == 64
 
 
 def test_required_resources_must_be_real_resource_capabilities():
@@ -144,3 +165,58 @@ def test_required_resources_must_be_real_resource_capabilities():
     bad_registry = SkillRegistry(records)
     errors = bad_registry.validate()
     assert any("unknown resource 'fit_mmm'" in error for error in errors)
+
+
+def test_tool_trace_evaluator_edge_cases():
+    from marketing_mcp.skillpack.evals import evaluate_tool_trace
+    from marketing_mcp.skillpack.registry import ToolTrace
+
+    # 1. Dict response envelope from diagnose_mmm should be parsed without crash
+    dict_diag_trace = ToolTrace(
+        id="dict-diagnose-envelope",
+        expected_valid=True,
+        steps=[
+            {
+                "tool": "diagnose_mmm",
+                "result": {
+                    "summary": {
+                        "model_id": "mmm_1",
+                        "decision_status": "approved",
+                        "decision_tools_enabled": True,
+                    }
+                },
+            },
+            {"tool": "optimize_budget"},
+        ],
+    )
+    eval_res = evaluate_tool_trace(dict_diag_trace)
+    assert eval_res.valid is True
+
+    # 2. submit_fit_mmm_job or resume_job after approved diagnosis resets decision gate
+    async_reset_trace = ToolTrace(
+        id="async-fit-resets-gate",
+        expected_valid=False,
+        steps=[
+            {"tool": "diagnose_mmm", "result": "approved"},
+            {"tool": "submit_fit_mmm_job"},
+            {"tool": "optimize_budget"},
+        ],
+    )
+    eval_res2 = evaluate_tool_trace(async_reset_trace)
+    assert eval_res2.valid is False
+    assert any("optimize_budget called before an approved diagnostic gate" in r for r in eval_res2.reasons)
+
+    # 3. Consecutive polling without declared max_consecutive_polls must be bounded by default
+    unbounded_default_poll_trace = ToolTrace(
+        id="unbounded-default-polling",
+        expected_valid=False,
+        steps=[
+            {"tool": "poll_job_progress"},
+            {"tool": "poll_job_progress"},
+            {"tool": "poll_job_progress"},
+            {"tool": "poll_job_progress"},
+        ],
+    )
+    eval_res3 = evaluate_tool_trace(unbounded_default_poll_trace)
+    assert eval_res3.valid is False
+    assert any("unbounded polling" in r for r in eval_res3.reasons)

@@ -123,7 +123,11 @@ def main(argv: list[str] | None = None) -> int:
     assets = generated_assets()
 
     if args.check:
-        drift = [path for path, expected in assets.items() if not path.exists() or path.read_text() != expected]
+        drift = [
+            path
+            for path, expected in assets.items()
+            if not path.exists() or path.read_text(encoding="utf-8") != expected
+        ]
         if drift:
             for path in drift:
                 print(f"drift: {path.relative_to(REPO_ROOT)}", file=sys.stderr)

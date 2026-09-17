@@ -39,7 +39,15 @@
   "gates": [
     "same_dataset_comparison"
   ],
-  "forbidden_before": [],
+  "forbidden_before": [
+    {
+      "operations": [
+        "compare_models",
+        "select_best_model"
+      ],
+      "until": "same_dataset_comparison"
+    }
+  ],
   "fallback_skills": [],
   "continuations": [
     "pymc-diagnostics-gate",
@@ -47,8 +55,8 @@
   ],
   "maturity": "experimental",
   "authoritative_sources": [
-    "../../references/scientific-answer-contract.md",
-    "../../references/scientific-source-ledger.md"
+    "marketing://skills/references/scientific-answer-contract",
+    "marketing://skills/references/scientific-source-ledger"
   ],
   "files": {
     "references": [],

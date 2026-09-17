@@ -17,6 +17,6 @@ Use the server tools rather than manually ranking models from copied metrics.
 
 Good convergence is not predictive accuracy. Predictive accuracy is not prior robustness. Prior robustness is not causal identification. None of them alone proves commercial usefulness.
 
-Before a comparison, preserve dataset/model lineage and let the server enforce compatibility. If an MCP comparison operation exists, do not hand-rank models in the LLM. A model selected by comparison must still have its own acceptable `diagnose_mmm` state before gated decision use.
+Before a comparison, verify the `same_dataset_comparison` gate: models being compared must share compatible lineage and the same underlying dataset; `compare_models` and `select_best_model` are forbidden before verifying dataset compatibility. If an MCP comparison operation exists, do not hand-rank models in the LLM. A model selected by comparison must still have its own acceptable `diagnose_mmm` state before gated decision use.
 
 `archive_model` is an administrative lifecycle operation, not a normal analytical recommendation; use it only when explicitly requested and authorized. Report uncertainty and Pareto/selection warnings returned by the server. Do not import generic ArviZ behavior that the MCP tool does not expose.

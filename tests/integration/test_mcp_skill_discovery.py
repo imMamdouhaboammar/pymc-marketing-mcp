@@ -59,6 +59,15 @@ def test_catalog_and_selected_skill_are_readable(server):
         )
         assert manifest["name"] == "pymc-diagnostics-gate"
 
+        contract_text = _text(
+            await server.read_resource("marketing://skills/references/scientific-answer-contract")
+        )
+        assert "Scientific Answer Contract" in contract_text
+        ledger_text = _text(
+            await server.read_resource("marketing://skills/references/scientific-source-ledger")
+        )
+        assert "Scientific Source Ledger" in ledger_text
+
     asyncio.run(_run())
 
 

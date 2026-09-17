@@ -42,12 +42,10 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
             consecutive_polls = 0
         if tool == "poll_job_progress":
             consecutive_polls += 1
-            if (
-                trace.max_consecutive_polls is not None
-                and consecutive_polls > trace.max_consecutive_polls
-            ):
+            poll_budget = trace.max_consecutive_polls if trace.max_consecutive_polls is not None else 3
+            if consecutive_polls > poll_budget:
                 reasons.append(
-                    "unbounded polling: trace exceeded its declared consecutive polling budget"
+                    "unbounded polling: trace exceeded consecutive polling budget"
                 )
 
         if tool == "register_dataset" and step.get("client") == "remote":
@@ -58,11 +56,19 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
                     "remote client-local filesystem path must not be treated as server-readable input"
                 )
 
-        if tool in {"fit_mmm", "calibrate_mmm"}:
+        if tool in {"fit_mmm", "calibrate_mmm", "submit_fit_mmm_job", "resume_job"}:
             decision_ready = False
 
         if tool == "diagnose_mmm":
-            decision_ready = result in {"approved", "approved_with_caution"}
+            status = None
+            if isinstance(result, str):
+                status = result
+            elif isinstance(result, dict):
+                status = (
+                    result.get("decision_status")
+                    or (result.get("summary") or {}).get("decision_status")
+                )
+            decision_ready = status in {"approved", "approved_with_caution"}
 
         if tool in gated and not decision_ready:
             reasons.append(f"{tool} called before an approved diagnostic gate at step {index}")
