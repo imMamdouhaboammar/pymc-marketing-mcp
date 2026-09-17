@@ -95,7 +95,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             if r.decision_tools_enabled:
                 next_acts.extend(["simulate_budget", "optimize_budget", "cross_validate_mmm"])
             else:
-                next_acts.append("refit_model")
+                next_acts.extend(["fit_mmm", "submit_fit_mmm_job"])
             return env(
                 summary={
                     "model_id": model_id,

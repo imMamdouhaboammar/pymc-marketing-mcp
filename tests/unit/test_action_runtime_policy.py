@@ -44,7 +44,7 @@ def _active_uses() -> list[tuple[Path, str, str]]:
 def test_all_active_actions_use_reviewed_immutable_runtime_refs() -> None:
     uses = _active_uses()
 
-    assert len(uses) == 56
+    assert len(uses) == 66
     assert {action for _, action, _ in uses} == set(APPROVED_ACTIONS)
     for workflow, action, ref in uses:
         expected_ref, _kind = APPROVED_ACTIONS[action]

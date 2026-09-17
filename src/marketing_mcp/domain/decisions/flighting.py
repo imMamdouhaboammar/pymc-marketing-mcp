@@ -158,12 +158,13 @@ def build_official_response_evaluator(
     channel_params: dict[str, dict[str, float]],
     channel_scale: dict[str, float] | None = None,
     channel_columns: list[str] | None = None,
+    target_scale: float | None = None,
 ) -> Callable[[np.ndarray], float]:
     """Compile a fast numeric response evaluator from official PyMC-Marketing transforms.
 
     The returned callable maps a raw (n_channels, n_weeks) spend matrix to the
     total multi-period response using the exact transform classes the model was
-    fitted with, including training-time channel scaling.
+    fitted with, including training-time channel scaling and target scale.
 
     Args:
         adstock_type: Key of ``ADSTOCK_MAP`` (e.g. 'geometric', 'delayed', 'weibull_pdf', 'none').
@@ -178,6 +179,8 @@ def build_official_response_evaluator(
             are divided by them before evaluation (scaled-space parity with fit).
         channel_columns: Channel order matching spend matrix rows. Defaults to
             sorted keys of channel_params for deterministic ordering.
+        target_scale: Optional training-time target scaling factor. When provided,
+            evaluates response in natural/original target units instead of normalized space.
 
     Raises:
         DomainError: INPUT_INVALID when a type is unsupported or required family
@@ -270,6 +273,8 @@ def build_official_response_evaluator(
         saturation_args.append(p_sym)
 
     response = saturation_instance.function(adstocked, *saturation_args)
+    if target_scale is not None and float(target_scale) > 0:
+        response = response * float(target_scale)
     total_response = response.sum()
 
     compiled = pytensor.function(symbolic_inputs, total_response)
@@ -363,7 +368,12 @@ def optimize_flighting_schedule(
         seed_pattern = apply_spend_pattern(ch_budget, planning_weeks, pattern)
 
         for t in range(planning_weeks):
-            bounds.append((min_w, max_w if np.isfinite(max_w) else None))
+            bounds.append(
+                (
+                    min_w / total_budget,
+                    (max_w / total_budget) if np.isfinite(max_w) else None,
+                )
+            )
             min_sum += min_w
             max_sum += max_w if np.isfinite(max_w) else 1e12
             x0_matrix[i, t] = float(np.clip(seed_pattern[t], min_w, max_w if np.isfinite(max_w) else 1e9))
@@ -384,11 +394,11 @@ def optimize_flighting_schedule(
             next_action="Raise max_weekly bounds or decrease total_budget",
         )
 
-    # Re-normalize initial guess to sum exactly to total_budget
+    # Re-normalize initial guess to sum exactly to total_budget, expressed as fractions w0
     current_x0_sum = x0_matrix.sum()
     if current_x0_sum > 0:
         x0_matrix = (x0_matrix / current_x0_sum) * total_budget
-    x0 = x0_matrix.flatten()
+    w0 = (x0_matrix / total_budget).flatten()
 
     # Objective function definition
     def _response(mat: np.ndarray) -> float:
@@ -396,19 +406,22 @@ def optimize_flighting_schedule(
             return float(response_evaluator(mat))
         return evaluate_carryover_response(mat, param_list)
 
-    def objective_fn(x: np.ndarray) -> float:
+    baseline_resp = max(1.0, abs(_response(x0_matrix)))
+
+    def objective_fn(w: np.ndarray) -> float:
+        x = w * total_budget
         mat = x.reshape((n_channels, planning_weeks))
         resp = _response(mat)
         total_sp = float(np.sum(x))
 
         if objective == "maximize_net_profit":
             # Maximize: margin_pct * Response - Total Spend
-            # Minimize: -(margin_pct * Response - Total Spend)
-            loss = -(margin_pct * resp - total_sp)
+            # Minimize: -(margin_pct * Response - Total Spend), normalized by total_budget
+            loss = -(margin_pct * resp - total_sp) / total_budget
         else:
             # Maximize: Response
-            # Minimize: -Response
-            loss = -resp
+            # Minimize: -Response, normalized by baseline_resp
+            loss = -resp / baseline_resp
 
         # Soft pattern penalty
         reg = 0.0
@@ -424,17 +437,18 @@ def optimize_flighting_schedule(
 
         return loss + reg
 
-    # Constraints list
+    # Constraints list on budget fractions
     constraints = [
         {
             "type": "eq",
-            "fun": lambda x: float(np.sum(x) - total_budget),
+            "fun": lambda w: float(np.sum(w) - 1.0),
         }
     ]
 
     # Target iROAS floor constraint
     if target_iroas_min is not None and target_iroas_min > 0:
-        def roas_constraint(x: np.ndarray) -> float:
+        def roas_constraint(w: np.ndarray) -> float:
+            x = w * total_budget
             mat = x.reshape((n_channels, planning_weeks))
             resp = _response(mat)
             achieved_roas = resp / max(1e-6, float(np.sum(x)))
@@ -442,35 +456,36 @@ def optimize_flighting_schedule(
 
         constraints.append({"type": "ineq", "fun": roas_constraint})
 
-    # Run SLSQP optimization
+    # Run SLSQP optimization on normalized spend fractions
     opt_res = minimize(
         fun=objective_fn,
-        x0=x0,
+        x0=w0,
         method="SLSQP",
         bounds=bounds,
         constraints=constraints,
-        options={"maxiter": 300, "ftol": 1e-7},
+        options={"maxiter": 500, "ftol": 1e-7, "eps": 1e-5},
     )
 
+    opt_x = opt_res.x * total_budget
     if not opt_res.success and target_iroas_min is not None:
         # Verify if target ROAS constraint was violated
-        mat = opt_res.x.reshape((n_channels, planning_weeks))
+        mat = opt_x.reshape((n_channels, planning_weeks))
         resp = _response(mat)
-        achieved_roas = resp / max(1e-6, float(np.sum(opt_res.x)))
+        achieved_roas = resp / max(1e-6, float(np.sum(opt_x)))
         if achieved_roas < target_iroas_min:
-                raise DomainError(
-                    "OPTIMIZATION_INFEASIBLE",
-                    f"Target minimum iROAS of {target_iroas_min:.2f} cannot be achieved (max achieved: {achieved_roas:.2f})",
-                    evidence={
-                        "target_iroas_min": target_iroas_min,
-                        "achieved_roas": achieved_roas,
-                        "solver_message": opt_res.message,
-                    },
-                    next_action="Lower target_iroas_min or relax spend constraints",
-                )
+            raise DomainError(
+                "OPTIMIZATION_INFEASIBLE",
+                f"Target minimum iROAS of {target_iroas_min:.2f} cannot be achieved (max achieved: {achieved_roas:.2f})",
+                evidence={
+                    "target_iroas_min": target_iroas_min,
+                    "achieved_roas": achieved_roas,
+                    "solver_message": opt_res.message,
+                },
+                next_action="Lower target_iroas_min or relax spend constraints",
+            )
 
     # Post-process optimal spend matrix
-    opt_mat = opt_res.x.reshape((n_channels, planning_weeks))
+    opt_mat = opt_x.reshape((n_channels, planning_weeks))
     # Exact budget re-normalization
     total_opt = opt_mat.sum()
     if total_opt > 0 and abs(total_opt - total_budget) > 1e-6:

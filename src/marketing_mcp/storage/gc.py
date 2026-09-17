@@ -148,14 +148,26 @@ class StorageGarbageCollector:
                     total_remaining_bytes += f.stat().st_size
                     remaining_files += 1
 
+        # Candidate vs deleted stats
+        candidate_count = deleted_count
+        eligible_bytes = freed_bytes
+        eligible_mb = round(freed_bytes / (1024 * 1024), 2)
+        actual_deleted = 0 if dry_run else deleted_count
+        actual_freed_bytes = 0 if dry_run else freed_bytes
+        actual_freed_mb = 0.0 if dry_run else eligible_mb
+
         return {
             "dry_run": dry_run,
             "older_than_hours": older_than_hours,
-            "deleted_files_count": deleted_count,
-            "freed_bytes": freed_bytes,
-            "freed_mb": round(freed_bytes / (1024 * 1024), 2),
+            "candidate_files_count": candidate_count,
+            "eligible_bytes": eligible_bytes,
+            "eligible_mb": eligible_mb,
+            "deleted_files_count": actual_deleted,
+            "freed_bytes": actual_freed_bytes,
+            "freed_mb": actual_freed_mb,
             "remaining_blobs_count": remaining_files,
             "remaining_storage_mb": round(total_remaining_bytes / (1024 * 1024), 2),
             "cleaned_paths": cleaned_paths[:50],
             "errors": gc_errors,
         }
+

@@ -26,6 +26,7 @@ from marketing_mcp.schemas.models import (
     FitCLVInput,
     FitPurchaseModelInput,
     FitValueModelInput,
+    ModelLineage,
     PredictCLVInput,
     PredictExpectedPurchasesInput,
     PredictExpectedSpendInput,
@@ -95,6 +96,40 @@ class CLVService:
         """Validate RFM DataFrame against CLV model requirements."""
         self.adapter.normalize_data(df, config.model_type, config.model_dump())
 
+    def _build_lineage(
+        self,
+        dataset_id: str,
+        df: pd.DataFrame,
+        model_family: str,
+        cust_col: str | None = None,
+        now: str | None = None,
+        currency: str | None = None,
+        value_unit: str | None = None,
+    ) -> ModelLineage:
+        import hashlib
+
+        dataset_meta = self.metadata.get_dataset(dataset_id) if self.metadata else {}
+        fingerprint = (
+            dataset_meta.get("fingerprint")
+            or dataset_meta.get("sha256")
+            or f"rows_{len(df)}_cols_{len(df.columns)}"
+        )
+        cust_pop_fp = ""
+        if cust_col and cust_col in df.columns:
+            cust_ids = sorted(str(x) for x in df[cust_col].dropna().unique())
+            cust_pop_fp = hashlib.sha256("||".join(cust_ids).encode("utf-8")).hexdigest()
+
+        return ModelLineage(
+            dataset_id=dataset_id,
+            dataset_fingerprint=fingerprint,
+            customer_id_column=cust_col or "",
+            customer_population_fingerprint=cust_pop_fp,
+            currency=currency or dataset_meta.get("currency"),
+            value_unit=value_unit or dataset_meta.get("value_unit"),
+            model_family=model_family,
+            training_timestamp=now or datetime.now(UTC).isoformat(),
+        )
+
     def fit_purchase_model(self, input: FitPurchaseModelInput) -> CLVModelRecord:
         """Fit a repeat purchase model (BG/NBD or ShiftedBetaGeo) and persist artifact."""
         df = self._load_dataset(input.dataset_id)
@@ -106,10 +141,20 @@ class CLVService:
             df, config_dict, model_id, input.dataset_id
         )
 
+        lineage = self._build_lineage(
+            dataset_id=input.dataset_id,
+            df=df,
+            model_family=input.model_type,
+            cust_col=input.customer_id_col,
+            now=now,
+        )
+
         record = CLVModelRecord(
             model_id=model_id,
             model_type=input.model_type,
             dataset_id=input.dataset_id,
+            dataset_fingerprint=lineage.dataset_fingerprint,
+            lineage=lineage,
             status="completed",
             artifact_path=artifact_ref.uri,
             artifact_ref=asdict(artifact_ref),
@@ -137,10 +182,20 @@ class CLVService:
             df, config_dict, model_id, input.dataset_id
         )
 
+        lineage = self._build_lineage(
+            dataset_id=input.dataset_id,
+            df=df,
+            model_family=input.model_type,
+            cust_col=input.customer_id_col,
+            now=now,
+        )
+
         record = CLVModelRecord(
             model_id=model_id,
             model_type=input.model_type,
             dataset_id=input.dataset_id,
+            dataset_fingerprint=lineage.dataset_fingerprint,
+            lineage=lineage,
             status="completed",
             artifact_path=artifact_ref.uri,
             artifact_ref=asdict(artifact_ref),
@@ -168,10 +223,20 @@ class CLVService:
             df, config_dict, model_id, input.dataset_id
         )
 
+        lineage = self._build_lineage(
+            dataset_id=input.dataset_id,
+            df=df,
+            model_family=input.config.model_type,
+            cust_col=input.config.customer_id_column,
+            now=now,
+        )
+
         record = CLVModelRecord(
             model_id=model_id,
             model_type=input.config.model_type,
             dataset_id=input.dataset_id,
+            dataset_fingerprint=lineage.dataset_fingerprint,
+            lineage=lineage,
             status="completed",
             artifact_path=artifact_ref.uri,
             artifact_ref=asdict(artifact_ref),
@@ -257,6 +322,61 @@ class CLVService:
                 f"value_model_id '{input.value_model_id}' must be a Gamma-Gamma value model (got '{v_rec['model_type']}')",
             )
 
+        # Validate lineage, currency, and cohort consistency (CLV-001)
+        p_lineage = p_rec.get("lineage") or {}
+        v_lineage = v_rec.get("lineage") or {}
+
+        def _get_field(rec_dict: dict, lin: Any, key: str):
+            val = rec_dict.get(key)
+            if val:
+                return val
+            if isinstance(lin, dict):
+                return lin.get(key)
+            return getattr(lin, key, None)
+
+        p_fp = _get_field(p_rec, p_lineage, "dataset_fingerprint")
+        v_fp = _get_field(v_rec, v_lineage, "dataset_fingerprint")
+        p_ds = _get_field(p_rec, p_lineage, "dataset_id") or _get_field(p_rec, p_lineage, "source_dataset_id")
+        v_ds = _get_field(v_rec, v_lineage, "dataset_id") or _get_field(v_rec, v_lineage, "source_dataset_id")
+        p_pop = _get_field(p_rec, p_lineage, "customer_population_fingerprint")
+        v_pop = _get_field(v_rec, v_lineage, "customer_population_fingerprint")
+        p_curr = _get_field(p_rec, p_lineage, "currency")
+        v_curr = _get_field(v_rec, v_lineage, "currency")
+
+        # Fail-closed validation on dataset lineage: missing or mismatched dataset metadata triggers rejection
+        if not p_ds or not v_ds or p_ds != v_ds or not p_fp or not v_fp or p_fp != v_fp:
+            raise DomainError(
+                "CLV_LINEAGE_MISMATCH",
+                f"Purchase model '{input.purchase_model_id}' and value model '{input.value_model_id}' were trained on different or unverified datasets/cohorts ({p_ds} vs {v_ds})",
+                evidence={
+                    "purchase_model_id": input.purchase_model_id,
+                    "value_model_id": input.value_model_id,
+                    "purchase_dataset_id": p_ds,
+                    "value_dataset_id": v_ds,
+                    "purchase_fingerprint": p_fp,
+                    "value_fingerprint": v_fp,
+                },
+                next_action="Ensure both models are trained on the same customer transaction dataset",
+            )
+
+        # Monetary currency unit validation
+        if p_curr and v_curr and str(p_curr).strip().upper() != str(v_curr).strip().upper():
+            raise DomainError(
+                "CLV_CURRENCY_MISMATCH",
+                f"Purchase model currency '{p_curr}' does not match value model currency '{v_curr}'",
+                evidence={"purchase_currency": p_curr, "value_currency": v_curr},
+                next_action="Ensure both models use the same currency units",
+            )
+
+        # Customer cohort population validation
+        if p_pop and v_pop and p_pop != v_pop:
+            raise DomainError(
+                "CLV_COHORT_MISMATCH",
+                "Purchase model customer cohort does not match value model customer cohort",
+                evidence={"purchase_cohort_fingerprint": p_pop, "value_cohort_fingerprint": v_pop},
+                next_action="Ensure both models are trained on the exact same customer cohort",
+            )
+
         with ExitStack() as stack:
             purchase_model = stack.enter_context(self._materialized_model(p_rec))
             value_model = stack.enter_context(self._materialized_model(v_rec))
@@ -295,6 +415,12 @@ class CLVService:
         try:
             return self.metadata.get_clv_model(model_id)
         except DomainError:
+            try:
+                rec = self.metadata.get_model(model_id)
+                if rec.get("model_family") == "clv" or rec.get("model_type") in ("bg_nbd", "gamma_gamma", "shifted_beta_geo"):
+                    return rec
+            except DomainError:
+                pass
             raise DomainError("CLV_MODEL_NOT_FOUND", f"CLV model '{model_id}' not found")
 
     def _load_clv_model(self, model_type: str, artifact_path: Path):

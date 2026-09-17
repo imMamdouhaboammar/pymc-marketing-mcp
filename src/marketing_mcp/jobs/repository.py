@@ -449,6 +449,15 @@ class SQLiteJobRepository:
                 """,
                 (now, now),
             ).rowcount
+            unleased_cancelling = self.conn.execute(
+                """
+                UPDATE jobs
+                SET status = 'cancelled', updated_at = ?
+                WHERE status = 'cancelling' AND lease_expires_at IS NULL
+                """,
+                (now,),
+            ).rowcount
+            cancelled += unleased_cancelling
             self.conn.commit()
             return recovered + requeued + failed + cancelled
         except Exception:

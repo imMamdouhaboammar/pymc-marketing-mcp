@@ -4,45 +4,68 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import warnings
 from typing import Any
 
 _rust_core: Any = None
 _IS_RUST_AVAILABLE = False
+_RUST_DISABLED = os.getenv("MARKETING_MCP_DISABLE_RUST", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
-try:
-    import marketing_mcp_fast as _rust_core  # type: ignore
 
-    _IS_RUST_AVAILABLE = True
-except ImportError:
+def _load_rust_core() -> Any:
+    """Load the native module only when acceleration is enabled."""
     try:
-        # Check if local release shared library is present
-        from _frozen_importlib_external import ExtensionFileLoader
-        import importlib.util
-        from pathlib import Path
+        import marketing_mcp_fast
 
-        # Look in package directory or crate target release dir
-        pkg_dir = Path(__file__).resolve().parent
-        target_dir = Path(__file__).resolve().parent.parent.parent.parent / "crates" / "marketing_mcp_fast" / "target" / "release"
-        dylib_candidates = [
-            pkg_dir / "marketing_mcp_fast.so",
-            pkg_dir / "libmarketing_mcp_fast.so",
-            pkg_dir / "libmarketing_mcp_fast.dylib",
-            pkg_dir / "marketing_mcp_fast.dylib",
-            target_dir / "libmarketing_mcp_fast.dylib",
-            target_dir / "libmarketing_mcp_fast.so",
-            target_dir / "marketing_mcp_fast.so",
-        ]
-        found = next((p for p in dylib_candidates if p.is_file()), None)
-        if found:
+        return marketing_mcp_fast
+    except ImportError:
+        try:
+            import importlib.util
+            from _frozen_importlib_external import ExtensionFileLoader
+            from pathlib import Path
+
+            pkg_dir = Path(__file__).resolve().parent
+            target_dir = (
+                Path(__file__).resolve().parent.parent.parent.parent
+                / "crates"
+                / "marketing_mcp_fast"
+                / "target"
+                / "release"
+            )
+            candidates = [
+                pkg_dir / "marketing_mcp_fast.so",
+                pkg_dir / "libmarketing_mcp_fast.so",
+                pkg_dir / "libmarketing_mcp_fast.dylib",
+                pkg_dir / "marketing_mcp_fast.dylib",
+                target_dir / "libmarketing_mcp_fast.dylib",
+                target_dir / "libmarketing_mcp_fast.so",
+                target_dir / "marketing_mcp_fast.so",
+            ]
+            found = next((candidate for candidate in candidates if candidate.is_file()), None)
+            if found is None:
+                return None
             loader = ExtensionFileLoader("marketing_mcp_fast", str(found))
-            spec = importlib.util.spec_from_file_location("marketing_mcp_fast", found, loader=loader)
-            if spec and spec.loader:
-                _rust_core = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(_rust_core)
-                _IS_RUST_AVAILABLE = True
-    except Exception:
-        _rust_core = None
-        _IS_RUST_AVAILABLE = False
+            spec = importlib.util.spec_from_file_location(
+                "marketing_mcp_fast", found, loader=loader
+            )
+            if spec is None or spec.loader is None:
+                return None
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+        except (ImportError, OSError, AttributeError, TypeError, ValueError):
+            return None
+
+
+if not _RUST_DISABLED:
+    _rust_core = _load_rust_core()
+    _IS_RUST_AVAILABLE = _rust_core is not None
 
 
 def is_rust_accelerated() -> bool:
@@ -59,9 +82,43 @@ def get_engine_info() -> dict[str, Any]:
     }
 
 
+def get_native_invocation_stats() -> dict[str, int]:
+    """Return a snapshot of native invocation counters for observability and test verification.
+
+    Counters are process-local and reset on process restart.
+    Use these in integration tests to prove native hot paths actually ran.
+
+    Example::
+        stats = get_native_invocation_stats()
+        assert stats["native_admission_calls_total"] > 0  # Rust admission was wired
+    """
+    if _IS_RUST_AVAILABLE and hasattr(_rust_core, "get_native_invocation_stats"):
+        return dict(_rust_core.get_native_invocation_stats())
+    # Python fallback: return zeros (native paths never ran in this process)
+    return {
+        "native_admission_calls_total": 0,
+        "native_serialization_calls_total": 0,
+        "native_range_parse_calls_total": 0,
+        "native_job_admission_calls_total": 0,
+        "native_cancellation_calls_total": 0,
+        "native_fallback_calls_total": 0,
+    }
+
+
+def NATIVE_FALLBACK_COUNT_REF() -> None:
+    """Signal that a native path fell back to Python unexpectedly.
+
+    Called by NativeAdmissionMiddleware when the Rust extension throws during admission.
+    Allows monitoring fallback rate without failing the request.
+    """
+    if _IS_RUST_AVAILABLE and hasattr(_rust_core, "increment_native_fallback_count"):
+        _rust_core.increment_native_fallback_count()
+
+
 # =========================================================================
 # Pure Python Fallbacks (The /clean-code-guard and /ponytail Guarantee)
 # =========================================================================
+
 
 def _py_generate_sparkline(values: list[float]) -> str:
     finite = [v for v in values if isinstance(v, (int, float)) and math.isfinite(v)]
@@ -78,7 +135,7 @@ def _py_generate_sparkline(values: list[float]) -> str:
             out.append("▄")
         else:
             norm = max(0.0, min(1.0, (v - min_v) / rng))
-            idx = min(7, int(round(norm * 7.0)))
+            idx = min(7, round(norm * 7.0))
             out.append(blocks[idx])
     return "".join(out)
 
@@ -96,14 +153,14 @@ def _py_compress_curve_lttb(
     a_idx = 0
 
     for i in range(max_points - 2):
-        c_start = min(n - 1, int(math.floor((i + 1) * every)) + 1)
-        c_end = min(n, int(math.floor((i + 2) * every)) + 1)
+        c_start = min(n - 1, math.floor((i + 1) * every) + 1)
+        c_end = min(n, math.floor((i + 2) * every) + 1)
         c_len = max(1, c_end - c_start)
         avg_x = sum(xs[c_start:c_end]) / c_len
         avg_y = sum(ys[c_start:c_end]) / c_len
 
-        b_start = min(n - 1, int(math.floor(i * every)) + 1)
-        b_end = min(n, int(math.floor((i + 1) * every)) + 1)
+        b_start = min(n - 1, math.floor(i * every) + 1)
+        b_end = min(n, math.floor((i + 1) * every) + 1)
 
         ax = xs[a_idx]
         ay = ys[a_idx]
@@ -157,6 +214,7 @@ def _py_fast_sniff_and_validate_csv(
     channel_cols: list[str] | None = None,
 ) -> dict[str, Any]:
     from io import BytesIO
+
     import pandas as pd
 
     df = pd.read_csv(BytesIO(csv_bytes))
@@ -265,6 +323,7 @@ def _py_fast_serialize_json(obj: Any) -> str:
 # Public Dispatched API (Rust when available, else Python Fallback)
 # =========================================================================
 
+
 def generate_sparkline(values: list[float]) -> str:
     if _IS_RUST_AVAILABLE and hasattr(_rust_core, "generate_sparkline"):
         return _rust_core.generate_sparkline(values)
@@ -299,12 +358,23 @@ def fast_sniff_and_validate_csv(
 def fast_mcmc_diagnostics(
     rhats: list[float], esses: list[float], divergences: int
 ) -> dict[str, Any]:
-    """Experimental / benchmark MCMC diagnostic evaluator.
+    """EXPERIMENTAL / BENCHMARK-ONLY MCMC diagnostic evaluator. NOT for production decisions.
 
-    NON-AUTHORITATIVE: Production statistical decision gate authority resides
-    exclusively in `marketing_mcp.domain.diagnostics.engine.diagnose_inferencedata`.
-    This accelerator function is retained strictly for comparative benchmarks and tests.
+    .. deprecated::
+        NON-AUTHORITATIVE. Production statistical decision gate authority resides
+        exclusively in ``marketing_mcp.domain.diagnostics.engine.diagnose_inferencedata``.
+        Use this function ONLY for comparative benchmarks or parity tests.
+        Calling this from production decision paths is a correctness bug.
+
+    See also: ``marketing_mcp.accelerators.experimental`` for the clearly-labeled
+    experimental re-exports.
     """
+    warnings.warn(
+        "fast_mcmc_diagnostics is NON-AUTHORITATIVE and must not be used for production "
+        "statistical decisions. Use diagnose_inferencedata from the diagnostics engine instead.",
+        stacklevel=2,
+        category=UserWarning,
+    )
     if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_mcmc_diagnostics"):
         return _rust_core.fast_mcmc_diagnostics(rhats, esses, divergences)
     return _py_fast_mcmc_diagnostics(rhats, esses, divergences)
@@ -316,13 +386,19 @@ def fast_serialize_json(obj: Any) -> str:
     return _py_fast_serialize_json(obj)
 
 
+# Sentinel for detecting absent `id` field vs explicit null
+_SENTINEL = object()
+
+
 def _py_fast_admit_request(
     raw_bytes: bytes, max_size: int | None = None, tenant_id: str | None = None
 ) -> dict[str, Any]:
+    """Python fallback for fast_admit_request. Matches Rust engine behavior exactly."""
     import time
     import uuid
 
-    limit = max_size or (50 * 1024 * 1024)
+    # Align limit with Rust engine.rs DEFAULT_MAX_REQUEST_SIZE (10 MB)
+    limit = 10 * 1024 * 1024 if max_size is None else max_size
     if len(raw_bytes) > limit:
         return {
             "admitted": False,
@@ -330,7 +406,7 @@ def _py_fast_admit_request(
                 "code": "PAYLOAD_TOO_LARGE",
                 "category": "transport",
                 "message": f"Payload size ({len(raw_bytes)} bytes) exceeds maximum limit ({limit} bytes)",
-                "error_id": f"err-{int(time.time() * 1000):x}",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
                 "request_id": None,
                 "tenant_id": tenant_id,
                 "retryable": False,
@@ -344,7 +420,7 @@ def _py_fast_admit_request(
                 "code": "EMPTY_REQUEST",
                 "category": "protocol",
                 "message": "Request body is empty",
-                "error_id": f"err-{int(time.time() * 1000):x}",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
                 "request_id": None,
                 "tenant_id": tenant_id,
                 "retryable": False,
@@ -353,14 +429,14 @@ def _py_fast_admit_request(
         }
     try:
         obj = json.loads(raw_bytes)
-    except Exception as e:
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return {
             "admitted": False,
             "error": {
                 "code": "MALFORMED_JSON_RPC",
                 "category": "protocol",
                 "message": f"Malformed JSON payload: {e}",
-                "error_id": f"err-{int(time.time() * 1000):x}",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
                 "request_id": None,
                 "tenant_id": tenant_id,
                 "retryable": False,
@@ -373,41 +449,131 @@ def _py_fast_admit_request(
             "error": {
                 "code": "INVALID_JSON_RPC",
                 "category": "protocol",
-                "message": "JSON-RPC payload must be a JSON object",
-                "error_id": f"err-{int(time.time() * 1000):x}",
+                "message": "JSON-RPC payload must be a JSON object, not an array or scalar",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
                 "request_id": None,
                 "tenant_id": tenant_id,
                 "retryable": False,
                 "actionable": True,
             },
         }
-    req_id = str(obj.get("id")) if "id" in obj else f"req-{uuid.uuid4().hex[:12]}"
-    method = str(obj.get("method", ""))
-    if not method:
+
+    # jsonrpc field MUST be present and MUST be "2.0"
+    jsonrpc_val = obj.get("jsonrpc")
+    if "jsonrpc" not in obj:
         return {
             "admitted": False,
             "error": {
-                "code": "MISSING_METHOD",
+                "code": "MISSING_JSONRPC_VERSION",
                 "category": "protocol",
-                "message": "JSON-RPC request is missing required 'method' field",
-                "error_id": f"err-{int(time.time() * 1000):x}",
-                "request_id": req_id,
+                "message": "JSON-RPC request is missing required 'jsonrpc' field",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
+                "request_id": None,
                 "tenant_id": tenant_id,
                 "retryable": False,
                 "actionable": True,
             },
         }
+    if jsonrpc_val != "2.0":
+        return {
+            "admitted": False,
+            "error": {
+                "code": "INVALID_JSONRPC_VERSION",
+                "category": "protocol",
+                "message": f"jsonrpc version must be '2.0', got '{jsonrpc_val}'",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
+                "request_id": None,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+            },
+        }
+
+    # A JSON-RPC notification is identified only by an absent id field.
+    # A present null id is discouraged, but it is still a request.
+    id_val = obj.get("id") if "id" in obj else _SENTINEL
+    is_notification = id_val is _SENTINEL
+    if id_val is _SENTINEL or id_val is None:
+        req_id = None
+    elif isinstance(id_val, str) or (isinstance(id_val, int) and not isinstance(id_val, bool)) or isinstance(id_val, float) and math.isfinite(id_val):
+        req_id = id_val
+    else:
+        return {
+            "admitted": False,
+            "error": {
+                "code": "INVALID_REQUEST_ID",
+                "category": "protocol",
+                "message": "JSON-RPC id must be a string, number, or null",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
+                "request_id": None,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+            },
+        }
+
+    method_val = obj.get("method")
+    if not isinstance(method_val, str) or not method_val:
+        return {
+            "admitted": False,
+            "error": {
+                "code": "MISSING_METHOD",
+                "category": "protocol",
+                "message": "JSON-RPC request is missing a non-empty string 'method' field",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
+                "request_id": req_id,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+                "is_notification": is_notification,
+            },
+        }
+    method = method_val
+
+    params = obj.get("params", _SENTINEL)
+    if params is not _SENTINEL and not isinstance(params, (dict, list)):
+        return {
+            "admitted": False,
+            "error": {
+                "code": "INVALID_PARAMS",
+                "category": "protocol",
+                "message": "JSON-RPC params must be an object or array",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
+                "request_id": req_id,
+                "tenant_id": tenant_id,
+                "retryable": False,
+                "actionable": True,
+                "is_notification": is_notification,
+            },
+        }
+
     tool_name = None
-    if method == "tools/call" and isinstance(obj.get("params"), dict):
-        tool_name = obj["params"].get("name")
+    if method == "tools/call":
+        candidate = params.get("name") if isinstance(params, dict) else None
+        if not isinstance(candidate, str) or not candidate:
+            return {
+                "admitted": False,
+                "error": {
+                    "code": "INVALID_TOOL_CALL",
+                    "category": "protocol",
+                    "message": "MCP tools/call requires params.name as a non-empty string",
+                    "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
+                    "request_id": req_id,
+                    "tenant_id": tenant_id,
+                    "retryable": False,
+                    "actionable": True,
+                    "is_notification": is_notification,
+                },
+            }
+        tool_name = candidate
     return {
         "admitted": True,
         "request_id": req_id,
-        "jsonrpc": obj.get("jsonrpc", "2.0"),
+        "jsonrpc": "2.0",
         "method": method,
         "tool_name": tool_name,
         "payload_size": len(raw_bytes),
-        "is_notification": "id" not in obj,
+        "is_notification": is_notification,
         "error": None,
     }
 
@@ -465,10 +631,12 @@ def fast_parse_range_header(header: str, file_size: int) -> tuple[int, int, int]
 def _py_fast_admit_job(
     payload_size: int, max_size: int | None = None, tenant_id: str | None = None
 ) -> dict[str, Any]:
+    """Python fallback for fast_admit_job. Uses admission_id (NOT job_id) — matches Rust semantics."""
     import time
     import uuid
 
-    limit = max_size or (50 * 1024 * 1024)
+    # Align limit with Rust engine.rs DEFAULT_MAX_REQUEST_SIZE (10 MB)
+    limit = 10 * 1024 * 1024 if max_size is None else max_size
     if payload_size > limit:
         return {
             "admitted": False,
@@ -476,15 +644,18 @@ def _py_fast_admit_job(
                 "code": "PAYLOAD_TOO_LARGE",
                 "category": "transport",
                 "message": f"Job submission payload ({payload_size} bytes) exceeds limit ({limit} bytes)",
-                "error_id": f"err-{int(time.time() * 1000):x}",
+                "error_id": f"err-{int(time.time() * 1_000_000):x}-{uuid.uuid4().hex[:8]}",
                 "retryable": False,
+                "actionable": True,
             },
         }
     now = int(time.time())
-    job_id = f"job-{uuid.uuid4().hex[:12]}"
+    # `admission_id` is the INTERACTION-LEVEL token only.
+    # The canonical persistent job ID is created by Python's job service AFTER this check.
+    admission_id = f"adm-{uuid.uuid4().hex[:16]}"
     return {
         "admitted": True,
-        "job_id": job_id,
+        "admission_id": admission_id,
         "status": "accepted",
         "admitted_at": now,
         "recommended_poll_interval_ms": 1000,
@@ -492,9 +663,13 @@ def _py_fast_admit_job(
     }
 
 
-def _py_fast_acknowledge_cancellation(
-    job_id: str, in_process: bool = True
-) -> dict[str, Any]:
+def _py_fast_acknowledge_cancellation(job_id: str, in_process: bool = True) -> dict[str, Any]:
+    """Python fallback for fast_acknowledge_cancellation.
+
+    Status reflects interaction-level state only. The Python worker state is authoritative.
+    - in_process=True → "cancelling" (signal sent, worker may still be running)
+    - in_process=False → "cancellation_requested" (queued job, not yet started)
+    """
     import time
 
     trimmed = job_id.strip()
@@ -510,7 +685,8 @@ def _py_fast_acknowledge_cancellation(
     return {
         "acknowledged": True,
         "job_id": trimmed,
-        "status": "cancelled" if in_process else "cancelling",
+        # Match Rust engine status strings exactly
+        "status": "cancelling" if in_process else "cancellation_requested",
         "acknowledged_at": int(time.time()),
         "fence_triggered": True,
         "error": None,
@@ -526,13 +702,8 @@ def fast_admit_job(
     return _py_fast_admit_job(payload_size, max_size, tenant_id)
 
 
-def fast_acknowledge_cancellation(
-    job_id: str, in_process: bool = True
-) -> dict[str, Any]:
+def fast_acknowledge_cancellation(job_id: str, in_process: bool = True) -> dict[str, Any]:
     """Fast truthful cancellation acknowledgment using Rust native engine when available."""
     if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_acknowledge_cancellation"):
         return _rust_core.fast_acknowledge_cancellation(job_id, in_process)
     return _py_fast_acknowledge_cancellation(job_id, in_process)
-
-
-

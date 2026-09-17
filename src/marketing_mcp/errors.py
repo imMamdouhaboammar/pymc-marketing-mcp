@@ -106,6 +106,15 @@ ERROR_CATALOG: dict[str, ErrorDefinition] = {
     ),
 
     # Input validation
+    "INVALID_ARGUMENT": ErrorDefinition(
+        code="INVALID_ARGUMENT",
+        category=ErrorCategory.INPUT,
+        severity=ErrorSeverity.ERROR,
+        retryable=False,
+        http_status=400,
+        user_actionable=True,
+        suggested_action="Inspect input arguments and correct parameter values",
+    ),
     "INPUT_INVALID": ErrorDefinition(
         code="INPUT_INVALID",
         category=ErrorCategory.INPUT,
@@ -272,6 +281,15 @@ ERROR_CATALOG: dict[str, ErrorDefinition] = {
     ),
 
     # Validation
+    "DATASET_VALIDATION_FAILED": ErrorDefinition(
+        code="DATASET_VALIDATION_FAILED",
+        category=ErrorCategory.VALIDATION,
+        severity=ErrorSeverity.ERROR,
+        retryable=False,
+        http_status=422,
+        user_actionable=True,
+        suggested_action="Fix schema, date formatting, and missing required columns in dataset before fitting",
+    ),
     "INVALID_DATASET": ErrorDefinition(
         code="INVALID_DATASET",
         category=ErrorCategory.VALIDATION,
@@ -603,6 +621,15 @@ ERROR_CATALOG: dict[str, ErrorDefinition] = {
         http_status=400,
         user_actionable=True,
         suggested_action="Use a supported CLV model type (bg_nbd, pareto_nbd, gamma_gamma, shifted_beta_geo)",
+    ),
+    "CLV_LINEAGE_MISMATCH": ErrorDefinition(
+        code="CLV_LINEAGE_MISMATCH",
+        category=ErrorCategory.CLV,
+        severity=ErrorSeverity.ERROR,
+        retryable=False,
+        http_status=409,
+        user_actionable=True,
+        suggested_action="Ensure purchase and spend models were trained on identical customer cohorts and datasets",
     ),
 
     # Async Jobs

@@ -434,19 +434,32 @@ class DecisionService:
         saturation_type = _type_name(saturation_instance, SATURATION_MAP)
         l_max = int(getattr(adstock_instance, "l_max", 4) or 4)
 
-        # Training-time channel scaling: posterior parameters live in scaled space.
+        # Training-time channel scaling and target scaling: parameters live in scaled space.
         channel_scale: dict[str, float] | None = None
+        target_scale: float | None = None
         try:
             scales = model.get_scales_as_xarray()
-            scales_da = scales["channel_scale"]
-            channel_scale = {}
-            for ch in channels:
-                if "channel" in scales_da.dims:
-                    channel_scale[ch] = float(
-                        np.asarray(scales_da.sel(channel=ch)).reshape(-1).mean()
-                    )
-                else:
-                    channel_scale[ch] = float(np.asarray(scales_da).reshape(-1).mean())
+            if "target_scale" in scales:
+                target_scale = float(np.asarray(scales["target_scale"]).reshape(-1).mean())
+            elif "target" in scales:
+                target_scale = float(np.asarray(scales["target"]).reshape(-1).mean())
+            elif hasattr(model, "scalers") and hasattr(model.scalers, "_target"):
+                target_scale = float(
+                    np.asarray(
+                        getattr(model.scalers._target, "values", model.scalers._target)
+                    ).reshape(-1).mean()
+                )
+
+            if "channel_scale" in scales:
+                scales_da = scales["channel_scale"]
+                channel_scale = {}
+                for ch in channels:
+                    if "channel" in scales_da.dims:
+                        channel_scale[ch] = float(
+                            np.asarray(scales_da.sel(channel=ch)).reshape(-1).mean()
+                        )
+                    else:
+                        channel_scale[ch] = float(np.asarray(scales_da).reshape(-1).mean())
         except (AttributeError, KeyError, ValueError, TypeError):
             channel_scale = None
 
@@ -490,6 +503,7 @@ class DecisionService:
             channel_params=channel_params,
             channel_scale=channel_scale,
             channel_columns=channels,
+            target_scale=target_scale,
         )
 
         constraints_dicts = [c.model_dump() for c in input.channel_constraints]
@@ -547,6 +561,19 @@ class DecisionService:
             "net_profit": flighting_res["net_profit"],
             "posterior_response": sim_res["scenario_response"],
             "comparison_to_historical": sim_res["comparison"],
+            "comparison_baseline": {
+                "total_budget": input.total_budget,
+                "planning_weeks": input.planning_weeks,
+                "baseline_channel_spend": baseline_channel_spend,
+                "baseline_response": sim_res.get("baseline_response"),
+                "scenario_response": sim_res.get("scenario_response"),
+                "mean_response_delta": sim_res.get("comparison", {}).get("mean_response_delta")
+                if isinstance(sim_res.get("comparison"), dict)
+                else None,
+                "percent_change": sim_res.get("comparison", {}).get("percent_change")
+                if isinstance(sim_res.get("comparison"), dict)
+                else None,
+            },
             "warnings": flighting_res["warnings"],
             "decision_gate": self._gate_payload(record),
             "provenance": self._provenance(input.model_id, record),

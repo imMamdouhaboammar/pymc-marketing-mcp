@@ -38,16 +38,31 @@ def register_artifacts_tools(mcp, app: Application, context_provider=None) -> No
         meta_info: dict[str, Any] = {}
 
         if model_id:
-            rec = app.models.status(model_id)
-            if not rec.artifact_ref:
+            try:
+                rec = app.models.status(model_id)
+                artifact_ref = rec.artifact_ref
+                meta_info = {
+                    "model_id": rec.model_id,
+                    "dataset_id": rec.dataset_id,
+                    "lineage_stage": rec.lineage_stage,
+                    "created_at": rec.created_at,
+                }
+            except DomainError:
+                try:
+                    clv_dict = app.clv._require_clv_model_record(model_id)
+                    artifact_ref = clv_dict.get("artifact_ref")
+                    meta_info = {
+                        "model_id": clv_dict.get("model_id"),
+                        "dataset_id": clv_dict.get("dataset_id"),
+                        "lineage_stage": "clv_fit",
+                        "created_at": clv_dict.get("created_at"),
+                    }
+                except DomainError:
+                    raise DomainError("MODEL_NOT_FOUND", f"Model {model_id} was not found")
+
+            if not artifact_ref:
                 raise DomainError("ARTIFACT_NOT_FOUND", f"Model {model_id} has no artifact reference")
-            ref = ArtifactRef(**rec.artifact_ref)
-            meta_info = {
-                "model_id": rec.model_id,
-                "dataset_id": rec.dataset_id,
-                "lineage_stage": rec.lineage_stage,
-                "created_at": rec.created_at,
-            }
+            ref = ArtifactRef(**artifact_ref)
         elif artifact_uri:
             prefix = "blob://"
             if not artifact_uri.startswith(prefix):
@@ -56,7 +71,7 @@ def register_artifacts_tools(mcp, app: Application, context_provider=None) -> No
             if len(parts) != 2:
                 raise DomainError("INPUT_INVALID", "Malformed artifact URI")
             namespace, digest = parts
-            ref = ArtifactRef(
+            dummy_ref = ArtifactRef(
                 uri=artifact_uri,
                 sha256=digest,
                 size_bytes=0,
@@ -65,11 +80,12 @@ def register_artifacts_tools(mcp, app: Application, context_provider=None) -> No
                 owner=principal.subject if principal else "local",
                 tenant_id=principal.tenant_id if principal else None,
             )
-            target_path = app.artifacts.object_path(ref)
-            if target_path.is_file():
-                ref.size_bytes = target_path.stat().st_size
-            else:
+            target_path = app.artifacts.object_path(dummy_ref)
+            if not target_path.is_file():
                 raise DomainError("ARTIFACT_NOT_FOUND", f"Artifact at {artifact_uri} does not exist")
+            from dataclasses import replace
+
+            ref = replace(dummy_ref, size_bytes=target_path.stat().st_size)
         else:
             raise DomainError("INPUT_INVALID", "Must provide either model_id or artifact_uri")
 

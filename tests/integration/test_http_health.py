@@ -116,4 +116,6 @@ def test_health_endpoint_reports_interaction_engine_state(tmp_path):
     assert "interaction_engine" in payload
     assert "backend" in payload["interaction_engine"]
     assert "rust_accelerated" in payload["interaction_engine"]
+    assert payload["native_invocation_stats"]["native_admission_calls_total"] >= 0
+    assert payload["native_invocation_stats"]["native_fallback_calls_total"] >= 0
 

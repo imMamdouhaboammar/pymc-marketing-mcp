@@ -29,3 +29,6 @@ target/
 *credentials*.json
 *service_account*.json
 *service-account*.json
+decision-lab/
+pymc-modeling/
+python-analytics-skills/

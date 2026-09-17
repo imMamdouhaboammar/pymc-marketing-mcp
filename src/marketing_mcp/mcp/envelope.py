@@ -30,7 +30,11 @@ def env_json(
     provenance: dict[str, Any] | None = None,
     next_actions: list[str] | None = None,
 ) -> str:
-    """Fast JSON-serialized envelope using native Rust serde when available."""
+    """Serialize an envelope for explicit helper/benchmark callers.
+
+    FastMCP owns production JSON-RPC response encoding, so this function is not evidence
+    that native serde participates in the final MCP wire path.
+    """
     from marketing_mcp.accelerators import fast_serialize_json
 
     payload = env(
@@ -41,4 +45,3 @@ def env_json(
         next_actions=next_actions,
     )
     return fast_serialize_json(payload)
-

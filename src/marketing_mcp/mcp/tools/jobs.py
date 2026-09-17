@@ -29,12 +29,35 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
         require_scope(principal, scopes_for_tool("submit_fit_mmm_job")[0])
 
         payload_dict = config.model_dump()
-        from marketing_mcp.accelerators import fast_admit_job
         import json
+
+        from marketing_mcp.accelerators import fast_admit_job
 
         payload_bytes_len = len(json.dumps(payload_dict).encode("utf-8"))
         tenant_id = principal.tenant_id if principal else None
-        adm = fast_admit_job(payload_bytes_len, max_size=50 * 1024 * 1024, tenant_id=tenant_id)
+
+        # Synchronously validate dataset suitability before admitting job (MMM-VAL-001)
+        val_res = app.datasets.validate(
+            dataset_id=config.dataset_id,
+            date_column=config.date_column,
+            target_column=config.target_column,
+            channel_columns=config.channel_columns,
+            control_columns=config.control_columns or [],
+            dims=None,
+        )
+        if not val_res.valid_for_modeling:
+            err_findings = [f.message for f in val_res.findings if f.severity == "error"]
+            raise DomainError(
+                "DATASET_VALIDATION_FAILED",
+                f"Dataset {config.dataset_id} validation failed for MMM fitting: {'; '.join(err_findings)}",
+                evidence={"findings": [f.__dict__ for f in val_res.findings]},
+                next_action="Inspect dataset columns, date format, and values using inspect_dataset or validate_dataset",
+            )
+
+        # fast_admit_job performs a cheap size/admission check and returns an interaction-level
+        # `admission_id`. This is NOT the canonical job ID — the canonical job ID is created
+        # exclusively by app.jobs.submit_job() below and is the persistent identifier.
+        adm = fast_admit_job(payload_bytes_len, max_size=10 * 1024 * 1024, tenant_id=tenant_id)
         if not adm.get("admitted"):
             err = adm.get("error") or {}
             raise DomainError(
@@ -178,9 +201,16 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
     async def cancel_job(job_id: str):
         principal = resolve_context().principal
         require_scope(principal, scopes_for_tool("cancel_job")[0])
+        # Authorization and canonical job state are owned by Python. Native code
+        # acknowledges the interaction only after the canonical transition succeeds.
+        cancelled = app.jobs.cancel_job(job_id, principal=principal)
+
         from marketing_mcp.accelerators import fast_acknowledge_cancellation
 
-        ack = fast_acknowledge_cancellation(job_id, in_process=True)
+        ack = fast_acknowledge_cancellation(
+            job_id,
+            in_process=cancelled.status is JobStatus.CANCELLING,
+        )
         if not ack.get("acknowledged"):
             err = ack.get("error") or {}
             raise DomainError(
@@ -188,8 +218,8 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
                 err.get("message", "Invalid job id"),
             )
 
-        cancelled = app.jobs.cancel_job(job_id, principal=principal)
         summary_dict = cancelled.to_dict()
+        summary_dict["interaction_status"] = ack.get("status")
         summary_dict["fence_triggered"] = ack.get("fence_triggered", True)
         return env(summary=summary_dict)
 
@@ -198,7 +228,7 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
         description="List recent asynchronous background jobs for the active tenant.",
     )
     @mcp_error_boundary("list_jobs", "jobs", "monitoring")
-    async def list_jobs(status: str | None = None, limit: int = 50):
+    async def list_jobs(status: str | None = None, limit: int = 50, verbose: bool = False):
         principal = resolve_context().principal
         require_scope(principal, scopes_for_tool("list_jobs")[0])
         job_status = None
@@ -214,4 +244,8 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
                     next_action="Provide a supported job status",
                 )
         records = app.jobs.list_jobs(principal=principal, status=job_status, limit=limit)
-        return env(summary={"jobs": [r.to_dict() for r in records], "count": len(records)})
+        jobs_list = [
+            r.to_dict() if verbose else (r.to_summary_dict() if hasattr(r, "to_summary_dict") else r.to_dict())
+            for r in records
+        ]
+        return env(summary={"jobs": jobs_list, "count": len(records), "verbose": verbose})

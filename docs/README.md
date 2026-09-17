@@ -20,6 +20,7 @@ A test file existing in the repository is not enough to mark a release gate gree
 
 - `PRODUCTION-READINESS.md`: current release status, gate evidence and blockers
 - `ARCHITECTURE.md`: architecture implemented today plus the target production topology
+- `NATIVE-INTERACTION-RUNTIME-AUDIT.md`: traced MCP hot paths and verified/native/planned ownership
 - `SECURITY.md`: controls implemented today, known gaps and target security properties
 - `API-COMPATIBILITY.md`: declared dependency ranges and how compatibility is proven
 - `TOOL-CONTRACTS.md`: public MCP tool/resource contracts and maturity notes

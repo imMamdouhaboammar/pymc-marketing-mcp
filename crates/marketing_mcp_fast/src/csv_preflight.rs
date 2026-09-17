@@ -80,7 +80,11 @@ pub fn sniff_and_validate_csv(
     let date_idx = date_col.and_then(|d| col_indices.get(d).copied());
     let target_idx = target_col.and_then(|t| col_indices.get(t).copied());
     let channel_indices: Vec<usize> = channel_cols
-        .map(|chs| chs.iter().filter_map(|c| col_indices.get(*c).copied()).collect())
+        .map(|chs| {
+            chs.iter()
+                .filter_map(|c| col_indices.get(*c).copied())
+                .collect()
+        })
         .unwrap_or_default();
 
     for result in reader.records() {
@@ -93,7 +97,10 @@ pub fn sniff_and_validate_csv(
                 continue;
             }
             let trimmed = field.trim();
-            if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("nan") || trimmed.eq_ignore_ascii_case("null") {
+            if trimmed.is_empty()
+                || trimmed.eq_ignore_ascii_case("nan")
+                || trimmed.eq_ignore_ascii_case("null")
+            {
                 col_nulls[i] += 1;
             } else if let Ok(val) = trimmed.parse::<f64>() {
                 col_numeric_counts[i] += 1;
@@ -114,12 +121,16 @@ pub fn sniff_and_validate_csv(
                 if !trimmed.is_empty() {
                     match &min_date {
                         None => min_date = Some(trimmed.to_string()),
-                        Some(cur_min) if trimmed < cur_min.as_str() => min_date = Some(trimmed.to_string()),
+                        Some(cur_min) if trimmed < cur_min.as_str() => {
+                            min_date = Some(trimmed.to_string())
+                        }
                         _ => {}
                     }
                     match &max_date {
                         None => max_date = Some(trimmed.to_string()),
-                        Some(cur_max) if trimmed > cur_max.as_str() => max_date = Some(trimmed.to_string()),
+                        Some(cur_max) if trimmed > cur_max.as_str() => {
+                            max_date = Some(trimmed.to_string())
+                        }
                         _ => {}
                     }
                 }
@@ -129,13 +140,18 @@ pub fn sniff_and_validate_csv(
 
     // Minimum sample size requirement (PyMC-Marketing MMM requires at least 20 observations)
     if row_count < 14 {
-        validation_errors.push(format!("Dataset has only {row_count} rows; MMM modeling requires at least 14 rows"));
+        validation_errors.push(format!(
+            "Dataset has only {row_count} rows; MMM modeling requires at least 14 rows"
+        ));
     }
 
     // Target checks
     if let Some(t_idx) = target_idx {
         if col_nulls[t_idx] > 0 {
-            validation_errors.push(format!("Target column contains {} missing values", col_nulls[t_idx]));
+            validation_errors.push(format!(
+                "Target column contains {} missing values",
+                col_nulls[t_idx]
+            ));
         }
         if col_numeric_counts[t_idx] + col_nulls[t_idx] < row_count {
             validation_errors.push("Target column contains non-numeric values".to_string());
@@ -146,16 +162,23 @@ pub fn sniff_and_validate_csv(
     for &ch_idx in &channel_indices {
         let ch_name = &column_names[ch_idx];
         if col_mins[ch_idx] < 0.0 {
-            validation_errors.push(format!("Channel column '{ch_name}' contains negative spend: {}", col_mins[ch_idx]));
+            validation_errors.push(format!(
+                "Channel column '{ch_name}' contains negative spend: {}",
+                col_mins[ch_idx]
+            ));
         }
         if col_nulls[ch_idx] > 0 {
-            validation_errors.push(format!("Channel column '{ch_name}' contains {} missing values", col_nulls[ch_idx]));
+            validation_errors.push(format!(
+                "Channel column '{ch_name}' contains {} missing values",
+                col_nulls[ch_idx]
+            ));
         }
     }
 
     let mut columns = HashMap::new();
     for (i, name) in column_names.iter().enumerate() {
-        let is_num = col_numeric_counts[i] > 0 && (col_numeric_counts[i] + col_nulls[i] == row_count);
+        let is_num =
+            col_numeric_counts[i] > 0 && (col_numeric_counts[i] + col_nulls[i] == row_count);
         let detected_type = if date_idx == Some(i) {
             "date".to_string()
         } else if is_num {
@@ -164,8 +187,16 @@ pub fn sniff_and_validate_csv(
             "string".to_string()
         };
 
-        let min = if col_numeric_counts[i] > 0 { Some(col_mins[i]) } else { None };
-        let max = if col_numeric_counts[i] > 0 { Some(col_maxs[i]) } else { None };
+        let min = if col_numeric_counts[i] > 0 {
+            Some(col_mins[i])
+        } else {
+            None
+        };
+        let max = if col_numeric_counts[i] > 0 {
+            Some(col_maxs[i])
+        } else {
+            None
+        };
         let mean = if col_numeric_counts[i] > 0 {
             Some(col_sums[i] / (col_numeric_counts[i] as f64))
         } else {
@@ -221,12 +252,8 @@ mod tests {
 2023-04-02,230.0,42.0,18.0\n";
 
         let chs = ["tv", "radio"];
-        let res = sniff_and_validate_csv(
-            csv_data,
-            Some("date"),
-            Some("sales"),
-            Some(&chs),
-        ).unwrap();
+        let res =
+            sniff_and_validate_csv(csv_data, Some("date"), Some("sales"), Some(&chs)).unwrap();
 
         assert_eq!(res.row_count, 14);
         assert!(res.is_valid_for_modeling);
@@ -246,14 +273,13 @@ mod tests {
         }
 
         let chs = ["tv"];
-        let res = sniff_and_validate_csv(
-            rows.as_bytes(),
-            Some("date"),
-            Some("sales"),
-            Some(&chs),
-        ).unwrap();
+        let res = sniff_and_validate_csv(rows.as_bytes(), Some("date"), Some("sales"), Some(&chs))
+            .unwrap();
 
         assert!(!res.is_valid_for_modeling);
-        assert!(res.validation_errors.iter().any(|e| e.contains("negative spend")));
+        assert!(res
+            .validation_errors
+            .iter()
+            .any(|e| e.contains("negative spend")));
     }
 }

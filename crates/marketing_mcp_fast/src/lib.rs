@@ -1,7 +1,23 @@
 //! High-performance Rust accelerator for pymc-marketing-mcp.
-//! Exposes PyO3 native functions for dataset preflight, quantiles, sparklines,
-//! and MCMC decision gates.
+//!
+//! Exposes PyO3 native functions for:
+//! - MCP request admission and JSON-RPC framing validation
+//! - HTTP Range header parsing
+//! - Job admission tokens (interaction-level only, NOT canonical job IDs)
+//! - Cancellation acknowledgment
+//! - Dataset CSV preflight
+//! - Quantile computation
+//! - Sparkline generation
+//! - LTTB curve downsampling (transport representation only)
+//! - Native JSON serialization
+//! - Native invocation counters for observability
+//!
+//! # Statistical authority
+//! `fast_mcmc_diagnostics` and `fast_compute_split_rhat` are retained ONLY for
+//! comparative benchmarks and parity testing. They must never be used for production
+//! statistical decisions. Production authority resides exclusively in Python/ArviZ.
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -13,9 +29,41 @@ mod sparklines;
 
 use csv_preflight::sniff_and_validate_csv;
 use diagnostics::{compute_split_rhat, evaluate_mcmc_gates};
-use engine::{admit_and_validate_request, DEFAULT_MAX_REQUEST_SIZE};
+use engine::{
+    acknowledge_job_cancellation, admit_and_validate_request, admit_job_submission,
+    get_native_stats, parse_range_header, DEFAULT_MAX_REQUEST_SIZE, NATIVE_SERIALIZATION_COUNT,
+};
 use quantiles::compute_quantiles;
 use sparklines::{generate_sparkline as rust_generate_sparkline, lttb_downsample};
+use std::sync::atomic::Ordering;
+
+// ---------------------------------------------------------------------------
+// MCP Request Admission
+// ---------------------------------------------------------------------------
+
+fn set_jsonrpc_id(
+    py: Python,
+    dict: &Bound<'_, PyDict>,
+    key: &str,
+    value: Option<&serde_json::Value>,
+) -> PyResult<()> {
+    match value {
+        Some(serde_json::Value::String(value)) => dict.set_item(key, value),
+        Some(serde_json::Value::Number(value)) => {
+            if let Some(value) = value.as_i64() {
+                dict.set_item(key, value)
+            } else if let Some(value) = value.as_u64() {
+                dict.set_item(key, value)
+            } else if let Some(value) = value.as_f64() {
+                dict.set_item(key, value)
+            } else {
+                Err(PyValueError::new_err("unsupported JSON-RPC numeric id"))
+            }
+        }
+        Some(serde_json::Value::Null) | None => dict.set_item(key, py.None()),
+        Some(_) => Err(PyValueError::new_err("invalid JSON-RPC id type")),
+    }
+}
 
 #[pyfunction]
 #[pyo3(signature = (raw_bytes, max_size=None, tenant_id=None))]
@@ -30,10 +78,14 @@ fn fast_admit_request(
     match admit_and_validate_request(raw_bytes, limit, tenant_id.as_deref()) {
         Ok(admitted) => {
             dict.set_item("admitted", true)?;
-            dict.set_item("request_id", admitted.request_id)?;
+            // request_id is None only for notifications; explicit JSON null is preserved.
+            set_jsonrpc_id(py, &dict, "request_id", admitted.request_id.as_ref())?;
             dict.set_item("jsonrpc", admitted.jsonrpc)?;
             dict.set_item("method", admitted.method)?;
-            dict.set_item("tool_name", admitted.tool_name)?;
+            match admitted.tool_name {
+                Some(ref name) => dict.set_item("tool_name", name)?,
+                None => dict.set_item("tool_name", py.None())?,
+            }
             dict.set_item("payload_size", admitted.payload_size)?;
             dict.set_item("is_notification", admitted.is_notification)?;
             dict.set_item("error", py.None())?;
@@ -45,8 +97,12 @@ fn fast_admit_request(
             err_dict.set_item("category", err.category)?;
             err_dict.set_item("message", err.message)?;
             err_dict.set_item("error_id", err.error_id)?;
-            err_dict.set_item("request_id", err.request_id)?;
-            err_dict.set_item("tenant_id", err.tenant_id)?;
+            set_jsonrpc_id(py, &err_dict, "request_id", err.request_id.as_ref())?;
+            err_dict.set_item("is_notification", err.is_notification)?;
+            match err.tenant_id {
+                Some(ref tid) => err_dict.set_item("tenant_id", tid)?,
+                None => err_dict.set_item("tenant_id", py.None())?,
+            }
             err_dict.set_item("retryable", err.retryable)?;
             err_dict.set_item("actionable", err.actionable)?;
             dict.set_item("error", err_dict)?;
@@ -55,10 +111,18 @@ fn fast_admit_request(
     Ok(dict.into())
 }
 
+// ---------------------------------------------------------------------------
+// HTTP Range parsing
+// ---------------------------------------------------------------------------
+
 #[pyfunction]
 fn fast_parse_range_header(header: &str, file_size: u64) -> Option<(u64, u64, u64)> {
-    engine::parse_range_header(header, file_size)
+    parse_range_header(header, file_size)
 }
+
+// ---------------------------------------------------------------------------
+// Job Admission
+// ---------------------------------------------------------------------------
 
 #[pyfunction]
 #[pyo3(signature = (payload_size, max_size=None, tenant_id=None))]
@@ -68,15 +132,19 @@ fn fast_admit_job(
     max_size: Option<usize>,
     tenant_id: Option<String>,
 ) -> PyResult<PyObject> {
-    let limit = max_size.unwrap_or(engine::DEFAULT_MAX_REQUEST_SIZE);
+    let limit = max_size.unwrap_or(DEFAULT_MAX_REQUEST_SIZE);
     let dict = PyDict::new(py);
-    match engine::admit_job_submission(payload_size, limit, tenant_id.as_deref()) {
+    match admit_job_submission(payload_size, limit, tenant_id.as_deref()) {
         Ok(adm) => {
             dict.set_item("admitted", true)?;
-            dict.set_item("job_id", adm.job_id)?;
+            // Expose as `admission_id` (NOT `job_id`) to prevent confusion with canonical job IDs
+            dict.set_item("admission_id", adm.admission_id)?;
             dict.set_item("status", adm.status)?;
             dict.set_item("admitted_at", adm.admitted_at)?;
-            dict.set_item("recommended_poll_interval_ms", adm.recommended_poll_interval_ms)?;
+            dict.set_item(
+                "recommended_poll_interval_ms",
+                adm.recommended_poll_interval_ms,
+            )?;
             dict.set_item("error", py.None())?;
         }
         Err(err) => {
@@ -87,24 +155,26 @@ fn fast_admit_job(
             err_dict.set_item("message", err.message)?;
             err_dict.set_item("error_id", err.error_id)?;
             err_dict.set_item("retryable", err.retryable)?;
+            err_dict.set_item("actionable", err.actionable)?;
             dict.set_item("error", err_dict)?;
         }
     }
     Ok(dict.into())
 }
 
+// ---------------------------------------------------------------------------
+// Cancellation Acknowledgment
+// ---------------------------------------------------------------------------
+
 #[pyfunction]
 #[pyo3(signature = (job_id, in_process=true))]
-fn fast_acknowledge_cancellation(
-    py: Python,
-    job_id: &str,
-    in_process: bool,
-) -> PyResult<PyObject> {
+fn fast_acknowledge_cancellation(py: Python, job_id: &str, in_process: bool) -> PyResult<PyObject> {
     let dict = PyDict::new(py);
-    match engine::acknowledge_job_cancellation(job_id, in_process) {
+    match acknowledge_job_cancellation(job_id, in_process) {
         Ok(ack) => {
             dict.set_item("acknowledged", true)?;
             dict.set_item("job_id", ack.job_id)?;
+            // Status reflects interaction-level state only; worker state is authoritative in Python
             dict.set_item("status", ack.status)?;
             dict.set_item("acknowledged_at", ack.acknowledged_at)?;
             dict.set_item("fence_triggered", ack.fence_triggered)?;
@@ -116,21 +186,61 @@ fn fast_acknowledge_cancellation(
             err_dict.set_item("code", err.code)?;
             err_dict.set_item("category", err.category)?;
             err_dict.set_item("message", err.message)?;
+            err_dict.set_item("error_id", err.error_id)?;
+            err_dict.set_item("retryable", err.retryable)?;
+            err_dict.set_item("actionable", err.actionable)?;
             dict.set_item("error", err_dict)?;
         }
     }
     Ok(dict.into())
 }
 
+// ---------------------------------------------------------------------------
+// Native Observability
+// ---------------------------------------------------------------------------
+
+/// Return a snapshot of native invocation counters for integration test verification.
+#[pyfunction]
+fn increment_native_fallback_count() {
+    engine::NATIVE_FALLBACK_COUNT.fetch_add(1, Ordering::Relaxed);
+}
+
+#[pyfunction]
+fn get_native_invocation_stats(py: Python) -> PyResult<PyObject> {
+    let stats = get_native_stats();
+    let dict = PyDict::new(py);
+    dict.set_item("native_admission_calls_total", stats.admission_calls)?;
+    dict.set_item(
+        "native_serialization_calls_total",
+        stats.serialization_calls,
+    )?;
+    dict.set_item("native_range_parse_calls_total", stats.range_parse_calls)?;
+    dict.set_item(
+        "native_job_admission_calls_total",
+        stats.job_admission_calls,
+    )?;
+    dict.set_item("native_cancellation_calls_total", stats.cancellation_calls)?;
+    dict.set_item("native_fallback_calls_total", stats.fallback_calls)?;
+    Ok(dict.into())
+}
+
+// ---------------------------------------------------------------------------
+// Metadata
+// ---------------------------------------------------------------------------
+
 #[pyfunction]
 fn get_version() -> &'static str {
-    "0.1.0"
+    env!("CARGO_PKG_VERSION")
 }
 
 #[pyfunction]
 fn is_rust_available() -> bool {
     true
 }
+
+// ---------------------------------------------------------------------------
+// Sparkline and LTTB (transport-only downsampling)
+// ---------------------------------------------------------------------------
 
 #[pyfunction]
 fn generate_sparkline(values: Vec<f64>) -> String {
@@ -142,6 +252,10 @@ fn compress_curve_lttb(xs: Vec<f64>, ys: Vec<f64>, max_points: usize) -> (Vec<f6
     lttb_downsample(&xs, &ys, max_points)
 }
 
+// ---------------------------------------------------------------------------
+// Quantiles
+// ---------------------------------------------------------------------------
+
 #[pyfunction]
 fn fast_compute_quantiles(py: Python, values: Vec<f64>, quantiles: Vec<f64>) -> PyResult<PyObject> {
     let summary = compute_quantiles(&values, &quantiles);
@@ -151,12 +265,14 @@ fn fast_compute_quantiles(py: Python, values: Vec<f64>, quantiles: Vec<f64>) -> 
     dict.set_item("min", summary.min)?;
     dict.set_item("max", summary.max)?;
     dict.set_item("count", summary.count)?;
-
     let q_list = PyList::new(py, summary.quantiles)?;
     dict.set_item("quantiles", q_list)?;
-
     Ok(dict.into())
 }
+
+// ---------------------------------------------------------------------------
+// CSV Preflight
+// ---------------------------------------------------------------------------
 
 #[pyfunction]
 #[pyo3(signature = (csv_bytes, date_col=None, target_col=None, channel_cols=None))]
@@ -167,19 +283,25 @@ fn fast_sniff_and_validate_csv(
     target_col: Option<String>,
     channel_cols: Option<Vec<String>>,
 ) -> PyResult<PyObject> {
-    let ch_refs: Option<Vec<&str>> = channel_cols.as_ref().map(|v| v.iter().map(|s| s.as_str()).collect());
+    let ch_refs: Option<Vec<&str>> = channel_cols
+        .as_ref()
+        .map(|v| v.iter().map(|s| s.as_str()).collect());
     let res = sniff_and_validate_csv(
         csv_bytes,
         date_col.as_deref(),
         target_col.as_deref(),
         ch_refs.as_deref(),
-    ).map_err(pyo3::exceptions::PyValueError::new_err)?;
+    )
+    .map_err(pyo3::exceptions::PyValueError::new_err)?;
 
     let dict = PyDict::new(py);
     dict.set_item("row_count", res.row_count)?;
     dict.set_item("column_names", PyList::new(py, &res.column_names)?)?;
     dict.set_item("is_valid_for_modeling", res.is_valid_for_modeling)?;
-    dict.set_item("validation_errors", PyList::new(py, &res.validation_errors)?)?;
+    dict.set_item(
+        "validation_errors",
+        PyList::new(py, &res.validation_errors)?,
+    )?;
     dict.set_item("date_min", res.date_min)?;
     dict.set_item("date_max", res.date_max)?;
 
@@ -195,9 +317,16 @@ fn fast_sniff_and_validate_csv(
         cols_dict.set_item(name, col_stat)?;
     }
     dict.set_item("columns", cols_dict)?;
-
     Ok(dict.into())
 }
+
+// ---------------------------------------------------------------------------
+// Statistical diagnostics — EXPERIMENTAL ONLY
+// NOTE: These functions are for benchmarking and parity testing ONLY.
+// Production statistical decision authority resides exclusively in:
+//   marketing_mcp.domain.diagnostics.engine.diagnose_inferencedata
+// Never invoke these functions from production decision paths.
+// ---------------------------------------------------------------------------
 
 #[pyfunction]
 fn fast_mcmc_diagnostics(
@@ -215,7 +344,6 @@ fn fast_mcmc_diagnostics(
     dict.set_item("decision_tools_enabled", summary.decision_tools_enabled)?;
     dict.set_item("failures", PyList::new(py, summary.failures)?)?;
     dict.set_item("warnings", PyList::new(py, summary.warnings)?)?;
-
     Ok(dict.into())
 }
 
@@ -223,6 +351,10 @@ fn fast_mcmc_diagnostics(
 fn fast_compute_split_rhat(chains: Vec<Vec<f64>>) -> f64 {
     compute_split_rhat(&chains)
 }
+
+// ---------------------------------------------------------------------------
+// JSON Serialization
+// ---------------------------------------------------------------------------
 
 fn py_to_serde_value(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
     if obj.is_none() {
@@ -269,15 +401,22 @@ fn py_to_serde_value(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
 
 #[pyfunction]
 fn fast_serialize_json(obj: &Bound<'_, PyAny>) -> PyResult<String> {
+    NATIVE_SERIALIZATION_COUNT.fetch_add(1, Ordering::Relaxed);
     let value = py_to_serde_value(obj)?;
-    serde_json::to_string(&value).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    serde_json::to_string(&value)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
 #[pyfunction]
 fn fast_serialize_json_bytes(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    NATIVE_SERIALIZATION_COUNT.fetch_add(1, Ordering::Relaxed);
     let value = py_to_serde_value(obj)?;
     serde_json::to_vec(&value).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
+
+// ---------------------------------------------------------------------------
+// Module registration
+// ---------------------------------------------------------------------------
 
 #[pymodule]
 fn marketing_mcp_fast(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -287,13 +426,16 @@ fn marketing_mcp_fast(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compress_curve_lttb, m)?)?;
     m.add_function(wrap_pyfunction!(fast_compute_quantiles, m)?)?;
     m.add_function(wrap_pyfunction!(fast_sniff_and_validate_csv, m)?)?;
-    m.add_function(wrap_pyfunction!(fast_mcmc_diagnostics, m)?)?;
-    m.add_function(wrap_pyfunction!(fast_compute_split_rhat, m)?)?;
     m.add_function(wrap_pyfunction!(fast_serialize_json, m)?)?;
     m.add_function(wrap_pyfunction!(fast_serialize_json_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(fast_admit_request, m)?)?;
     m.add_function(wrap_pyfunction!(fast_parse_range_header, m)?)?;
     m.add_function(wrap_pyfunction!(fast_admit_job, m)?)?;
     m.add_function(wrap_pyfunction!(fast_acknowledge_cancellation, m)?)?;
+    m.add_function(wrap_pyfunction!(get_native_invocation_stats, m)?)?;
+    m.add_function(wrap_pyfunction!(increment_native_fallback_count, m)?)?;
+    // Experimental / benchmark-only — see module docstring
+    m.add_function(wrap_pyfunction!(fast_mcmc_diagnostics, m)?)?;
+    m.add_function(wrap_pyfunction!(fast_compute_split_rhat, m)?)?;
     Ok(())
 }

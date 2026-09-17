@@ -191,12 +191,31 @@ class DatasetService:
         missing = []
         issues = []
         if date_col:
-            dates = (
-                pd.to_datetime(df[date_col], errors="coerce")
-                .dropna()
-                .sort_values()
-                .drop_duplicates()
-            )
+            raw_dates = pd.to_datetime(df[date_col], errors="coerce")
+            null_dates_count = int(raw_dates.isna().sum())
+            if null_dates_count > 0:
+                issues.append(
+                    Finding(
+                        severity="error",
+                        code="INVALID_DATE_FORMAT",
+                        message=f"Found {null_dates_count} unparseable date values in column '{date_col}'",
+                        evidence={"null_count": null_dates_count, "column": date_col},
+                        suggested_action="Ensure all dates are formatted in standard ISO-8601 (YYYY-MM-DD)",
+                    )
+                )
+            dup_dates_count = int(raw_dates.dropna().duplicated().sum())
+            if dup_dates_count > 0:
+                issues.append(
+                    Finding(
+                        severity="warning",
+                        code="DUPLICATE_DATES",
+                        message=f"Found {dup_dates_count} duplicate dates in column '{date_col}'",
+                        evidence={"duplicate_count": dup_dates_count, "column": date_col},
+                        suggested_action="Aggregate rows by date or provide panel/geo dimensions",
+                    )
+                )
+
+            dates = raw_dates.dropna().sort_values().drop_duplicates()
             start = dates.min().date().isoformat() if len(dates) else None
             end = dates.max().date().isoformat() if len(dates) else None
             if len(dates) >= 3:
@@ -216,6 +235,16 @@ class DatasetService:
                         dates.min(), dates.max(), freq=pd.Timedelta(days=round(med))
                     )
                     missing = [d.date().isoformat() for d in expected.difference(dates)[:100]]
+        else:
+            issues.append(
+                Finding(
+                    severity="error",
+                    code="MISSING_DATE_COLUMN",
+                    message="No recognizable date or week column found in dataset",
+                    suggested_action="Ensure dataset contains a temporal column (e.g. 'date', 'week')",
+                )
+            )
+
         numeric = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
         targets = [
             c
@@ -256,11 +285,40 @@ class DatasetService:
                 Finding(
                     severity="warning",
                     code="MISSING_PERIODS",
-                    message="Potential missing periods detected",
+                    message="Potential missing periods detected in calendar timeline",
                     evidence={"count": len(missing)},
-                    suggested_action="Validate continuity before modeling",
+                    suggested_action="Validate continuity before modeling to avoid distorted adstock",
                 )
             )
+        if len(df) < 52:
+            issues.append(
+                Finding(
+                    severity="warning",
+                    code="INSUFFICIENT_OBSERVATIONS",
+                    message=f"Dataset has {len(df)} rows; PyMC MMM recommends at least 52 periods",
+                    evidence={"row_count": len(df), "recommended_min": 52},
+                    suggested_action="Collect at least 52 weekly observations for robust MCMC inference",
+                )
+            )
+        if not targets:
+            issues.append(
+                Finding(
+                    severity="error",
+                    code="MISSING_TARGET_COLUMN",
+                    message="No recognizable KPI or sales target column detected",
+                    suggested_action="Ensure dataset contains a numeric KPI column (e.g. 'sales', 'revenue')",
+                )
+            )
+        if not channels:
+            issues.append(
+                Finding(
+                    severity="error",
+                    code="MISSING_CHANNEL_COLUMNS",
+                    message="No recognizable media spend or impression columns detected",
+                    suggested_action="Ensure dataset contains media channel columns (e.g. 'meta_spend', 'search_spend')",
+                )
+            )
+
         candidate = bool(date_col and targets and channels and len(df) >= 52)
         return DatasetInspection(
             dataset_id=dataset_id,

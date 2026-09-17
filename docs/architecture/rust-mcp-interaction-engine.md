@@ -1,5 +1,10 @@
 # Architecture Specification: Rust MCP Interaction Engine
 
+> **Status: target-state design, not current-state evidence.** Several sections below are
+> intentionally aspirational. Use `docs/NATIVE-INTERACTION-RUNTIME-AUDIT.md` for the traced
+> production path and per-capability implementation status. In particular, native wire
+> serialization, typed dispatch, Rust streaming/backpressure, and SIMD SHA-256 are not current.
+
 ## 1. System Overview & Core Invariants
 
 The Model Context Protocol (MCP) server for PyMC-Marketing (`pymc-marketing-mcp`) provides AI clients (Claude, Cursor, ChatGPT) with a decision-safe interface for Bayesian marketing science.
