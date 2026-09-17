@@ -41,6 +41,16 @@ Throughout this hardening mission, the most severe bugs in the platform were gua
 * **Why It Was Deceptive**: Real enterprise marketing budgets are $1,000,000 to $50,000,000. At $10M, SciPy's finite-difference step $\Delta x \approx 1.49 \times 10^{-8}$ underflows machine precision ($10^7 + 10^{-8} = 10^7$).
 * **Lesson**: Numerical algorithms must be stress-tested across the full dynamic range of real-world inputs ($10^2, 10^4, 10^6, 10^8$).
 
+### Anti-Pattern 5: The Phantom Calculation (Unasserted Test Variables)
+* **What Happened**: In `test_flighting_respects_conservation_floors_and_caps`, the test computed `total_budget = sum(r["spend"] for r in schedule)` but omitted the `assert` statement comparing it to the target budget.
+* **Why It Was Deceptive**: The test passed green and appeared to test budget conservation during code reviews. In reality, Python computed the value and silently discarded it without checking the invariant.
+* **Lesson**: Enforce linter rule `F841` (unused variables) across all test directories, and audit all tests to guarantee every intermediate invariant calculation has an explicit, tight tolerance assertion.
+
+### Anti-Pattern 6: Architectural Claims Without Runtime Assertions
+* **What Happened**: Early architecture documentation claimed "SIMD hardware SHA-256 acceleration" and "pure native zero-copy streaming" for the Rust MCP interaction engine.
+* **Why It Was Deceptive**: The actual code used standard library hashing and standard buffered IPC channels; no SIMD intrinsics or unbuffered streaming existed in the runtime path.
+* **Lesson**: Architectural claims must be verified via actual runtime assertions, hardware telemetry, and automated throughput benchmarks before documentation is committed.
+
 ---
 
 ## 3. Reusable Adversarial Test Fixtures
@@ -102,4 +112,7 @@ Before declaring any bug resolved or submitting code, every agent must follow th
 | `tests/unit/test_job_state_machine.py` | Asynchronous job state transitions and cancellation fencing | 12 passed |
 | `tests/unit/test_error_normalization.py` | Error code taxonomy and user-actionable envelope parity | 8 passed |
 | `tests/unit/test_action_runtime_policy.py` | Tool registry AST alignment and next_actions validation | 7 passed |
+| `tests/benchmarks/benchmark_engine.py` | Multi-scenario native vs Python engine throughput benchmark | 7 scenarios |
+| `tests/unit/test_request_safety.py` | Safety middleware rate limiting and configurable threshold verification | 5 passed |
+| `tests/unit/test_native_parity.py` | Parity verification between native Rust and Python fallback engines | 8 passed |
 

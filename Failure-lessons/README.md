@@ -22,6 +22,11 @@ Every engineering agent and contributor working on this repository must preserve
 8. **Official Workflows Must Satisfy Downstream Prerequisites**: If a downstream official workflow requires an artifact capability (e.g. `log_likelihood` for LOO/WAIC model selection), the upstream official workflow must produce it by default or declare that requirement before fitting.
 9. **User Errors Are Not INTERNAL Errors**: Caller errors are never INTERNAL errors. All domain and validation exceptions must map to a standardized, machine-readable error taxonomy with explicit remediation guidance. Suggested `next_actions` must originate from the registered capability catalog.
 10. **Completion Claims Require Fresh Adversarial Evidence**: A regression test is not proven useful until it can be shown to fail when the relevant fix is removed or the defect is reintroduced. Green tests $\ne$ verified requirements without red-green falsification.
+11. **Never Accept Architectural Claims Without Runtime Counters**: Hardware and acceleration claims (e.g. SIMD hashing, zero-copy parsing, pure native streaming) must be backed by explicit runtime telemetry or unit test assertions. Speculative optimizations must never be documented as active reality without verification.
+12. **Protection Middleware Must Expose Configurable Test Knobs**: Security and rate-limiting middleware must provide configurable environment knobs (`rate_limit_per_minute`) so that performance benchmarks, stress tests, and integration pipelines are not choked by false-positive throttling.
+13. **Native Extension Builds Must Target the Active Runtime**: Native C-extension crates (PyO3) must explicitly link against the active virtual environment (`PYO3_PYTHON`) and configure platform-specific dynamic lookup (`-undefined dynamic_lookup` on macOS) to avoid unresolved symbol link errors during build and packaging.
+14. **Document Protocol Boundaries Truthfully**: When native acceleration wraps an external runtime SDK (e.g. MCP Python SDK), protocol admission must truthfully reflect boundary transformations (`InteractionRequest` / `BoundaryRequest`) rather than claiming non-existent zero-copy passthroughs.
+15. **Statistical Invariant Tests Must Derive Assertions Dynamically**: Tests verifying optimization invariants (e.g. spend conservation, channel bounds) must compute tolerances and expected values directly from input configurations rather than hardcoding static numbers that silently drift when fixtures change. Every computed variable in a test must have an assertion.
 
 ---
 
@@ -39,6 +44,11 @@ Every engineering agent and contributor working on this repository must preserve
 | [statistical-workflows.md](./statistical-workflows.md) | Workflow sequencing, LOO/WAIC prerequisites, capability manifests | `MODEL-SEL-001` |
 | [api-contracts.md](./api-contracts.md) | Normalized error taxonomy, traceback sanitization, registered `next_actions` | `API-ERR-001`, `API-NEXT-001` |
 | [testing-and-verification.md](./testing-and-verification.md) | Red-green verification protocol, adversarial fixtures, anti-pattern catalog | `TEST-001` |
+| [35-fictional-crypto-acceleration-and-streaming-claims.md](./35-fictional-crypto-acceleration-and-streaming-claims.md) | Verified runtime claims, hardware acceleration telemetry | `CRYPTO-001` |
+| [36-rate-limiter-choke-on-high-throughput-benchmarks.md](./36-rate-limiter-choke-on-high-throughput-benchmarks.md) | Configurable ingress throttling, benchmark safety isolation | `RATE-001` |
+| [37-macos-pyo3-linker-symbol-resolution-and-virtualenv.md](./37-macos-pyo3-linker-symbol-resolution-and-virtualenv.md) | Darwin PyO3 symbol resolution, dynamic lookup, toolchain paths | `LINK-001` |
+| [38-dual-parse-protocol-boundary-and-typed-contracts.md](./38-dual-parse-protocol-boundary-and-typed-contracts.md) | Dual-parsing boundary truth, typed interaction envelopes | `BOUND-001` |
+| [39-statistical-test-assertion-drift-and-budget-conservation.md](./39-statistical-test-assertion-drift-and-budget-conservation.md) | Dynamic budget bounds assertions, linter F841 enforcement | `TEST-002` |
 | [lessons-index.md](./lessons-index.md) | Master lookup table mapping lessons, rules, systems, and regression tests | Master Cross-Reference |
 
 ---
@@ -97,7 +107,7 @@ Documents in this directory must be updated when:
 
 ---
 
-## Historical Post-Mortem Archive (Lessons 01–34)
+## Historical Post-Mortem Archive (Lessons 01–39)
 
 Detailed case studies from earlier container deployment and Cloud Run hardening sessions remain indexed in [lessons-index.md](./lessons-index.md) and archived below:
 
@@ -135,3 +145,8 @@ Detailed case studies from earlier container deployment and Cloud Run hardening 
 * [32: Deceptive Cancellation & Orphan Compute Fences](./32-deceptive-cancellation-and-orphan-compute-fence.md)
 * [33: PyO3 Build in Slim Rust Container Missing Python Interpreter & ABI Mismatch](./33-pyo3-build-in-rust-slim-missing-python-interpreter.md)
 * [34: Dockerfile POSIX /bin/sh Process Substitution Syntax Error](./34-dockerfile-posix-sh-process-substitution-syntax-error.md)
+* [35: Fictional Crypto Acceleration & Streaming Claims](./35-fictional-crypto-acceleration-and-streaming-claims.md)
+* [36: Rate Limiter Choke on High-Throughput Benchmarks](./36-rate-limiter-choke-on-high-throughput-benchmarks.md)
+* [37: macOS PyO3 Linker Symbol Resolution & Virtualenv Incompatibility](./37-macos-pyo3-linker-symbol-resolution-and-virtualenv.md)
+* [38: Dual-Parse Protocol Boundary & Typed Interaction Contracts](./38-dual-parse-protocol-boundary-and-typed-contracts.md)
+* [39: Statistical Test Assertion Drift & Budget Conservation Invariant](./39-statistical-test-assertion-drift-and-budget-conservation.md)
