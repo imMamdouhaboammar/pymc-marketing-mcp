@@ -203,7 +203,7 @@ class TestErrorBoundaryDecorator:
         res = await crashing_tool()
         assert "error" in res
         err = res["error"]
-        assert err["code"] in ("CONFIGURATION_INVALID", "INTERNAL_ERROR")
+        assert err["code"] in ("CONFIGURATION_INVALID", "INTERNAL_ERROR", "INVALID_ARGUMENT")
         assert "error_id" in err
 
 

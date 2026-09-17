@@ -71,15 +71,20 @@ class AsyncioJobExecutor:
         try:
             self.repo.update_job(job.job_id, JobStatus.RUNNING)
             result = await coro_fn(job, cancel_event)
-            if cancel_event.is_set():
-                self.repo.update_job(job.job_id, JobStatus.CANCELLED)
-            else:
+            current_job = self.repo.get_job(job.job_id)
+            if cancel_event.is_set() or current_job.status in (JobStatus.CANCELLING, JobStatus.CANCELLED):
+                if current_job.status != JobStatus.CANCELLED:
+                    self.repo.update_job(job.job_id, JobStatus.CANCELLED)
+            elif current_job.status == JobStatus.RUNNING:
                 self.repo.update_job(job.job_id, JobStatus.SUCCEEDED, result=result)
         except asyncio.CancelledError:
-            self.repo.update_job(job.job_id, JobStatus.CANCELLED)
+            current_job = self.repo.get_job(job.job_id)
+            if current_job.status != JobStatus.CANCELLED:
+                self.repo.update_job(job.job_id, JobStatus.CANCELLED)
         except Exception as e:
             logger.exception("Job %s failed", job.job_id)
             from marketing_mcp.error_classifier import classify_exception
+
             norm = classify_exception(
                 e,
                 operation=job.job_type,
@@ -100,10 +105,13 @@ class AsyncioJobExecutor:
 
     def cancel(self, job_id: str) -> bool:
         cancel_event = self._cancel_events.get(job_id)
-        if cancel_event:
-            cancel_event.set()
         task = self._tasks.get(job_id)
-        if task and not task.done():
-            task.cancel()
-            return True
-        return False
+        if cancel_event is None or task is None or task.done():
+            return False
+
+        # Cooperative cancellation keeps the wrapper task alive while any
+        # run_in_executor thread finishes. The job remains CANCELLING until the
+        # runner returns to Python and observes this event, so terminal state is
+        # never reported while CPU work is still active.
+        cancel_event.set()
+        return True

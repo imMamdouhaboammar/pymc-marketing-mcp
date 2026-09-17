@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import math
+
 import pytest
 
 from marketing_mcp.accelerators import (
     compress_curve_lttb,
     fast_compute_quantiles,
-    fast_mcmc_diagnostics,
     fast_serialize_json,
-    fast_sniff_and_validate_csv,
     generate_sparkline,
     get_engine_info,
     is_rust_accelerated,
@@ -125,7 +124,9 @@ def test_quantiles_edge_cases_and_numpy_parity():
     # 4. Extreme values
     extreme_data = [1e-10, 2e-10, 5e-10, 1e-9]
     ext_res = fast_compute_quantiles(extreme_data, [0.5])
-    assert ext_res["quantiles"][0] == pytest.approx(np.quantile(extreme_data, 0.5, method="linear"), rel=1e-5)
+    assert ext_res["quantiles"][0] == pytest.approx(
+        np.quantile(extreme_data, 0.5, method="linear"), rel=1e-5
+    )
 
 
 def test_lttb_edge_cases_and_parity():
@@ -135,6 +136,7 @@ def test_lttb_edge_cases_and_parity():
 
     # Parity between Rust and fallback
     import marketing_mcp.accelerators as acc
+
     xs = [float(i) * 0.1 for i in range(200)]
     ys = [math.sin(x) + 0.1 * math.cos(x * 3) for x in xs]
     rust_x, rust_y = compress_curve_lttb(xs, ys, max_points=25)
@@ -163,13 +165,38 @@ def test_sparklines_edge_cases_and_parity():
 def test_fallback_mcmc_diagnostics_no_attribute_error(monkeypatch):
     """Verify that Python fallback in _py_fast_mcmc_diagnostics appends without AttributeError."""
     import marketing_mcp.accelerators as acc
+
     monkeypatch.setattr(acc, "_IS_RUST_AVAILABLE", False)
 
     # Trigger max_rhat > 1.05 failure branch
-    res = acc.fast_mcmc_diagnostics(rhats=[1.08, 1.02], esses=[500.0], divergences=0)
+    with pytest.warns(UserWarning, match="NON-AUTHORITATIVE"):
+        res = acc.fast_mcmc_diagnostics(rhats=[1.08, 1.02], esses=[500.0], divergences=0)
     assert res["decision_status"] == "rejected"
     assert res["decision_tools_enabled"] is False
     assert any("exceeds safety threshold" in f for f in res["failures"])
+
+
+def test_disable_rust_environment_forces_real_fallback():
+    """The fallback CI lane must disable native loading without monkeypatching."""
+    import os
+    import subprocess
+    import sys
+
+    env = os.environ.copy()
+    env["MARKETING_MCP_DISABLE_RUST"] = "1"
+    output = subprocess.check_output(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from marketing_mcp.accelerators import get_engine_info; "
+                "print(get_engine_info()['backend'])"
+            ),
+        ],
+        env=env,
+        text=True,
+    )
+    assert output.strip() == "python-standard"
 
 
 def test_fast_admit_request_native_and_fallback(monkeypatch):
@@ -179,20 +206,69 @@ def test_fast_admit_request_native_and_fallback(monkeypatch):
     raw_large = b"x" * 500
 
     for is_rust in [True, False]:
-      monkeypatch.setattr(acc, "_IS_RUST_AVAILABLE", is_rust)
-      res = acc.fast_admit_request(raw_valid)
-      assert res["admitted"] is True
-      assert res["request_id"] == "req-1"
-      assert res["method"] == "tools/call"
-      assert res["tool_name"] == "simulate_budget"
-      assert res["error"] is None
+        monkeypatch.setattr(acc, "_IS_RUST_AVAILABLE", is_rust)
+        res = acc.fast_admit_request(raw_valid)
+        assert res["admitted"] is True
+        assert res["request_id"] == "req-1"
+        assert res["method"] == "tools/call"
+        assert res["tool_name"] == "simulate_budget"
+        assert res["error"] is None
 
-      err = acc.fast_admit_request(
-          raw_large, max_size=100, tenant_id="tenant-1"
-      )
-      assert err["admitted"] is False
-      assert err["error"]["code"] == "PAYLOAD_TOO_LARGE"
-      assert err["error"]["tenant_id"] == "tenant-1"
+        err = acc.fast_admit_request(raw_large, max_size=100, tenant_id="tenant-1")
+        assert err["admitted"] is False
+        assert err["error"]["code"] == "PAYLOAD_TOO_LARGE"
+        assert err["error"]["tenant_id"] == "tenant-1"
+
+
+def test_python_admission_protocol_validation_matches_native():
+    import marketing_mcp.accelerators as acc
+
+    null_id = acc._py_fast_admit_request(
+        b'{"jsonrpc":"2.0","id":null,"method":"tools/list","params":{}}'
+    )
+    assert null_id["admitted"] is True
+    assert null_id["request_id"] is None
+    assert null_id["is_notification"] is False
+
+    numeric_id = acc._py_fast_admit_request(
+        b'{"jsonrpc":"2.0","id":42,"method":"tools/list","params":{}}'
+    )
+    assert numeric_id["admitted"] is True
+    assert numeric_id["request_id"] == 42
+
+    null_version = acc._py_fast_admit_request(
+        b'{"jsonrpc":null,"id":1,"method":"tools/list"}'
+    )
+    assert null_version["admitted"] is False
+    assert null_version["error"]["code"] == "INVALID_JSONRPC_VERSION"
+
+    zero_limit = acc._py_fast_admit_request(
+        b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+        max_size=0,
+    )
+    assert zero_limit["admitted"] is False
+    assert zero_limit["error"]["code"] == "PAYLOAD_TOO_LARGE"
+
+    invalid_cases = [
+        (b'{"jsonrpc":"2.0","id":true,"method":"tools/list"}', "INVALID_REQUEST_ID"),
+        (b'{"jsonrpc":"2.0","id":1,"method":"tools/list","params":"bad"}', "INVALID_PARAMS"),
+        (
+            b'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"arguments":{}}}',
+            "INVALID_TOOL_CALL",
+        ),
+    ]
+    for raw, expected_code in invalid_cases:
+        result = acc._py_fast_admit_request(raw)
+        assert result["admitted"] is False
+        assert result["error"]["code"] == expected_code
+
+
+def test_range_parser_rejects_extra_delimiters_in_both_backends(monkeypatch):
+    import marketing_mcp.accelerators as acc
+
+    for is_rust in [True, False]:
+        monkeypatch.setattr(acc, "_IS_RUST_AVAILABLE", is_rust)
+        assert acc.fast_parse_range_header("bytes=0-1-2", 100) is None
 
 
 def test_fast_admit_job_native_and_fallback(monkeypatch):
@@ -204,7 +280,8 @@ def test_fast_admit_job_native_and_fallback(monkeypatch):
         ok = acc.fast_admit_job(1024, max_size=10000, tenant_id="tenant-1")
         assert ok["admitted"] is True
         assert ok["status"] == "accepted"
-        assert ok["job_id"].startswith("job-")
+        assert ok["admission_id"].startswith("adm-")
+        assert "job_id" not in ok
         assert ok["recommended_poll_interval_ms"] == 1000
         assert ok["error"] is None
 
@@ -222,15 +299,13 @@ def test_fast_acknowledge_cancellation_native_and_fallback(monkeypatch):
         in_proc = acc.fast_acknowledge_cancellation("job-12345", in_process=True)
         assert in_proc["acknowledged"] is True
         assert in_proc["job_id"] == "job-12345"
-        assert in_proc["status"] == "cancelled"
+        assert in_proc["status"] == "cancelling"
         assert in_proc["fence_triggered"] is True
 
         distributed = acc.fast_acknowledge_cancellation("job-12345", in_process=False)
         assert distributed["acknowledged"] is True
-        assert distributed["status"] == "cancelling"
+        assert distributed["status"] == "cancellation_requested"
 
         invalid = acc.fast_acknowledge_cancellation("   ", in_process=True)
         assert invalid["acknowledged"] is False
         assert invalid["error"]["code"] == "INVALID_JOB_ID"
-
-

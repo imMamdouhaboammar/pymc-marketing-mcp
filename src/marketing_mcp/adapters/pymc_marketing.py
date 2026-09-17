@@ -198,6 +198,8 @@ class PyMCMarketingAdapter:
             chains=sampler.get("chains", 4),
             target_accept=sampler.get("target_accept", 0.9),
             random_seed=sampler.get("random_seed", 42),
+            compute_convergence_checks=sampler.get("compute_convergence_checks", True),
+            idata_kwargs={"log_likelihood": True},
         )
         model.sample_posterior_predictive(X, random_seed=sampler.get("random_seed", 42))
         if artifact is not None:
@@ -323,13 +325,26 @@ class PyMCMarketingAdapter:
                 }
             )
 
+        decision_impact = "warning" if stability_findings else ("approved" if (mean_nrmse is None or mean_nrmse <= 0.50) else "caution")
+        decision_provenance = {
+            "metric": "NRMSE",
+            "definition": "Root Mean Squared Error normalized by target standard deviation: RMSE / std(y_test)",
+            "normalizer": "standard_deviation",
+            "aggregation": "arithmetic_mean_across_folds",
+            "observed": round(mean_nrmse, 4) if mean_nrmse is not None else None,
+            "threshold": 0.50,
+            "rule": "observed <= threshold and not stability_findings",
+            "decision": decision_impact,
+        }
+
         return {
             "folds": len(fold_metrics),
             "metrics": fold_metrics,
             "mean_out_of_sample_rmse": round(mean_rmse, 2),
             "mean_out_of_sample_nrmse": round(mean_nrmse, 4) if mean_nrmse is not None else None,
             "stability_findings": stability_findings,
-            "decision_impact": "warning" if stability_findings else "approved",
+            "decision_impact": decision_impact,
+            "decision_provenance": decision_provenance,
         }
 
     def evaluate_prior_sensitivity(
@@ -490,7 +505,11 @@ class PyMCMarketingAdapter:
                 )
 
         return {
+            "ranking_metric": "channel_contribution_median",
+            "ranking_scope": "entire_historical_window",
+            "higher_is_better": True,
             "baseline_ranks": base_ranks,
+            "baseline_values": {c["channel"]: c.get("contribution_median", 0.0) for c in base_contrib.get("channels", [])},
             "tested_dimensions": {
                 "adstock": True,
                 "saturation": True,
@@ -607,8 +626,24 @@ class PyMCMarketingAdapter:
 
                 sub_x = [round(float(x_vals[i]), 4) for i in selected_indices]
 
+                sat_type_str = str(getattr(model, "saturation_type", "")).lower()
+                sat_inst = getattr(model, "saturation", None)
+                is_no_sat = (
+                    sat_type_str in ("none", "nosaturation")
+                    or (sat_inst is not None and type(sat_inst).__name__ in ("NoSaturation", "NoneType"))
+                )
+
                 for ch in channels:
                     ch_da = da.sel(channel=ch)
+                    # Aggregate any multi-dimensional panel coords (e.g. geo, country)
+                    panel_dims = [
+                        d
+                        for d in ch_da.dims
+                        if d not in ("chain", "draw") and (grid_dim is None or d != grid_dim)
+                    ]
+                    if panel_dims:
+                        ch_da = ch_da.sum(dim=panel_dims)
+
                     reduce_dims = [d for d in ch_da.dims if d in ("chain", "draw")]
                     if reduce_dims:
                         med = ch_da.median(dim=reduce_dims)
@@ -629,13 +664,51 @@ class PyMCMarketingAdapter:
                         upper_vals = [round(float(v), 4) for v in q97.values.flatten()[: len(sub_x)]]
 
                     max_resp = round(float(np.nanmax(med_vals)), 4) if med_vals else 0.0
-                    half_resp = max_resp / 2.0
-                    half_idx = 0
-                    for idx, val in enumerate(med_vals):
-                        if val >= half_resp:
-                            half_idx = idx
-                            break
-                    half_spend = sub_x[half_idx] if sub_x else 0.0
+                    if is_no_sat:
+                        half_spend = None
+                        half_details = {
+                            "applicable": False,
+                            "reason": "model_has_no_saturation_transform",
+                        }
+                    else:
+                        half_resp = max_resp / 2.0
+                        half_idx = 0
+                        for idx, val in enumerate(med_vals):
+                            if val >= half_resp:
+                                half_idx = idx
+                                break
+                        half_spend = sub_x[half_idx] if sub_x else 0.0
+                        half_details = {
+                            "applicable": True,
+                            "reason": "model_has_saturation_transform",
+                        }
+
+                    # Channel empirical support metadata (CURVE-002)
+                    n_nonzero = 0
+                    hist_min = 0.0
+                    hist_max = 0.0
+                    hist_p95 = 0.0
+                    if hasattr(model, "X") and hasattr(model.X, "columns") and str(ch) in model.X.columns:
+                        col_s = pd.to_numeric(model.X[str(ch)], errors="coerce").fillna(0)
+                        pos_s = col_s[col_s > 0]
+                        n_nonzero = int(len(pos_s))
+                        hist_min = round(float(pos_s.min()), 2) if n_nonzero > 0 else 0.0
+                        hist_max = round(float(col_s.max()), 2)
+                        hist_p95 = round(float(col_s.quantile(0.95)), 2)
+
+                    max_sub_x = max(sub_x) if sub_x else 0.0
+                    if n_nonzero == 0:
+                        support_class = "no_empirical_support"
+                        prior_dominated = True
+                    elif max_sub_x > (hist_max * 1.5 if hist_max > 0 else 0):
+                        support_class = "extrapolated"
+                        prior_dominated = False
+                    elif n_nonzero < 10:
+                        support_class = "weak_support"
+                        prior_dominated = True
+                    else:
+                        support_class = "observed"
+                        prior_dominated = False
 
                     channel_curves[str(ch)] = {
                         "spend_grid": sub_x,
@@ -644,6 +717,13 @@ class PyMCMarketingAdapter:
                         "upper_94": upper_vals,
                         "max_response_median": max_resp,
                         "half_saturation_spend": half_spend,
+                        "half_saturation_details": half_details,
+                        "n_nonzero_periods": n_nonzero,
+                        "historical_spend_min": hist_min,
+                        "historical_spend_max": hist_max,
+                        "historical_spend_p95": hist_p95,
+                        "support_class": support_class,
+                        "prior_dominated": prior_dominated,
                     }
 
             return {

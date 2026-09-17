@@ -255,6 +255,27 @@ def validate_mmm_dataset(
             )
         )
 
+    # Check for target tracking gaps: significant media spend with zero or missing target
+    if len(channel_columns) > 0:
+        total_media_spend = df[channel_columns].apply(pd.to_numeric, errors="coerce").fillna(0).sum(axis=1)
+        target_series = target.fillna(0)
+        gap_mask = (total_media_spend > 0) & (target_series == 0)
+        gap_count = int(gap_mask.sum())
+        if gap_count > 0:
+            findings.append(
+                _f(
+                    "warning",
+                    "POSSIBLE_TARGET_TRACKING_GAP",
+                    f"Detected {gap_count} periods with active media spend but zero {target_column}",
+                    {
+                        "target_column": target_column,
+                        "zero_target_active_spend_count": gap_count,
+                        "pct_of_periods": round((gap_count / max(1, len(df))) * 100, 2),
+                    },
+                    "Verify telemetry, tracking outages, or seasonal closure periods",
+                )
+            )
+
     if len(channel_columns) > 1:
         corr = df[channel_columns].apply(pd.to_numeric, errors="coerce").corr().abs()
         for i, a in enumerate(channel_columns):

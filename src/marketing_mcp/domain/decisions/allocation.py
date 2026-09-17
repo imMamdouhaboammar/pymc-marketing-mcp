@@ -131,7 +131,20 @@ def apply_changes(
     def change_value(amount: float, change: Any) -> float:
         change_type = change.type if hasattr(change, "type") else change["type"]
         value = float(change.value if hasattr(change, "value") else change["value"])
-        updated = amount * (1 + value) if change_type == "relative" else amount + value
+        if change_type == "set_spend":
+            updated = value
+        elif change_type == "add_spend":
+            updated = amount + value
+        elif change_type == "multiply_spend":
+            updated = amount * value
+        elif change_type == "percent_change":
+            updated = amount * (1.0 + value / 100.0)
+        elif change_type == "relative":
+            updated = amount * (1.0 + value)
+        elif change_type == "absolute":
+            updated = amount + value
+        else:
+            updated = amount + value
         if updated < 0:
             raise DomainError("INVALID_BUDGET", "Scenario produces negative spend")
         return float(updated)

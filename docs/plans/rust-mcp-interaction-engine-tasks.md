@@ -1,5 +1,9 @@
 # Task Breakdown: Rust MCP Interaction Engine & Production Hardening
 
+> **Historical execution checklist, not completion evidence.** Checked boxes record what the
+> earlier pass claimed. The current audit found several claims unwired or unproven. The
+> authoritative status is `docs/NATIVE-INTERACTION-RUNTIME-AUDIT.md` plus executable evidence.
+
 ## Overview
 This document tracks atomic, verifiable tasks across the 6 implementation slices. Every completed milestone is verified against test suites and codified into `Failure-lessons/`.
 

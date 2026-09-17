@@ -182,7 +182,8 @@ def test_flighting_response_matches_official_transform_recomputation(flighting_a
                 vals = da.sel(channel=ch) if "channel" in da.dims else da
                 params[ch][var] = float(np.asarray(vals).mean())
 
-    scales_da = model.get_scales_as_xarray()["channel_scale"]
+    scales_dict = model.get_scales_as_xarray()
+    scales_da = scales_dict["channel_scale"]
     scale_map = {
         ch: (
             float(np.asarray(scales_da.sel(channel=ch)).mean())
@@ -191,6 +192,9 @@ def test_flighting_response_matches_official_transform_recomputation(flighting_a
         )
         for ch in channels
     }
+    target_scale = float(
+        np.asarray(scales_dict.get("target_scale", scales_dict.get("target", 1.0))).reshape(-1).mean()
+    )
 
     evaluator = build_official_response_evaluator(
         adstock_type="geometric",
@@ -199,6 +203,7 @@ def test_flighting_response_matches_official_transform_recomputation(flighting_a
         channel_params=params,
         channel_scale=scale_map,
         channel_columns=channels,
+        target_scale=target_scale,
     )
     schedule_matrix = np.array([res["weekly_schedule"][ch] for ch in channels], dtype=float)
     expected_response = float(evaluator(schedule_matrix))

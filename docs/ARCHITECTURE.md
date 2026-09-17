@@ -115,3 +115,63 @@ The project currently declares Python `>=3.12,<3.14`, PyMC-Marketing `>=1.0.0` a
 Exact versions for a verified release come from `uv.lock` plus machine-generated release evidence, not from a hand-maintained architecture statement
 
 See `docs/API-COMPATIBILITY.md`
+
+## Rust Interaction Engine
+
+The `marketing_mcp_fast` Rust extension (`crates/marketing_mcp_fast/`) provides a
+**Rust-backed MCP interaction fast path** for latency-sensitive infrastructure.
+
+**Precise terminology**: This is a `Rust interaction engine` or `native admission layer`. It is
+NOT a "Rust MCP Server" — the MCP protocol server is the official Python MCP SDK (FastMCP).
+
+### Capability Evidence Table
+
+| Capability | Location | Runtime caller | Status |
+|---|---|---|---|
+| Native request admission (size and JSON-RPC validation) | `engine.rs::admit_and_validate_request` | `NativeAdmissionMiddleware` on POST /mcp | **IMPLEMENTED_NOT_YET_BENCHMARKED** |
+| `jsonrpc == "2.0"`, id, params and tools/call validation | `engine.rs` | Same middleware | **IMPLEMENTED_AND_VERIFIED** |
+| Notification semantics (id absent only) | `engine.rs` | Same middleware | **IMPLEMENTED_AND_VERIFIED** |
+| HTTP Range header parsing | `engine.rs::parse_range_header` | `http/artifacts.py` artifact download | **IMPLEMENTED_AND_VERIFIED** |
+| Job admission token (interaction-level, not canonical job ID) | `engine.rs::admit_job_submission` | `mcp/tools/jobs.py` submit_fit_mmm_job | **IMPLEMENTED_AND_VERIFIED** |
+| Truthful cancellation transition | `JobService` + native acknowledgment | `mcp/tools/jobs.py` cancel_job | **IMPLEMENTED_AND_VERIFIED** |
+| LTTB transport representation | `sparklines.rs` | `DecisionService.response_curves` | **IMPLEMENTED_NOT_YET_BENCHMARKED** |
+| Sparkline generation | `sparklines.rs` | response curves and dataset telemetry | **IMPLEMENTED_NOT_YET_BENCHMARKED** |
+| Native JSON final-wire serialization | no supported FastMCP wire caller | none | **REMOVE_CLAIM** |
+| Typed Rust/Python dispatch boundary | documentation only | none | **PLANNED** |
+| CSV preflight validation | `csv_preflight.rs` | accelerator facade | **IMPLEMENTED_AND_VERIFIED** |
+| Native invocation counters | `engine.rs` atomics | integration tests | **IMPLEMENTED_AND_VERIFIED** |
+| Rust ON/OFF parity lane | explicit disable environment flag | native CI workflow | **IMPLEMENTED_NOT_YET_BENCHMARKED** |
+| Artifact streaming, hashing and backpressure | Python generator | Python only | **PLANNED** |
+| SIMD SHA-256 | no crate or production caller | none | **REMOVE_CLAIM** |
+| "1 MB bounded Rust stream buffers" | Python 1 MiB reads only | none | **REMOVE_CLAIM** |
+| End-to-end MCP benchmarks (p50/p95/p99) | admission benchmark only | none | **PLANNED** |
+| Docker runtime activation | native library in image | Docker smoke workflow | **IMPLEMENTED_NOT_YET_BENCHMARKED** |
+
+### Separation of Concerns
+
+```text
+Rust owns:
+  - Latency-sensitive MCP interaction infrastructure
+  - Request size enforcement and JSON-RPC framing validation
+  - HTTP range header parsing
+  - Job admission tokens (interaction-level)
+  - Cancellation acknowledgment
+  - LTTB transport visualization downsampling
+  - CSV preflight byte-level inspection
+
+Python/ArviZ owns (authoritative, never delegated to Rust):
+  - PyMC / PyMC-Marketing statistical computation
+  - MCMC R-hat, ESS, divergence diagnostics
+  - Diagnostic gate decisions (pass/caution/block)
+  - Budget allocation semantics
+  - Model acceptance and rejection
+  - Cross-validation, prior sensitivity, calibration
+  - Posterior interpretation
+```
+
+### Experimental / Non-Authoritative
+
+`fast_mcmc_diagnostics` and `fast_compute_split_rhat` exist in the Rust crate for
+benchmarking and parity testing only. They are explicitly non-authoritative. Access them via
+`marketing_mcp.accelerators.experimental.EXPERIMENTAL_*` to make the restriction visible.
+Calling them from production decision paths is a correctness bug.

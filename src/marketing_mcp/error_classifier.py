@@ -140,7 +140,36 @@ def classify_exception(
             stack_trace=tb_str,
         )
 
-    # 3. SQLite exceptions
+    # 3. User input errors (KeyError, ValueError)
+    if isinstance(exc, (KeyError, ValueError)):
+        defn = get_error_definition("INVALID_ARGUMENT")
+        return NormalizedError(
+            error_id=error_id,
+            code=defn.code,
+            category=defn.category.value,
+            severity=defn.severity.value,
+            message=str(exc) or "Invalid input parameter or missing key",
+            user_message=f"Invalid argument: {exc}",
+            operation=operation,
+            component=component,
+            stage=stage or "validation",
+            retryable=False,
+            user_actionable=True,
+            suggested_action=defn.suggested_action,
+            original_error=original_error,
+            cause_chain=cause_chain,
+            evidence={"error_type": type(exc).__name__, "detail": str(exc)},
+            context=ctx,
+            request_id=request_id,
+            job_id=job_id,
+            dataset_id=dataset_id,
+            model_id=model_id,
+            tenant_id=tenant_id,
+            artifact_uri=artifact_uri,
+            stack_trace=tb_str,
+        )
+
+    # 4. SQLite exceptions
     if isinstance(exc, sqlite3.OperationalError):
         msg = str(exc).lower()
         is_busy = "locked" in msg or "busy" in msg or "timeout" in msg

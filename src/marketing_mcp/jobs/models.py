@@ -76,6 +76,31 @@ class JobRecord:
         d["checkpoints"] = [c if isinstance(c, dict) else c.to_dict() for c in self.checkpoints]
         return d
 
+    def to_summary_dict(self) -> dict[str, Any]:
+        latest_cp = self.checkpoints[-1] if self.checkpoints else None
+        latest_stage = latest_cp.stage if latest_cp else None
+        progress = (
+            latest_cp.progress_percent
+            if latest_cp
+            else (100.0 if self.status == JobStatus.SUCCEEDED else 0.0)
+        )
+        return {
+            "job_id": self.job_id,
+            "job_type": self.job_type,
+            "status": self.status.value,
+            "owner": self.owner,
+            "tenant_id": self.tenant_id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "attempts": self.attempts,
+            "stage": latest_stage,
+            "progress_percent": progress,
+            "has_result": self.result is not None,
+            "has_error": self.error is not None,
+            "error_code": self.error.get("code") if self.error else None,
+        }
+
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> JobRecord:
         d = dict(data)

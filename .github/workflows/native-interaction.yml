@@ -1,0 +1,163 @@
+name: Native Interaction Engine
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: native-interaction-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-quality:
+    name: Rust format, clippy, and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/marketing_mcp_fast
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --no-default-features
+  native-bridge:
+    name: Native build and production-path invocation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - name: Build and install native extension
+        run: |
+          cargo build --release --manifest-path crates/marketing_mcp_fast/Cargo.toml
+          cp crates/marketing_mcp_fast/target/release/libmarketing_mcp_fast.so \
+            src/marketing_mcp_fast.so
+      - name: Assert native activation
+        run: uv run python -c "from marketing_mcp.accelerators import is_rust_accelerated; assert is_rust_accelerated()"
+      - name: Prove production hot paths invoke Rust
+        run: |
+          uv run pytest tests/integration/test_native_hot_path.py \
+            tests/integration/test_large_artifacts_and_resilience.py \
+            tests/integration/test_mcp_protocol.py tests/test_rust_bridge.py -q
+      - name: Benchmark real HTTP MCP path with Rust on and off
+        run: |
+          uv run python scripts/benchmark_mcp_end_to_end.py \
+            --iterations 50 --warmup 5 --output mcp-e2e-benchmark.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mcp-e2e-benchmark
+          path: mcp-e2e-benchmark.json
+  python-fallback:
+    name: Python fallback contracts
+    runs-on: ubuntu-latest
+    env:
+      MARKETING_MCP_DISABLE_RUST: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - run: uv run python -c "from marketing_mcp.accelerators import is_rust_accelerated; assert not is_rust_accelerated()"
+      - run: |
+          uv run pytest tests/integration/test_native_hot_path.py \
+            tests/integration/test_large_artifacts_and_resilience.py \
+            tests/integration/test_mcp_protocol.py tests/test_rust_bridge.py -q
+
+  statistical-invariance:
+    name: Statistical semantics (${{ matrix.backend }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [python, rust]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - name: Build native extension
+        if: matrix.backend == 'rust'
+        run: |
+          cargo build --release --manifest-path crates/marketing_mcp_fast/Cargo.toml
+          cp crates/marketing_mcp_fast/target/release/libmarketing_mcp_fast.so \
+            src/marketing_mcp_fast.so
+      - name: Assert requested backend is active
+        env:
+          MARKETING_MCP_DISABLE_RUST: ${{ matrix.backend == 'python' && '1' || '0' }}
+        run: |
+          uv run python -c "from marketing_mcp.accelerators import is_rust_accelerated; assert is_rust_accelerated() == ('${{ matrix.backend }}' == 'rust')"
+      - name: Run statistical decision contracts
+        env:
+          MARKETING_MCP_DISABLE_RUST: ${{ matrix.backend == 'python' && '1' || '0' }}
+        run: uv run pytest -m statistical -v
+
+  docker-runtime:
+    name: Docker native runtime and MCP smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - name: Build production image
+        run: docker build -t pymc-marketing-mcp:native-ci .
+      - name: Start production image
+        run: |
+          docker run --rm -d --name pymc-native-ci -p 8080:8080 \
+            -e MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true \
+            pymc-marketing-mcp:native-ci
+      - name: Verify health, readiness, and real MCP tool call
+        run: |
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:8080/health && break
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:8080/health | grep rust-native
+          curl --fail --silent http://127.0.0.1:8080/health/ready
+          uv run python - <<'PY'
+          import asyncio
+
+          import httpx2
+          from mcp.client.session import ClientSession
+          from mcp.client.streamable_http import streamable_http_client
+
+
+          async def main() -> None:
+              async with (
+                  httpx2.AsyncClient() as client,
+                  streamable_http_client(
+                      "http://127.0.0.1:8080/mcp", http_client=client
+                  ) as (read_stream, write_stream),
+                  ClientSession(read_stream, write_stream) as session,
+              ):
+                  await session.initialize()
+                  tools = await session.list_tools()
+                  assert any(tool.name == "get_model_status" for tool in tools.tools)
+                  result = await session.call_tool(
+                      "get_model_status", arguments={"model_id": "native-ci-missing"}
+                  )
+                  assert result.content
+
+
+          asyncio.run(main())
+          PY
+          curl --fail --silent http://127.0.0.1:8080/health > /tmp/native-health.json
+          uv run python -c "import json; p=json.load(open('/tmp/native-health.json')); assert p['native_invocation_stats']['native_admission_calls_total'] > 0"
+      - name: Container logs
+        if: always()
+        run: docker logs pymc-native-ci
+      - name: Stop container
+        if: always()
+        run: docker stop pymc-native-ci

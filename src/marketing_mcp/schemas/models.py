@@ -296,14 +296,29 @@ class PredictCLVInput(BaseModel):
 
 
 
+class ModelLineage(BaseModel):
+    dataset_id: str
+    dataset_fingerprint: str = ""
+    customer_id_column: str = ""
+    customer_population_fingerprint: str = ""
+    observation_window: dict[str, Any] = Field(default_factory=dict)
+    currency: str | None = None
+    value_unit: str | None = None
+    model_family: str = ""
+    training_timestamp: str = ""
+    schema_version: str = "1.0"
+
+
 class CLVModelRecord(BaseModel):
     model_id: str
     model_type: CLVModelType
     dataset_id: str
+    dataset_fingerprint: str = ""
     status: ModelStatus
     artifact_path: str | None = None
     artifact_ref: dict[str, Any] | None = None
     config: dict[str, Any] = Field(default_factory=dict)
+    lineage: ModelLineage | None = None
     package_provenance: dict[str, str] = Field(default_factory=dict)
     created_at: str
     updated_at: str
@@ -345,7 +360,7 @@ class DiagnosticResult(BaseModel):
 
 
 class BudgetChange(BaseModel):
-    type: Literal["relative", "absolute"]
+    type: Literal["relative", "absolute", "set_spend", "add_spend", "multiply_spend", "percent_change"]
     value: float
 
 

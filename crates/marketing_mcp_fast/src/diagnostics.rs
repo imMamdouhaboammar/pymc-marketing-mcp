@@ -57,7 +57,11 @@ pub fn compute_split_rhat(chains: &[Vec<f64>]) -> f64 {
     }
 
     let overall_mean: f64 = chain_means.iter().sum::<f64>() / m;
-    let b_over_n = chain_means.iter().map(|&x| (x - overall_mean).powi(2)).sum::<f64>() / (m - 1.0);
+    let b_over_n = chain_means
+        .iter()
+        .map(|&x| (x - overall_mean).powi(2))
+        .sum::<f64>()
+        / (m - 1.0);
     let w: f64 = chain_vars.iter().sum::<f64>() / m;
 
     if w <= 1e-12 {
@@ -72,11 +76,7 @@ pub fn compute_split_rhat(chains: &[Vec<f64>]) -> f64 {
 }
 
 /// Evaluate MCMC diagnostics across all parameters and divergence count.
-pub fn evaluate_mcmc_gates(
-    rhats: &[f64],
-    esses: &[f64],
-    divergences: usize,
-) -> DiagnosticSummary {
+pub fn evaluate_mcmc_gates(rhats: &[f64], esses: &[f64], divergences: usize) -> DiagnosticSummary {
     let mut max_rhat = 1.0f64;
     for &r in rhats {
         if r.is_finite() && r > max_rhat {
@@ -101,15 +101,23 @@ pub fn evaluate_mcmc_gates(
         failures.push(format!("Sampler had {divergences} divergent transition(s)"));
     }
     if max_rhat > 1.05 {
-        failures.push(format!("Max R-hat ({max_rhat:.3}) exceeds safety threshold (1.05)"));
+        failures.push(format!(
+            "Max R-hat ({max_rhat:.3}) exceeds safety threshold (1.05)"
+        ));
     } else if max_rhat > 1.02 {
-        warnings.push(format!("Max R-hat ({max_rhat:.3}) shows mild convergence friction"));
+        warnings.push(format!(
+            "Max R-hat ({max_rhat:.3}) shows mild convergence friction"
+        ));
     }
 
     if min_ess < 100.0 {
-        failures.push(format!("Min Bulk-ESS ({min_ess:.1}) is below critical floor (100.0)"));
+        failures.push(format!(
+            "Min Bulk-ESS ({min_ess:.1}) is below critical floor (100.0)"
+        ));
     } else if min_ess < 400.0 {
-        warnings.push(format!("Min Bulk-ESS ({min_ess:.1}) is below recommended target (400.0)"));
+        warnings.push(format!(
+            "Min Bulk-ESS ({min_ess:.1}) is below recommended target (400.0)"
+        ));
     }
 
     let (decision_status, decision_tools_enabled) = if !failures.is_empty() {

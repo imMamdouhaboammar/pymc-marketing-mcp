@@ -242,12 +242,17 @@ class PlottingService:
             posterior = getattr(idata, "posterior", {}) if idata is not None else {}
             has_sat_plot = False
             for i, ch in enumerate(channels):
-                if "saturation_lam" in posterior:
-                    da = posterior["saturation_lam"]
+                sat_var = next((v for v in posterior if v.startswith("saturation_")), None)
+                if sat_var is not None:
+                    da = posterior[sat_var]
                     if hasattr(da, "dims") and "channel" in da.dims:
-                        vals = da.sel(channel=ch).values.flatten()
+                        ch_slice = da.sel(channel=ch)
+                        extra_dims = [d for d in ch_slice.dims if d not in ("chain", "draw")]
+                        if extra_dims:
+                            ch_slice = ch_slice.mean(dim=extra_dims)
+                        vals = np.asarray(ch_slice.values).flatten()
                         axes[i].hist(vals, bins=30, edgecolor="black", color="#4361ee", alpha=0.7)
-                        axes[i].set_title(f"{ch}\n(saturation λ)")
+                        axes[i].set_title(f"{ch}\n({sat_var})")
                         has_sat_plot = True
                     else:
                         axes[i].text(0.5, 0.5, f"{ch}\nNo saturation posterior", ha="center")
@@ -356,13 +361,22 @@ class PlottingService:
             if time_coord is None:
                 raise DomainError("DATA_INVALID", "No time dimension in prediction summary")
 
-            median = np.asarray(summary["median"].values)
-            lower = np.asarray(summary["lower"].values)
-            upper = np.asarray(summary["upper"].values)
+            med_da = summary["median"]
+            lower_da = summary["lower"]
+            upper_da = summary["upper"]
+            extra_summary_dims = [d for d in med_da.dims if d != time_coord]
+            if extra_summary_dims:
+                med_da = med_da.sum(dim=extra_summary_dims)
+                lower_da = lower_da.sum(dim=extra_summary_dims)
+                upper_da = upper_da.sum(dim=extra_summary_dims)
+
+            median = np.asarray(med_da.values).reshape(-1)
+            lower = np.asarray(lower_da.values).reshape(-1)
+            upper = np.asarray(upper_da.values).reshape(-1)
             t = (
                 np.asarray(summary[time_coord].values)
                 if time_coord in summary.coords
-                else np.arange(median.shape[0])
+                else np.arange(len(median))
             )
 
             obs_group = idata.get("observed_data")
@@ -373,11 +387,18 @@ class PlottingService:
                 else None
             )
             if obs_ds is not None and obs_var is not None:
+                obs_da = obs_ds[obs_var]
+                extra_obs_dims = [d for d in obs_da.dims if d != time_coord]
+                if extra_obs_dims:
+                    obs_vals = np.asarray(obs_da.sum(dim=extra_obs_dims).values).reshape(-1)
+                else:
+                    obs_vals = np.asarray(obs_da.values).reshape(-1)
+
                 ax.fill_between(t, lower, upper, alpha=0.3, label="94% HDI")
                 ax.plot(t, median, label="Predicted median", linewidth=1.5)
                 ax.plot(
                     t,
-                    np.asarray(obs_ds[obs_var].values).reshape(-1),
+                    obs_vals,
                     "k.",
                     alpha=0.7,
                     markersize=3,

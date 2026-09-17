@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import tempfile
 import time
 from pathlib import Path
@@ -13,9 +12,8 @@ from starlette.testclient import TestClient
 from marketing_mcp.app import Application
 from marketing_mcp.cli import create_http_app
 from marketing_mcp.config import Settings
-from marketing_mcp.jobs.models import JobCheckpoint, JobRecord, JobStatus
+from marketing_mcp.jobs.models import JobRecord, JobStatus
 from marketing_mcp.mcp.server import create_server
-from marketing_mcp.repositories.models import ArtifactRef
 from marketing_mcp.storage.artifacts import LocalArtifactStore
 from marketing_mcp.storage.gc import StorageGarbageCollector
 
@@ -42,12 +40,16 @@ def test_chunked_artifact_streaming_and_zero_ram_materialize(tmp_path):
     expected_sha256 = hashlib.sha256(data).hexdigest()
 
     # Put file using stream hashing
-    ref = store.put_file(source_file, content_type="application/x-netcdf", owner="test_user", tenant_id="tenant_a")
+    ref = store.put_file(
+        source_file, content_type="application/x-netcdf", owner="test_user", tenant_id="tenant_a"
+    )
     assert ref.sha256 == expected_sha256
     assert ref.size_bytes == len(data)
 
     # Test chunked reading
-    chunks = list(store.read_chunks(ref, owner="test_user", tenant_id="tenant_a", chunk_size=512 * 1024))
+    chunks = list(
+        store.read_chunks(ref, owner="test_user", tenant_id="tenant_a", chunk_size=512 * 1024)
+    )
     assert sum(len(c) for c in chunks) == len(data)
     assert hashlib.sha256(b"".join(chunks)).hexdigest() == expected_sha256
 
@@ -76,7 +78,11 @@ def test_http_streaming_endpoint_with_range_requests(app_instance):
     assert resp.headers["content-length"] == str(len(data))
     assert resp.headers["accept-ranges"] == "bytes"
 
-    # HTTP Range request (first 100 bytes)
+    # HTTP Range request (first 100 bytes) must invoke the native parser on the
+    # production artifact route, not merely in a helper-only test.
+    from marketing_mcp.accelerators import get_native_invocation_stats, is_rust_accelerated
+
+    before = get_native_invocation_stats()["native_range_parse_calls_total"]
     range_resp = client.get(
         f"/artifacts/{namespace}/{ref.sha256}/download",
         headers={"Range": "bytes=0-99"},
@@ -85,6 +91,9 @@ def test_http_streaming_endpoint_with_range_requests(app_instance):
     assert range_resp.content == data[:100]
     assert range_resp.headers["content-range"] == f"bytes 0-99/{len(data)}"
     assert range_resp.headers["content-length"] == "100"
+    if is_rust_accelerated():
+        after = get_native_invocation_stats()["native_range_parse_calls_total"]
+        assert after == before + 1
 
 
 def test_checkpoint_persistence_and_chronological_retrieval(app_instance):
@@ -93,9 +102,9 @@ def test_checkpoint_persistence_and_chronological_retrieval(app_instance):
     app_instance.job_repo.create_job(job)
 
     # Record intermediate checkpoints
-    cp1 = app_instance.jobs.record_checkpoint(job_id, "dataset_validated", progress_percent=15.0)
-    cp2 = app_instance.jobs.record_checkpoint(job_id, "sampling_initialized", progress_percent=35.0)
-    cp3 = app_instance.jobs.record_checkpoint(
+    app_instance.jobs.record_checkpoint(job_id, "dataset_validated", progress_percent=15.0)
+    app_instance.jobs.record_checkpoint(job_id, "sampling_initialized", progress_percent=35.0)
+    app_instance.jobs.record_checkpoint(
         job_id, "posterior_saved", progress_percent=90.0, state_data={"model_id": "mmm_recovered"}
     )
 
@@ -121,7 +130,10 @@ def test_crash_recovery_reconciles_completed_checkpoints_to_succeeded(app_instan
         job_id,
         "posterior_saved",
         progress_percent=90.0,
-        state_data={"model_id": "mmm_saved_before_crash", "result": {"model_id": "mmm_saved_before_crash"}},
+        state_data={
+            "model_id": "mmm_saved_before_crash",
+            "result": {"model_id": "mmm_saved_before_crash"},
+        },
     )
 
     # Simulate server boot recovery
@@ -152,7 +164,9 @@ def test_export_artifact_to_sandbox_and_garbage_collection(app_instance, tmp_pat
 
     # Create dummy artifact
     data = b"MCMC_MODEL_BINARY_ARVIZ_NC_CONTENT"
-    ref = app_instance.artifacts.put_bytes(data, content_type="application/x-netcdf", owner="local", tenant_id=None)
+    ref = app_instance.artifacts.put_bytes(
+        data, content_type="application/x-netcdf", owner="local", tenant_id=None
+    )
 
     # 1. Export artifact to sandbox
     export_handler = None

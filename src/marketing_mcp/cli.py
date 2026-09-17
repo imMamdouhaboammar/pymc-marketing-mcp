@@ -9,17 +9,17 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 
 from marketing_mcp import __version__
+from marketing_mcp.accelerators import get_engine_info, get_native_invocation_stats
 from marketing_mcp.app import Application
 from marketing_mcp.auth import AuthManager, MCPAuthMiddleware
 from marketing_mcp.config import Settings
 from marketing_mcp.http.artifacts import create_artifact_download_handler
 from marketing_mcp.http.credentials import CredentialControlAPI
 from marketing_mcp.http.health import create_readiness_handler, liveness_handler
+from marketing_mcp.http.native_middleware import NativeAdmissionMiddleware
 from marketing_mcp.http.safety import RequestSafetyMiddleware
 from marketing_mcp.mcp.context import RequestScopedContextProvider
 from marketing_mcp.mcp.server import create_server
-
-from marketing_mcp.accelerators import get_engine_info
 
 SERVICE_NAME = "pymc-marketing-mcp"
 
@@ -33,6 +33,7 @@ def health_payload(*, auth_enabled: bool) -> dict[str, Any]:
         "transport": "streamable-http",
         "auth_enabled": auth_enabled,
         "interaction_engine": get_engine_info(),
+        "native_invocation_stats": get_native_invocation_stats(),
         "endpoints": {
             "mcp": "/mcp",
             "health": "/health",
@@ -78,6 +79,10 @@ def create_http_app(
     mcp = create_server(app_instance, context_provider=ctx_provider)
     app = mcp.streamable_http_app(host=host)
 
+    # Starlette middleware is LIFO. Authentication is outermost, request safety
+    # supplies rate limiting/correlation next, then native admission rejects malformed
+    # authorized MCP traffic before the SDK parses it.
+    app.add_middleware(NativeAdmissionMiddleware, mcp_path="/mcp")
     app.add_middleware(RequestSafetyMiddleware)
     app.add_middleware(MCPAuthMiddleware, auth_manager=auth_mgr)
 
@@ -170,9 +175,10 @@ def main():
 
     error_id_to_lookup = getattr(args, "error_id", None) or args.flag_error_id
     if error_id_to_lookup:
-        from marketing_mcp.observability.errors import GLOBAL_ERROR_REGISTRY
         import json
         import sys
+
+        from marketing_mcp.observability.errors import GLOBAL_ERROR_REGISTRY
 
         rec = GLOBAL_ERROR_REGISTRY.lookup(error_id_to_lookup)
         if not rec:

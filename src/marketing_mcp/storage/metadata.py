@@ -10,10 +10,14 @@ from marketing_mcp.storage.migrations import MigrationRunner
 
 
 class SQLiteMetadataStore:
-    def __init__(self, path: Path | str):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
+    def __init__(self, path: Path | str | sqlite3.Connection):
+        if isinstance(path, sqlite3.Connection):
+            self.conn = path
+            self.path = None
+        else:
+            self.path = Path(path)
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._init()
 
@@ -79,8 +83,34 @@ class SQLiteMetadataStore:
     def get_clv_model(self, model_id: str) -> dict[str, Any]:
         return self._get("clv_models", "model_id", model_id, "CLV_MODEL_NOT_FOUND")
 
+    def list_clv_models(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT payload FROM clv_models ORDER BY rowid DESC").fetchall()
+        return [json.loads(r["payload"]) for r in rows]
+
+    def get_model_unified(self, model_id: str) -> dict[str, Any]:
+        """Look up model across both MMM and CLV registries."""
+        try:
+            return self.get_model(model_id)
+        except DomainError:
+            try:
+                return self.get_clv_model(model_id)
+            except DomainError:
+                raise DomainError(
+                    "MODEL_NOT_FOUND",
+                    f"Model '{model_id}' was not found in either MMM or CLV registries",
+                    evidence={"model_id": model_id},
+                    next_action="Verify the model ID with list_models or fit a model first",
+                )
+
+    def list_models_unified(self) -> list[dict[str, Any]]:
+        """List all models across both MMM and CLV registries."""
+        return self.list_models() + self.list_clv_models()
+
     def put_scenario(self, payload: dict[str, Any]):
         self._put("scenarios", "scenario_id", payload["scenario_id"], payload)
 
     def get_scenario(self, scenario_id: str) -> dict[str, Any]:
         return self._get("scenarios", "scenario_id", scenario_id, "SCENARIO_NOT_FOUND")
+
+
+SQLiteMetadataRepository = SQLiteMetadataStore

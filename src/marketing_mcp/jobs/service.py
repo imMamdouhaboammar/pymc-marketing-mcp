@@ -8,7 +8,7 @@ from typing import Any
 
 from marketing_mcp.errors import DomainError
 from marketing_mcp.jobs.executor import AsyncioJobExecutor, JobExecutor
-from marketing_mcp.jobs.models import JobRecord, JobStatus
+from marketing_mcp.jobs.models import JobCheckpoint, JobRecord, JobStatus
 from marketing_mcp.jobs.repository import JobRepository
 from marketing_mcp.security.ownership import authorize_job
 from marketing_mcp.security.principal import Principal
@@ -66,8 +66,6 @@ class JobService:
         total_steps: int = 1,
         state_data: dict[str, Any] | None = None,
     ) -> JobCheckpoint:
-        from marketing_mcp.jobs.models import JobCheckpoint
-
         cp = JobCheckpoint(
             checkpoint_id=f"cp-{uuid.uuid4().hex[:10]}",
             job_id=job_id,
@@ -80,11 +78,15 @@ class JobService:
         self.repo.save_checkpoint(cp)
         return cp
 
-    def get_checkpoints(self, job_id: str, principal: Principal | None = None) -> list[JobCheckpoint]:
+    def get_checkpoints(
+        self, job_id: str, principal: Principal | None = None
+    ) -> list[JobCheckpoint]:
         self.get_job(job_id, principal=principal)
         return self.repo.get_checkpoints(job_id)
 
-    def get_latest_checkpoint(self, job_id: str, principal: Principal | None = None) -> JobCheckpoint | None:
+    def get_latest_checkpoint(
+        self, job_id: str, principal: Principal | None = None
+    ) -> JobCheckpoint | None:
         self.get_job(job_id, principal=principal)
         return self.repo.get_latest_checkpoint(job_id)
 
@@ -127,13 +129,17 @@ class JobService:
         job: JobRecord | None = None
         try:
             job = self.get_job(job_id_or_key, principal=principal)
-        except Exception:
+        except DomainError as exc:
+            if exc.code != "JOB_NOT_FOUND":
+                raise
             job = self.repo.find_by_idempotency_key(job_id_or_key, tenant_id=tenant_id)
             if job:
                 authorize_job(principal, job.to_dict(), action="read")
 
         if not job:
-            raise DomainError("JOB_NOT_FOUND", f"Job or idempotency key '{job_id_or_key}' was not found")
+            raise DomainError(
+                "JOB_NOT_FOUND", f"Job or idempotency key '{job_id_or_key}' was not found"
+            )
 
         checkpoints = self.repo.get_checkpoints(job.job_id)
         latest_cp = checkpoints[-1] if checkpoints else None
@@ -154,7 +160,8 @@ class JobService:
             "result": job.result,
             "error": job.error,
             "recommended_action": (
-                "get_model_status" if has_usable_result
+                "get_model_status"
+                if has_usable_result
                 else ("resume_job" if can_resume else "poll_job_progress")
             ),
         }
@@ -188,11 +195,12 @@ class JobService:
     def cancel_job(self, job_id: str, principal: Principal | None = None) -> JobRecord:
         record = self.repo.get_job(job_id)
         authorize_job(principal, record.to_dict(), action="write")
-        cancelled_in_process = self.executor.cancel(job_id)
-        requested = self.repo.request_cancellation(job_id)
-        if cancelled_in_process and requested.status is JobStatus.CANCELLING:
-            return self.repo.update_job(job_id, JobStatus.CANCELLED)
-        return requested
+        if record.status in (JobStatus.CANCELLED, JobStatus.SUCCEEDED, JobStatus.FAILED):
+            return record
+        self.executor.cancel(job_id)
+        # Cancellation is cooperative. Running work remains CANCELLING until
+        # its runner returns to Python, observes the event, and fences the result.
+        return self.repo.request_cancellation(job_id)
 
     def list_jobs(
         self, principal: Principal | None = None, status: JobStatus | None = None, limit: int = 50
