@@ -309,4 +309,79 @@ def validate_mmm_dataset(
                             "Verify whether these periods are genuine events or data errors",
                         )
                     )
+
+    # Check for mixed campaign objectives (e.g. upper-funnel awareness vs lower-funnel sales)
+    for col in df.columns:
+        if col in required:
+            continue
+        cl = col.lower()
+        if any(k in cl for k in ["objective", "goal", "funnel", "campaign_type"]):
+            vals = [str(v).lower() for v in df[col].dropna().unique()]
+            has_upper = any(k in v for v in vals for k in ["aware", "traffic", "reach", "brand", "view"])
+            has_lower = any(k in v for v in vals for k in ["sale", "purchase", "lead", "conversion", "revenue"])
+            if has_upper and has_lower:
+                findings.append(
+                    _f(
+                        "warning",
+                        "MIXED_CAMPAIGN_OBJECTIVES",
+                        f"Column '{col}' indicates mixed campaign objectives (upper-funnel brand/awareness and lower-funnel conversion/sales). "
+                        "Pooling non-revenue upper-funnel campaigns into a revenue MMM distorts adstock decay and sales response curves.",
+                        evidence={"column": col, "detected_objectives": list(vals[:10])},
+                        action="Filter dataset to conversion-oriented campaigns or model awareness as an upstream KPI",
+                    )
+                )
+
+    # Check for staggered channel lifecycles and temporal confounding
+    if len(channel_columns) > 1:
+        active_masks = {}
+        for ch in channel_columns:
+            s = pd.to_numeric(df[ch], errors="coerce").fillna(0)
+            active_masks[ch] = (s > 0)
+
+        for i, a in enumerate(channel_columns):
+            for b in channel_columns[i + 1 :]:
+                mask_a = active_masks[a]
+                mask_b = active_masks[b]
+                count_a = int(mask_a.sum())
+                count_b = int(mask_b.sum())
+                if count_a >= 5 and count_b >= 5:
+                    union = int((mask_a | mask_b).sum())
+                    inter = int((mask_a & mask_b).sum())
+                    overlap_ratio = inter / max(1, union)
+                    if overlap_ratio < 0.25:
+                        findings.append(
+                            _f(
+                                "warning",
+                                "STAGGERED_CHANNEL_LIFECYCLES",
+                                f"Channels '{a}' and '{b}' exhibit staggered or largely disjoint active periods (overlap: {overlap_ratio:.1%}). "
+                                "Temporal confounding can prevent cleanly separating channel response from macro time trends.",
+                                evidence={
+                                    "channels": [a, b],
+                                    "overlap_ratio": round(overlap_ratio, 3),
+                                    "active_periods": {a: count_a, b: count_b},
+                                },
+                                action="Align observation windows across media channels or supply informative priors on adstock decay",
+                            )
+                        )
+
+    # Check for unmodeled market heterogeneity
+    if not dims:
+        for col in df.columns:
+            if col in required:
+                continue
+            cl = col.lower()
+            if any(k in cl for k in ["market", "country", "geo", "region"]):
+                unique_vals = df[col].dropna().unique()
+                if 2 <= len(unique_vals) <= 50:
+                    findings.append(
+                        _f(
+                            "warning",
+                            "UNMODELED_MARKET_HETEROGENEITY",
+                            f"Dataset contains geographic/market column '{col}' with {len(unique_vals)} unique values, but 'dims' was not provided. "
+                            "Fitting a single pooled global MMM may hide material market-level heterogeneity.",
+                            evidence={"column": col, "unique_markets": [str(v) for v in unique_vals[:10]]},
+                            action=f"Specify dims=['{col}'] to fit a hierarchical/panel MMM or fit separate models per market",
+                        )
+                    )
+
     return findings

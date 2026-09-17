@@ -139,6 +139,68 @@ def classify_exception(
             stack_trace=tb_str,
         )
 
+    # 2.5 Sampling and Numerical Instability errors
+    exc_name = type(exc).__name__
+    is_linalg = "LinAlgError" in exc_name or "SingularMatrix" in exc_name
+    is_num = isinstance(exc, (FloatingPointError, ZeroDivisionError, ArithmeticError)) or is_linalg
+    is_sampling = "SamplingError" in exc_name or "ConvergenceError" in exc_name
+
+    if is_sampling:
+        defn = get_error_definition("SAMPLING_FAILED")
+        return NormalizedError(
+            error_id=error_id,
+            code=defn.code,
+            category=defn.category.value,
+            severity=defn.severity.value,
+            message=str(exc) or "MCMC sampling failed during posterior exploration",
+            user_message=f"MCMC sampling failed: {exc}",
+            operation=operation,
+            component=component or "PyMCAdapter",
+            stage=stage or "sampling",
+            retryable=True,
+            user_actionable=True,
+            suggested_action=defn.suggested_action,
+            original_error=original_error,
+            cause_chain=cause_chain,
+            evidence={"error_type": exc_name, "detail": str(exc)},
+            context=ctx,
+            request_id=request_id,
+            job_id=job_id,
+            dataset_id=dataset_id,
+            model_id=model_id,
+            tenant_id=tenant_id,
+            artifact_uri=artifact_uri,
+            stack_trace=tb_str,
+        )
+
+    if is_num:
+        defn = get_error_definition("NUMERICAL_INSTABILITY")
+        return NormalizedError(
+            error_id=error_id,
+            code=defn.code,
+            category=defn.category.value,
+            severity=defn.severity.value,
+            message=str(exc) or "Numerical instability encountered during linear algebra or likelihood computation",
+            user_message=f"Numerical computation failure: {exc}",
+            operation=operation,
+            component=component or "PyMCAdapter",
+            stage=stage or "computation",
+            retryable=False,
+            user_actionable=True,
+            suggested_action=defn.suggested_action,
+            original_error=original_error,
+            cause_chain=cause_chain,
+            evidence={"error_type": exc_name, "detail": str(exc)},
+            context=ctx,
+            request_id=request_id,
+            job_id=job_id,
+            dataset_id=dataset_id,
+            model_id=model_id,
+            tenant_id=tenant_id,
+            artifact_uri=artifact_uri,
+            stack_trace=tb_str,
+        )
+
     # 3. User input errors (KeyError, ValueError)
     if isinstance(exc, (KeyError, ValueError)):
         defn = get_error_definition("INVALID_ARGUMENT")

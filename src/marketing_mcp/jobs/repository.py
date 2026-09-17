@@ -1,9 +1,8 @@
-"""Job persistence repository for SQLite and in-memory execution."""
-
 from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
@@ -16,7 +15,7 @@ class JobRepository(Protocol):
     """Abstract job repository protocol."""
 
     def create_job(self, record: JobRecord) -> JobRecord: ...
-    def get_job(self, job_id: str) -> JobRecord: ...
+    def get_job(self, job_id: str, tenant_id: str | None = None) -> JobRecord: ...
     def update_job(
         self,
         job_id: str,
@@ -61,50 +60,60 @@ class JobRepository(Protocol):
 class SQLiteJobRepository:
     """SQLite implementation of JobRepository."""
 
-    def __init__(self, conn: sqlite3.Connection):
+    def __init__(self, conn: sqlite3.Connection, lock: threading.RLock | None = None):
         self.conn = conn
+        self._lock = lock if lock is not None else threading.RLock()
 
     def create_job(self, record: JobRecord) -> JobRecord:
-        now = datetime.now(UTC).isoformat()
-        record.created_at = now
-        record.updated_at = now
-        self.conn.execute(
-            """
-            INSERT INTO jobs (
-                job_id, job_type, status, owner, tenant_id, idempotency_key,
-                created_at, updated_at, payload, result, error, lease_owner,
-                lease_expires_at, fence_token, attempts, max_attempts
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                record.job_id,
-                record.job_type,
-                record.status.value,
-                record.owner,
-                record.tenant_id,
-                record.idempotency_key,
-                record.created_at,
-                record.updated_at,
-                json.dumps(record.payload),
-                json.dumps(record.result) if record.result else None,
-                json.dumps(record.error) if record.error else None,
-                record.lease_owner,
-                record.lease_expires_at,
-                record.fence_token,
-                record.attempts,
-                record.max_attempts,
-            ),
-        )
-        self.conn.commit()
-        return record
+        with self._lock:
+            now = datetime.now(UTC).isoformat()
+            record.created_at = now
+            record.updated_at = now
+            self.conn.execute(
+                """
+                INSERT INTO jobs (
+                    job_id, job_type, status, owner, tenant_id, idempotency_key,
+                    created_at, updated_at, payload, result, error, lease_owner,
+                    lease_expires_at, fence_token, attempts, max_attempts
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.job_id,
+                    record.job_type,
+                    record.status.value,
+                    record.owner,
+                    record.tenant_id,
+                    record.idempotency_key,
+                    record.created_at,
+                    record.updated_at,
+                    json.dumps(record.payload),
+                    json.dumps(record.result) if record.result else None,
+                    json.dumps(record.error) if record.error else None,
+                    record.lease_owner,
+                    record.lease_expires_at,
+                    record.fence_token,
+                    record.attempts,
+                    record.max_attempts,
+                ),
+            )
+            if self.conn.in_transaction:
+                self.conn.commit()
+            return record
 
-    def get_job(self, job_id: str) -> JobRecord:
-        row = self.conn.execute(
-            "SELECT * FROM jobs WHERE job_id = ?", (job_id,)
-        ).fetchone()
-        if not row:
-            raise DomainError("JOB_NOT_FOUND", f"Job '{job_id}' was not found")
-        return self._row_to_record(row)
+    def get_job(self, job_id: str, tenant_id: str | None = None) -> JobRecord:
+        with self._lock:
+            query = "SELECT * FROM jobs WHERE job_id = ?"
+            params: list[Any] = [job_id]
+            if tenant_id is not None:
+                if tenant_id in (None, "default"):
+                    query += " AND (tenant_id = 'default' OR tenant_id IS NULL)"
+                else:
+                    query += " AND tenant_id = ?"
+                    params.append(tenant_id)
+            row = self.conn.execute(query, params).fetchone()
+            if not row:
+                raise DomainError("JOB_NOT_FOUND", f"Job '{job_id}' was not found")
+            return self._row_to_record(row)
 
     def update_job(
         self,
@@ -113,23 +122,25 @@ class SQLiteJobRepository:
         result: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
     ) -> JobRecord:
-        current = self.get_job(job_id)
-        validate_transition(current.status, status)
+        with self._lock:
+            current = self.get_job(job_id)
+            validate_transition(current.status, status)
 
-        now = datetime.now(UTC).isoformat()
-        res_json = json.dumps(result) if result is not None else (json.dumps(current.result) if current.result else None)
-        err_json = json.dumps(error) if error is not None else (json.dumps(current.error) if current.error else None)
+            now = datetime.now(UTC).isoformat()
+            res_json = json.dumps(result) if result is not None else (json.dumps(current.result) if current.result else None)
+            err_json = json.dumps(error) if error is not None else (json.dumps(current.error) if current.error else None)
 
-        self.conn.execute(
-            """
-            UPDATE jobs
-            SET status = ?, result = ?, error = ?, updated_at = ?
-            WHERE job_id = ?
-            """,
-            (status.value, res_json, err_json, now, job_id),
-        )
-        self.conn.commit()
-        return self.get_job(job_id)
+            self.conn.execute(
+                """
+                UPDATE jobs
+                SET status = ?, result = ?, error = ?, updated_at = ?
+                WHERE job_id = ?
+                """,
+                (status.value, res_json, err_json, now, job_id),
+            )
+            if self.conn.in_transaction:
+                self.conn.commit()
+            return self.get_job(job_id)
 
     def list_jobs(
         self,
@@ -137,30 +148,39 @@ class SQLiteJobRepository:
         status: JobStatus | None = None,
         limit: int = 50,
     ) -> list[JobRecord]:
-        query = "SELECT * FROM jobs WHERE 1=1"
-        params: list[Any] = []
-        if tenant_id is not None:
-            query += " AND tenant_id = ?"
-            params.append(tenant_id)
-        if status is not None:
-            query += " AND status = ?"
-            params.append(status.value)
-        query += " ORDER BY created_at DESC LIMIT ?"
-        params.append(limit)
+        with self._lock:
+            query = "SELECT * FROM jobs WHERE 1=1"
+            params: list[Any] = []
+            if tenant_id is not None:
+                if tenant_id == "default":
+                    query += " AND (tenant_id = 'default' OR tenant_id IS NULL)"
+                else:
+                    query += " AND tenant_id = ?"
+                    params.append(tenant_id)
+            if status is not None:
+                query += " AND status = ?"
+                params.append(status.value)
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
 
-        rows = self.conn.execute(query, params).fetchall()
-        return [self._row_to_record(r) for r in rows]
+            rows = self.conn.execute(query, params).fetchall()
+            return [self._row_to_record(r) for r in rows]
 
     def find_by_idempotency_key(self, key: str, tenant_id: str | None = None) -> JobRecord | None:
-        query = "SELECT * FROM jobs WHERE idempotency_key = ?"
-        params: list[Any] = [key]
-        if tenant_id is not None:
-            query += " AND tenant_id = ?"
-            params.append(tenant_id)
-        row = self.conn.execute(query, params).fetchone()
-        if not row:
-            return None
-        return self._row_to_record(row)
+        with self._lock:
+            query = "SELECT * FROM jobs WHERE idempotency_key = ?"
+            params: list[Any] = [key]
+            if tenant_id is not None:
+                if tenant_id == "default":
+                    query += " AND (tenant_id = 'default' OR tenant_id IS NULL)"
+                else:
+                    query += " AND tenant_id = ?"
+                    params.append(tenant_id)
+            query += " ORDER BY created_at DESC LIMIT 1"
+            row = self.conn.execute(query, params).fetchone()
+            if not row:
+                return None
+            return self._row_to_record(row)
 
     def claim_next_job(
         self,
@@ -314,34 +334,61 @@ class SQLiteJobRepository:
             raise
 
     def save_checkpoint(self, checkpoint: JobCheckpoint) -> None:
-        self.conn.execute(
-            """
-            INSERT INTO job_checkpoints (
-                checkpoint_id, job_id, stage, step, total_steps,
-                progress_percent, state_data, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                checkpoint.checkpoint_id,
-                checkpoint.job_id,
-                checkpoint.stage,
-                checkpoint.step,
-                checkpoint.total_steps,
-                checkpoint.progress_percent,
-                json.dumps(checkpoint.state_data),
-                checkpoint.created_at,
-            ),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """
+                INSERT INTO job_checkpoints (
+                    checkpoint_id, job_id, stage, step, total_steps,
+                    progress_percent, state_data, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    checkpoint.checkpoint_id,
+                    checkpoint.job_id,
+                    checkpoint.stage,
+                    checkpoint.step,
+                    checkpoint.total_steps,
+                    checkpoint.progress_percent,
+                    json.dumps(checkpoint.state_data),
+                    checkpoint.created_at,
+                ),
+            )
+            if self.conn.in_transaction:
+                self.conn.commit()
 
     def get_checkpoints(self, job_id: str) -> list[JobCheckpoint]:
-        try:
-            rows = self.conn.execute(
-                "SELECT * FROM job_checkpoints WHERE job_id = ? ORDER BY created_at ASC",
-                (job_id,),
-            ).fetchall()
-            return [
-                JobCheckpoint(
+        with self._lock:
+            try:
+                rows = self.conn.execute(
+                    "SELECT * FROM job_checkpoints WHERE job_id = ? ORDER BY created_at ASC",
+                    (job_id,),
+                ).fetchall()
+                return [
+                    JobCheckpoint(
+                        checkpoint_id=r["checkpoint_id"],
+                        job_id=r["job_id"],
+                        stage=r["stage"],
+                        step=r["step"],
+                        total_steps=r["total_steps"],
+                        progress_percent=r["progress_percent"],
+                        state_data=json.loads(r["state_data"]) if r["state_data"] else {},
+                        created_at=r["created_at"],
+                    )
+                    for r in rows
+                ]
+            except Exception:
+                return []
+
+    def get_latest_checkpoint(self, job_id: str) -> JobCheckpoint | None:
+        with self._lock:
+            try:
+                r = self.conn.execute(
+                    "SELECT * FROM job_checkpoints WHERE job_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (job_id,),
+                ).fetchone()
+                if not r:
+                    return None
+                return JobCheckpoint(
                     checkpoint_id=r["checkpoint_id"],
                     job_id=r["job_id"],
                     stage=r["stage"],
@@ -351,31 +398,8 @@ class SQLiteJobRepository:
                     state_data=json.loads(r["state_data"]) if r["state_data"] else {},
                     created_at=r["created_at"],
                 )
-                for r in rows
-            ]
-        except Exception:
-            return []
-
-    def get_latest_checkpoint(self, job_id: str) -> JobCheckpoint | None:
-        try:
-            r = self.conn.execute(
-                "SELECT * FROM job_checkpoints WHERE job_id = ? ORDER BY created_at DESC LIMIT 1",
-                (job_id,),
-            ).fetchone()
-            if not r:
+            except Exception:
                 return None
-            return JobCheckpoint(
-                checkpoint_id=r["checkpoint_id"],
-                job_id=r["job_id"],
-                stage=r["stage"],
-                step=r["step"],
-                total_steps=r["total_steps"],
-                progress_percent=r["progress_percent"],
-                state_data=json.loads(r["state_data"]) if r["state_data"] else {},
-                created_at=r["created_at"],
-            )
-        except Exception:
-            return None
 
     def recover_stale_running_jobs(self) -> int:
         """Recover stale attempts and reconcile interrupted jobs using checkpoints."""

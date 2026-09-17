@@ -64,11 +64,12 @@ def authorize_resource(
             next_action="Provide a valid Authorization header",
         )
 
-    # 1. Multi-tenant isolation: strict tenant_id match
+    # 1. Multi-tenant isolation: strict tenant_id match with default reconciliation
     record_tenant = record.get("tenant_id")
-    if record_tenant is not None and (
-        principal.tenant_id is None or principal.tenant_id != record_tenant
-    ):
+    caller_tenant = principal.tenant_id
+    norm_rec_tenant = "default" if record_tenant in (None, "default") else record_tenant
+    norm_caller_tenant = "default" if caller_tenant in (None, "default") else caller_tenant
+    if norm_rec_tenant != norm_caller_tenant:
         raise DomainError(
             "AUTH_FORBIDDEN",
             f"Access denied to {resource_type} belonging to tenant '{record_tenant}'",
@@ -77,7 +78,7 @@ def authorize_resource(
                 "record_tenant": record_tenant,
                 "caller_tenant": principal.tenant_id,
             },
-            next_action="Ensure the authentication token matches the target tenant",
+            next_action="Ensure the authentication token matches the authorized tenant",
         )
 
     # 2. Owner isolation for mutation/archive actions unless admin

@@ -127,10 +127,15 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             authorize_model(principal, model_rec, action="read")
 
             r = app.diagnostics.cross_validate(input)
+            decision = r.get("decision_provenance", {}).get("decision") or r.get("decision_impact")
+            if decision == "blocked_predictive_failure" or r.get("failures"):
+                next_acts = ["diagnose_mmm", "validate_dataset", "evaluate_prior_sensitivity"]
+            else:
+                next_acts = ["diagnose_mmm", "simulate_budget", "optimize_budget"]
             return env(
                 summary=r,
                 warnings=r.get("stability_findings", []),
-                next_actions=["diagnose_mmm", "optimize_budget"],
+                next_actions=next_acts,
             )
         except DomainError as e:
             return e.to_dict()

@@ -114,6 +114,59 @@ def migrate_004_checkpoints_and_lifecycle(conn: sqlite3.Connection):
     )
 
 
+@migration(5, "add_agent_insights")
+def migrate_005_insights(conn: sqlite3.Connection):
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS agent_insights (
+            insight_id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            category TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'info',
+            summary TEXT NOT NULL,
+            details TEXT,
+            model_id TEXT,
+            dataset_id TEXT,
+            tags TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_insights_tenant ON agent_insights(tenant_id);
+        CREATE INDEX IF NOT EXISTS idx_insights_model ON agent_insights(tenant_id, model_id);
+        CREATE INDEX IF NOT EXISTS idx_insights_dataset ON agent_insights(tenant_id, dataset_id);
+        CREATE INDEX IF NOT EXISTS idx_insights_category ON agent_insights(tenant_id, category);
+        CREATE INDEX IF NOT EXISTS idx_insights_created ON agent_insights(created_at DESC);
+        """
+    )
+
+
+@migration(6, "add_tenant_id_to_core_resources")
+def migrate_006_tenant_scoping(conn: sqlite3.Connection):
+    for tbl in ("datasets", "models", "scenarios", "clv_models"):
+        cols = {row[1] for row in conn.execute(f"PRAGMA table_info({tbl})").fetchall()}
+        if "tenant_id" not in cols:
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN tenant_id TEXT")
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{tbl}_tenant ON {tbl}(tenant_id)")
+
+
+@migration(7, "add_organization_mapping_profiles")
+def migrate_007_mapping_profiles(conn: sqlite3.Connection):
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS organization_mapping_profiles (
+            profile_id TEXT PRIMARY KEY,
+            organization_id TEXT NOT NULL,
+            profile_name TEXT NOT NULL,
+            mappings TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_mapping_profiles_org ON organization_mapping_profiles(organization_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_mapping_profiles_org_name ON organization_mapping_profiles(organization_id, profile_name);
+        """
+    )
+
+
 class MigrationRunner:
     """Applies ordered migrations and tracks schema version."""
 

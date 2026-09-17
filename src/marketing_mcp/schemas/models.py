@@ -41,6 +41,9 @@ class DatasetInspection(BaseModel):
     missing_periods: list[str]
     issues: list[Finding]
     mmm_candidate: bool
+    is_long_form: bool = False
+    detected_dimensions: list[str] = Field(default_factory=list)
+    detected_categorical_channels: list[str] = Field(default_factory=list)
 
 
 class DatasetValidationResult(BaseModel):
@@ -598,3 +601,74 @@ class ToolEnvelope(BaseModel):
     warnings: list[Any] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
     next_actions: list[str] = Field(default_factory=list)
+
+
+InsightCategory = Literal[
+    "eda_finding",
+    "prior_selection",
+    "diagnostic_warning",
+    "budget_strategy",
+    "clv_insight",
+    "hypothesis",
+    "general_note",
+]
+
+
+class RecordInsightInput(BaseModel):
+    category: InsightCategory = Field(
+        description="Category: 'eda_finding', 'prior_selection', 'diagnostic_warning', 'budget_strategy', 'clv_insight', 'hypothesis', 'general_note'"
+    )
+    summary: str = Field(
+        min_length=3,
+        max_length=500,
+        description="Concise headline summary of the analytical insight or hypothesis",
+    )
+    details: str | None = Field(
+        default=None,
+        description="Detailed analytical explanation, evidence, caveats, or recommended actions",
+    )
+    model_id: str | None = Field(
+        default=None,
+        description="Associated PyMC model ID if applicable",
+    )
+    dataset_id: str | None = Field(
+        default=None,
+        description="Associated dataset ID if applicable",
+    )
+    agent_id: str | None = Field(
+        default=None,
+        description="Optional AI client or agent identifier (e.g. 'antigravity', 'claude-code', 'cursor')",
+    )
+    severity: Literal["info", "warning", "critical"] = Field(
+        default="info",
+        description="Severity or significance level: 'info', 'warning', or 'critical'",
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="List of keyword tags for categorization and search",
+    )
+
+
+class QueryInsightsInput(BaseModel):
+    model_id: str | None = Field(
+        default=None,
+        description="Optional model ID to filter insights",
+    )
+    dataset_id: str | None = Field(
+        default=None,
+        description="Optional dataset ID to filter insights",
+    )
+    category: InsightCategory | None = Field(
+        default=None,
+        description="Optional category to filter insights",
+    )
+    tag: str | None = Field(
+        default=None,
+        description="Optional keyword tag to filter insights",
+    )
+    limit: int = Field(
+        default=50,
+        ge=1,
+        le=100,
+        description="Maximum number of recent insights to return",
+    )

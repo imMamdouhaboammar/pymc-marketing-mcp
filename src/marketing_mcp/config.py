@@ -159,6 +159,14 @@ class Settings(BaseModel):
                 evidence={"host": self.host, "profile": profile.value},
                 next_action="Select http-private-api-key or http-production-oauth",
             )
+
+        # Canonicalize filesystem paths to absolute paths
+        self.data_dir = self.data_dir.expanduser().resolve()
+        self.ingest_dir = self.ingest_dir.expanduser().resolve()
+        self.artifact_dir = self.artifact_dir.expanduser().resolve()
+        self.metadata_db = self.metadata_db.expanduser().resolve()
+        self.metadata_db.parent.mkdir(parents=True, exist_ok=True)
+
         return self
 
     @classmethod

@@ -37,6 +37,21 @@ class DiagnosticsService:
             sampler_config=input.sampler.model_dump(),
         )
         res["model_id"] = input.model_id
+
+        # Persist cross-validation results into model record diagnostics
+        if not rec.diagnostics:
+            rec.diagnostics = {}
+        rec.diagnostics["cross_validation"] = res
+        decision = res.get("decision_provenance", {}).get("decision") or res.get("decision_impact")
+        if decision == "blocked_predictive_failure":
+            rec.validation_state = "blocked_predictive_failure"
+            failures = list(rec.diagnostics.get("failures", []))
+            for f in res.get("failures", []):
+                if f not in failures:
+                    failures.append(f)
+            rec.diagnostics["failures"] = failures
+
+        self.metadata.put_model(rec.model_dump())
         return res
 
     def prior_sensitivity(self, input: PriorSensitivityInput) -> dict[str, Any]:

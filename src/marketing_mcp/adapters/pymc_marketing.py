@@ -271,10 +271,16 @@ class PyMCMarketingAdapter:
         fold_metrics = []
         rmses = []
         nrmses = []
+        y_tests_collected = []
+        test_preds_collected = []
+        y_trains_collected = []
         if hasattr(cv, "_cv_results"):
             for idx, res in enumerate(cv._cv_results):
                 try:
                     y_test = np.asarray(res.y_test, dtype=float).reshape(-1)
+                    y_tests_collected.append(y_test)
+                    y_train_arr = np.asarray(getattr(res, "y_train", []), dtype=float).reshape(-1)
+                    y_trains_collected.append(y_train_arr)
                     pp = res.idata.posterior_predictive
                     y_var = (
                         "y_original_scale"
@@ -287,6 +293,7 @@ class PyMCMarketingAdapter:
                         dtype=float,
                     ).reshape(-1)
                     test_pred = pred_mean[-len(y_test) :]
+                    test_preds_collected.append(test_pred)
                     fold_rmse = float(np.sqrt(np.mean((y_test - test_pred) ** 2)))
                     scale = float(np.std(y_test))
                     fold_nrmse = float(fold_rmse / scale) if scale > 0 else None
@@ -308,6 +315,16 @@ class PyMCMarketingAdapter:
                     }
                 )
 
+        attribution = (
+            self.compute_cv_attribution(
+                y_tests=y_tests_collected,
+                test_preds=test_preds_collected,
+                y_trains=y_trains_collected,
+            )
+            if y_tests_collected
+            else {}
+        )
+
         mean_rmse = float(np.mean(rmses)) if rmses else 0.0
         mean_nrmse = float(np.mean(nrmses)) if nrmses else None
 
@@ -325,7 +342,20 @@ class PyMCMarketingAdapter:
                 }
             )
 
-        decision_impact = "warning" if stability_findings else ("approved" if (mean_nrmse is None or mean_nrmse <= 0.50) else "caution")
+        failures = []
+        if mean_nrmse is not None and mean_nrmse > 0.50:
+            decision_impact = "blocked_predictive_failure"
+            failures.append({
+                "metric": "cross_validation_nrmse",
+                "observed": round(mean_nrmse, 4),
+                "threshold": 0.50,
+                "message": f"Out-of-sample predictive NRMSE ({mean_nrmse:.3f}) exceeds decision threshold (0.50). Model is uncalibrated or under-specified for out-of-sample forecasting.",
+            })
+        elif stability_findings:
+            decision_impact = "warning"
+        else:
+            decision_impact = "approved"
+
         decision_provenance = {
             "metric": "NRMSE",
             "definition": "Root Mean Squared Error normalized by target standard deviation: RMSE / std(y_test)",
@@ -343,8 +373,143 @@ class PyMCMarketingAdapter:
             "mean_out_of_sample_rmse": round(mean_rmse, 2),
             "mean_out_of_sample_nrmse": round(mean_nrmse, 4) if mean_nrmse is not None else None,
             "stability_findings": stability_findings,
+            "failures": failures,
             "decision_impact": decision_impact,
             "decision_provenance": decision_provenance,
+            "failure_attribution": attribution,
+        }
+
+    def compute_cv_attribution(
+        self,
+        y_tests: list[np.ndarray],
+        test_preds: list[np.ndarray],
+        y_trains: list[np.ndarray] | None = None,
+        seasonal_period: int = 7,
+    ) -> dict[str, Any]:
+        """Decompose CV performance against naive benchmark, calculate residual autocorrelation and stability."""
+        mmm_rmses = []
+        mmm_nrmses = []
+        naive_rmses = []
+        naive_nrmses = []
+        autocorrs = []
+
+        for idx, y_test in enumerate(y_tests):
+            y_t = np.asarray(y_test, dtype=float).reshape(-1)
+            pred = np.asarray(test_preds[idx], dtype=float).reshape(-1)
+            scale = float(np.std(y_t))
+
+            # 1. MMM metrics
+            rmse = float(np.sqrt(np.mean((y_t - pred) ** 2)))
+            nrmse = float(rmse / scale) if scale > 0 else 0.0
+            mmm_rmses.append(rmse)
+            mmm_nrmses.append(nrmse)
+
+            # 2. Residual Autocorrelation (lag-1)
+            err = y_t - pred
+            if len(err) >= 3:
+                e_mean = float(np.mean(err))
+                e_dm = err - e_mean
+                denom = float(np.sum(e_dm ** 2))
+                if denom > 1e-12:
+                    rho1 = float(np.sum(e_dm[:-1] * e_dm[1:]) / denom)
+                else:
+                    rho1 = 0.0
+                autocorrs.append(rho1)
+
+            # 3. Naive Baseline
+            if y_trains and idx < len(y_trains) and len(y_trains[idx]) > 0:
+                y_tr = np.asarray(y_trains[idx], dtype=float).reshape(-1)
+                if len(y_tr) >= seasonal_period:
+                    naive_pred = np.array([
+                        y_tr[-seasonal_period + (i % seasonal_period)]
+                        for i in range(len(y_t))
+                    ])
+                else:
+                    naive_pred = np.full_like(y_t, y_tr[-1])
+            else:
+                naive_pred = np.full_like(y_t, np.mean(y_t))
+
+            n_rmse = float(np.sqrt(np.mean((y_t - naive_pred) ** 2)))
+            n_nrmse = float(n_rmse / scale) if scale > 0 else 0.0
+            naive_rmses.append(n_rmse)
+            naive_nrmses.append(n_nrmse)
+
+        mean_mmm_nrmse = float(np.mean(mmm_nrmses)) if mmm_nrmses else 0.0
+        mean_naive_nrmse = float(np.mean(naive_nrmses)) if naive_nrmses else 0.0
+        mean_naive_rmse = float(np.mean(naive_rmses)) if naive_rmses else 0.0
+
+        if mean_naive_nrmse > 1e-6:
+            skill_score = float(1.0 - (mean_mmm_nrmse / mean_naive_nrmse))
+        else:
+            skill_score = 0.0
+
+        skill_verdict = "superior" if skill_score > 0 else "inferior"
+        mean_rho1 = float(np.mean(autocorrs)) if autocorrs else 0.0
+        autocorr_verdict = "excessive" if abs(mean_rho1) > 0.30 else "acceptable"
+
+        fold_var = float(np.var(mmm_nrmses)) if len(mmm_nrmses) > 1 else 0.0
+        stab_verdict = "unstable" if fold_var > 0.10 else "stable"
+
+        # Ranked Hypotheses
+        hypotheses = []
+        rank = 1
+        if skill_score <= 0.0:
+            hypotheses.append({
+                "rank": rank,
+                "hypothesis": "Model underperforms trivial naive baseline",
+                "confidence": 0.90,
+                "evidence": {
+                    "mmm_mean_nrmse": round(mean_mmm_nrmse, 4),
+                    "naive_mean_nrmse": round(mean_naive_nrmse, 4),
+                    "skill_score": round(skill_score, 4),
+                },
+                "recommendation": "Inspect feature transformations, lags, and baseline trend; model is worse than predicting prior period.",
+            })
+            rank += 1
+
+        if abs(mean_rho1) > 0.30:
+            hypotheses.append({
+                "rank": rank,
+                "hypothesis": "Omitted temporal dynamics or seasonal patterns",
+                "confidence": 0.85,
+                "evidence": {
+                    "mean_lag1_autocorr": round(mean_rho1, 4),
+                    "threshold": 0.30,
+                },
+                "recommendation": "Add Fourier seasonality terms or autoregressive components to capture serial correlation in residuals.",
+            })
+            rank += 1
+
+        if fold_var > 0.10:
+            hypotheses.append({
+                "rank": rank,
+                "hypothesis": "Structural regime shift across time windows",
+                "confidence": 0.75,
+                "evidence": {
+                    "fold_variance": round(fold_var, 4),
+                    "threshold": 0.10,
+                },
+                "recommendation": "Check for external shocks (e.g. macro shifts, campaign changes) or use time-varying parameter specification.",
+            })
+            rank += 1
+
+        return {
+            "naive_baseline": {
+                "strategy": "seasonal_or_last_observed",
+                "mean_naive_rmse": round(mean_naive_rmse, 2),
+                "mean_naive_nrmse": round(mean_naive_nrmse, 4) if mean_naive_nrmse > 0 else None,
+                "skill_score": round(skill_score, 4),
+                "skill_verdict": skill_verdict,
+            },
+            "residual_diagnostics": {
+                "mean_lag1_autocorr": round(mean_rho1, 4),
+                "autocorr_verdict": autocorr_verdict,
+            },
+            "fold_stability": {
+                "fold_variance": round(fold_var, 4),
+                "stability_verdict": stab_verdict,
+            },
+            "ranked_hypotheses": hypotheses,
         }
 
     def evaluate_prior_sensitivity(

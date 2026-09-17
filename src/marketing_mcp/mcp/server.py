@@ -6,9 +6,11 @@ from marketing_mcp.mcp.tools.artifacts import register_artifacts_tools
 from marketing_mcp.mcp.tools.clv import register_clv_tools
 from marketing_mcp.mcp.tools.datasets import register_datasets_tools
 from marketing_mcp.mcp.tools.decisions import register_decisions_tools
+from marketing_mcp.mcp.tools.insights import register_insights_tools
 from marketing_mcp.mcp.tools.jobs import register_jobs_tools
 from marketing_mcp.mcp.tools.mmm import register_mmm_tools
 from marketing_mcp.mcp.tools.model_selection import register_model_selection_tools
+from marketing_mcp.mcp.skills import register_skill_delivery
 
 
 def create_server(app: Application | None = None, context_provider=None):
@@ -35,5 +37,11 @@ def create_server(app: Application | None = None, context_provider=None):
     register_datasets_tools(mcp, app, context_provider=context_provider)
     register_jobs_tools(mcp, app, context_provider=context_provider)
     register_artifacts_tools(mcp, app, context_provider=context_provider)
+    register_insights_tools(mcp, app, context_provider=context_provider)
+    register_skill_delivery(mcp, app, context_provider=context_provider)
 
     return mcp
+
+
+# Compatibility alias
+create_mcp_server = create_server

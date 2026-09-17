@@ -35,6 +35,7 @@ TOOL_SCOPES: dict[str, str] = {
     "recommend_next_measurement": "marketing:read",
     # modeling lifecycle
     "register_dataset": "marketing:model",
+    "transform_ad_export": "marketing:model",
     "fit_mmm": "marketing:model",
     "diagnose_mmm": "marketing:model",
     "calibrate_mmm": "marketing:model",
@@ -70,6 +71,13 @@ TOOL_SCOPES: dict[str, str] = {
     # artifacts & sandbox delivery
     "export_artifact_to_sandbox": "marketing:read",
     "cleanup_server_storage": "marketing:admin",
+    # agent insights & interaction memory
+    "record_agent_insight": "marketing:model",
+    "get_agent_insights": "marketing:read",
+    # scientific skills guidance
+    "get_skill_guidance": "marketing:read",
+    "list_agentic_skills": "marketing:read",
+    "get_skill_workflow_map": "marketing:read",
     # administration
     "archive_model": "marketing:admin",
 }

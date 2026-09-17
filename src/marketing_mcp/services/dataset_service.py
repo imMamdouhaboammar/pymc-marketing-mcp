@@ -34,8 +34,9 @@ class DatasetService:
         self.blobs = storage if isinstance(storage, LocalArtifactStore) else LocalArtifactStore(storage)
         self.max_bytes = max_dataset_mb * 1024 * 1024
 
-    def list(self) -> list[dict[str, Any]]:
-        return self.metadata.list_datasets()
+    def list(self, principal: Any = None) -> list[dict[str, Any]]:
+        tenant_id = principal.tenant_id if principal and principal.auth_type != "stdio" else None
+        return self.metadata.list_datasets(tenant_id=tenant_id)
 
     def register_bytes(
         self,
@@ -157,8 +158,9 @@ class DatasetService:
             ) from exc
         return df
 
-    def load(self, dataset_id: str):
-        record = self.metadata.get_dataset(dataset_id)
+    def load(self, dataset_id: str, principal: Any = None):
+        tenant_id = principal.tenant_id if principal and principal.auth_type != "stdio" else None
+        record = self.metadata.get_dataset(dataset_id, tenant_id=tenant_id)
         blob = record.get("blob")
         if blob is None:
             path = Path(record["path"])
@@ -180,164 +182,15 @@ class DatasetService:
         )
         return self._read_bytes(data, f".{record['format']}")
 
-    def inspect(self, dataset_id: str) -> DatasetInspection:
-        df = self.load(dataset_id)
-        possible_dates = []
-        for c in df.columns:
-            if "date" in c.lower() or "week" in c.lower():
-                possible_dates.append(c)
-        date_col = possible_dates[0] if possible_dates else None
-        freq = None
-        start = end = None
-        missing = []
-        issues = []
-        if date_col:
-            raw_dates = pd.to_datetime(df[date_col], errors="coerce")
-            null_dates_count = int(raw_dates.isna().sum())
-            if null_dates_count > 0:
-                issues.append(
-                    Finding(
-                        severity="error",
-                        code="INVALID_DATE_FORMAT",
-                        message=f"Found {null_dates_count} unparseable date values in column '{date_col}'",
-                        evidence={"null_count": null_dates_count, "column": date_col},
-                        suggested_action="Ensure all dates are formatted in standard ISO-8601 (YYYY-MM-DD)",
-                    )
-                )
-            dup_dates_count = int(raw_dates.dropna().duplicated().sum())
-            if dup_dates_count > 0:
-                issues.append(
-                    Finding(
-                        severity="warning",
-                        code="DUPLICATE_DATES",
-                        message=f"Found {dup_dates_count} duplicate dates in column '{date_col}'",
-                        evidence={"duplicate_count": dup_dates_count, "column": date_col},
-                        suggested_action="Aggregate rows by date or provide panel/geo dimensions",
-                    )
-                )
-
-            dates = raw_dates.dropna().sort_values().drop_duplicates()
-            start = dates.min().date().isoformat() if len(dates) else None
-            end = dates.max().date().isoformat() if len(dates) else None
-            if len(dates) >= 3:
-                deltas = dates.diff().dropna().dt.days
-                med = float(deltas.median())
-                freq = (
-                    "daily"
-                    if med <= 1.5
-                    else "weekly"
-                    if med <= 8
-                    else "monthly"
-                    if med <= 35
-                    else "irregular"
-                )
-                if freq == "weekly":
-                    expected = pd.date_range(
-                        dates.min(), dates.max(), freq=pd.Timedelta(days=round(med))
-                    )
-                    missing = [d.date().isoformat() for d in expected.difference(dates)[:100]]
-        else:
-            issues.append(
-                Finding(
-                    severity="error",
-                    code="MISSING_DATE_COLUMN",
-                    message="No recognizable date or week column found in dataset",
-                    suggested_action="Ensure dataset contains a temporal column (e.g. 'date', 'week')",
-                )
-            )
-
-        numeric = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
-        targets = [
-            c
-            for c in numeric
-            if any(k in c.lower() for k in ["revenue", "sales", "orders", "target", "conversion"])
-        ]
-        channels = [
-            c
-            for c in numeric
-            if any(
-                k in c.lower()
-                for k in [
-                    "spend",
-                    "meta",
-                    "google",
-                    "tiktok",
-                    "youtube",
-                    "facebook",
-                    "search",
-                    "media",
-                    "tv",
-                    "radio",
-                ]
-            )
-            and c not in targets
-        ]
-        controls = [
-            c
-            for c in numeric
-            if c not in targets + channels
-            and any(
-                k in c.lower()
-                for k in ["discount", "price", "holiday", "promo", "season", "competitor", "macro"]
-            )
-        ]
-        if missing:
-            issues.append(
-                Finding(
-                    severity="warning",
-                    code="MISSING_PERIODS",
-                    message="Potential missing periods detected in calendar timeline",
-                    evidence={"count": len(missing)},
-                    suggested_action="Validate continuity before modeling to avoid distorted adstock",
-                )
-            )
-        if len(df) < 52:
-            issues.append(
-                Finding(
-                    severity="warning",
-                    code="INSUFFICIENT_OBSERVATIONS",
-                    message=f"Dataset has {len(df)} rows; PyMC MMM recommends at least 52 periods",
-                    evidence={"row_count": len(df), "recommended_min": 52},
-                    suggested_action="Collect at least 52 weekly observations for robust MCMC inference",
-                )
-            )
-        if not targets:
-            issues.append(
-                Finding(
-                    severity="error",
-                    code="MISSING_TARGET_COLUMN",
-                    message="No recognizable KPI or sales target column detected",
-                    suggested_action="Ensure dataset contains a numeric KPI column (e.g. 'sales', 'revenue')",
-                )
-            )
-        if not channels:
-            issues.append(
-                Finding(
-                    severity="error",
-                    code="MISSING_CHANNEL_COLUMNS",
-                    message="No recognizable media spend or impression columns detected",
-                    suggested_action="Ensure dataset contains media channel columns (e.g. 'meta_spend', 'search_spend')",
-                )
-            )
-
-        candidate = bool(date_col and targets and channels and len(df) >= 52)
-        return DatasetInspection(
-            dataset_id=dataset_id,
-            rows=len(df),
-            frequency=freq,
-            date_range={"start": start, "end": end},
-            possible_targets=targets,
-            possible_channels=channels,
-            possible_controls=controls,
-            missing_periods=missing,
-            issues=issues,
-            mmm_candidate=candidate,
-        )
+    def inspect(self, dataset_id: str, principal: Any = None) -> DatasetInspection:
+        df = self.load(dataset_id, principal=principal)
+        from marketing_mcp.scientific.datasets import inspect_dataset_frame
+        return inspect_dataset_frame(df, dataset_id=dataset_id)
 
     def validate(
-        self, dataset_id, date_column, target_column, channel_columns, control_columns, dims=None
+        self, dataset_id, date_column, target_column, channel_columns, control_columns, dims=None, principal: Any = None
     ) -> DatasetValidationResult:
-        df = self.load(dataset_id)
+        df = self.load(dataset_id, principal=principal)
         findings = validate_mmm_dataset(
             df,
             date_column,
@@ -389,5 +242,41 @@ class DatasetService:
             valid_for_modeling=valid,
             temporal_summary=temporal_summary,
         )
+
+    def transform_long_form(
+        self,
+        dataset_id: str,
+        date_column: str,
+        channel_column: str,
+        spend_column: str,
+        target_columns: list[str],
+        dimension_columns: list[str] | None = None,
+        frequency: str = "D",
+        principal: Any = None,
+    ):
+        from marketing_mcp.scientific.transformations import (
+            generate_transformation_plan,
+            transform_long_form_export,
+        )
+
+        raw_df = self.load(dataset_id, principal=principal)
+        plan = generate_transformation_plan(
+            raw_df,
+            date_column=date_column,
+            channel_column=channel_column,
+            spend_column=spend_column,
+            target_columns=target_columns,
+            dimension_columns=dimension_columns,
+            frequency=frequency,
+        )
+        transformed_df, provenance = transform_long_form_export(raw_df, plan)
+        transformed_bytes = transformed_df.to_csv(index=False).encode("utf-8")
+        registered = self.register_bytes(
+            transformed_bytes,
+            format="csv",
+            filename=f"transformed_{dataset_id}.csv",
+            principal=principal,
+        )
+        return registered, provenance, plan
 
 

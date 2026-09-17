@@ -22,7 +22,7 @@ class DecisionService:
         self.metadata = metadata
         self.modeling = modeling
 
-    def _approved(self, model_id):
+    def _approved(self, model_id, action: str = "optimize_budget", mode: str = "production"):
         record = self.modeling.status(model_id)
         if not record.diagnostics:
             raise DomainError(
@@ -32,9 +32,36 @@ class DecisionService:
                 next_action=f"Call diagnose_mmm(model_id='{model_id}') to run MCMC convergence diagnostics.",
             )
         DecisionGate(
-            record.validation_state,
-            record.diagnostics.get("failures", []),
-        ).require_decision_access()
+            decision_status=record.validation_state,
+            failures=record.diagnostics.get("failures", []),
+            model_id=model_id,
+            dataset_id=record.dataset_id,
+            dataset_fingerprint=getattr(record, "dataset_fingerprint", None),
+            mode=mode,
+        ).require_decision_access(action=action)
+
+        # Dataset Fingerprint Lineage Verification
+        if getattr(record, "dataset_fingerprint", None) and record.dataset_id:
+            t_id = getattr(record, "tenant_id", None)
+            try:
+                current_ds = self.metadata.get_dataset(record.dataset_id, tenant_id=t_id)
+                if current_ds and isinstance(current_ds, dict):
+                    cur_fp = current_ds.get("fingerprint")
+                    if (
+                        isinstance(cur_fp, str)
+                        and isinstance(record.dataset_fingerprint, str)
+                        and cur_fp != record.dataset_fingerprint
+                    ):
+                        raise DomainError(
+                            "DATASET_FINGERPRINT_MISMATCH",
+                            f"Underlying dataset '{record.dataset_id}' has mutated since model '{model_id}' was trained. Training fingerprint: {record.dataset_fingerprint[:12]}... vs Current: {cur_fp[:12]}...",
+                            evidence={"training_fingerprint": record.dataset_fingerprint, "current_fingerprint": cur_fp},
+                            next_action="Refit the MMM model using the updated dataset before running optimizations.",
+                        )
+            except DomainError as exc:
+                if exc.code == "DATASET_FINGERPRINT_MISMATCH":
+                    raise
+
         model, _ = self.modeling.load_model(model_id)
         return model, record
 
@@ -55,17 +82,24 @@ class DecisionService:
         }
         if status == "rejected":
             payload["diagnostic_failures"] = list(diagnostics.get("failures") or [])
+        if getattr(record, "config", None) and isinstance(record.config, dict) and "dataset_intelligence" in record.config:
+            di = record.config["dataset_intelligence"]
+            payload["dataset_quality_status"] = di.get("data_quality_status", "validated")
+            payload["identifiability_risk"] = di.get("identifiability_risk", "low")
         return payload
 
     @staticmethod
     def _provenance(model_id, record) -> dict:
-        return {
+        prov = {
             "model_id": model_id,
             "dataset_id": record.dataset_id,
             "lineage_stage": getattr(record, "lineage_stage", "initial_fit"),
             "parent_model_id": getattr(record, "parent_model_id", None),
-            "versions": record.config.get("provenance", {}),
+            "versions": record.config.get("provenance", {}) if getattr(record, "config", None) else {},
         }
+        if getattr(record, "config", None) and isinstance(record.config, dict) and "dataset_intelligence" in record.config:
+            prov["dataset_intelligence"] = record.config["dataset_intelligence"]
+        return prov
 
     def contributions(self, model_id):
         model, record = self.modeling.load_model(model_id)
@@ -262,7 +296,82 @@ class DecisionService:
             allocation,
             baseline,
         )
-        combined_warnings = extrap_warnings + ident_warnings
+
+        # Economic explainability and rationale per channel
+        channel_iroas: dict[str, float] = {}
+        try:
+            adapter = self.modeling.adapter_factory()
+            if hasattr(adapter, "calculate_iroas"):
+                iroas_res = adapter.calculate_iroas(model)
+                for ch, stats in iroas_res.items():
+                    if isinstance(stats, dict):
+                        channel_iroas[ch] = stats.get("mean", 1.0)
+            elif hasattr(adapter, "incremental_roas"):
+                iroas_res = adapter.incremental_roas(model)
+                for ch_data in iroas_res.get("channels", []):
+                    ch_name = ch_data.get("channel")
+                    m_stat = ch_data.get("marginal_iroas")
+                    if ch_name and isinstance(m_stat, dict):
+                        channel_iroas[ch_name] = m_stat.get("mean", 1.0)
+        except Exception:
+            channel_iroas = {}
+
+        rationale: dict[str, Any] = {}
+        economic_warnings: list[dict[str, Any]] = []
+        for ch, spend in allocation.items():
+            base_spend = baseline.get(ch, 0.0)
+            spend_change_pct = (
+                round(((spend - base_spend) / base_spend) * 100, 2)
+                if base_spend > 0
+                else None
+            )
+
+            constraints_active = []
+            ch_constraint = input.constraints.get(ch)
+            if ch_constraint:
+                if ch_constraint.min is not None and abs(spend - ch_constraint.min) < 1e-2:
+                    constraints_active.append("at_min_spend_bound")
+                if ch_constraint.max is not None and abs(spend - ch_constraint.max) < 1e-2:
+                    constraints_active.append("at_max_spend_bound")
+                if ch_constraint.fixed is not None and abs(spend - ch_constraint.fixed) < 1e-2:
+                    constraints_active.append("fixed_spend_bound")
+
+            m_iroas = channel_iroas.get(ch)
+            if m_iroas is not None and m_iroas < 1.0:
+                verdict = "sub_marginal_warning"
+                economic_warnings.append(
+                    {
+                        "code": "ECONOMIC_SUB_MARGINAL_ALLOCATION",
+                        "severity": "warning",
+                        "channel": ch,
+                        "message": (
+                            f"Channel '{ch}' was allocated ${spend:,.0f} despite estimated marginal iROAS < 1.0 ({m_iroas:.2f}). "
+                            f"This allocation is likely driven by steep initial saturation curvature near zero spend or constraint bounds rather than incremental profitability."
+                        ),
+                        "evidence": {
+                            "channel": ch,
+                            "allocated_spend": spend,
+                            "marginal_iroas": m_iroas,
+                            "binding_constraints": constraints_active,
+                        },
+                        "suggested_action": (
+                            f"Evaluate whether to constrain '{ch}' with min=0 or reallocate its budget to higher-performing incremental channels."
+                        ),
+                    }
+                )
+            else:
+                verdict = "profitable"
+
+            rationale[ch] = {
+                "allocated_spend": spend,
+                "baseline_spend": base_spend,
+                "spend_change_pct": spend_change_pct,
+                "marginal_iroas_estimate": m_iroas,
+                "binding_constraints": constraints_active or ["budget_constrained"],
+                "economic_verdict": verdict,
+            }
+
+        combined_warnings = extrap_warnings + ident_warnings + economic_warnings
 
         scenario_id = f"scenario_{uuid.uuid4().hex[:12]}"
         payload = {
@@ -273,7 +382,9 @@ class DecisionService:
             "result": result,
             "extrapolation_warnings": extrap_warnings,
             "identifiability_warnings": ident_warnings,
+            "economic_warnings": economic_warnings,
             "channel_confidence": channel_conf,
+            "allocation_rationale": rationale,
             "created_at": _utc(),
         }
         self.metadata.put_scenario(payload)
@@ -281,9 +392,11 @@ class DecisionService:
             {
                 "scenario_id": scenario_id,
                 "model_id": input.model_id,
+                "allocation_rationale": rationale,
                 "warnings": combined_warnings,
                 "identifiability_warnings": ident_warnings,
                 "identifiability_risks": ident_warnings,
+                "economic_warnings": economic_warnings,
                 "channel_confidence": channel_conf,
                 "decision_gate": self._gate_payload(record),
                 "provenance": self._provenance(input.model_id, record),

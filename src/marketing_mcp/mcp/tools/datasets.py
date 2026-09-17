@@ -178,16 +178,12 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
         try:
             principal = resolve_context().principal
             require_scope(principal, scopes_for_tool("list_datasets")[0])
-            registered = app.datasets.list()
-
             is_admin = bool(
                 principal and ("marketing:admin" in (principal.scopes or set()) or "admin" in (principal.scopes or set()))
             )
             is_stdio = principal is None or principal.auth_type == "stdio"
-
-            if not (is_admin or is_stdio):
-                caller_tenant = principal.tenant_id if principal else None
-                registered = [d for d in registered if d.get("tenant_id") == caller_tenant]
+            list_principal = None if (is_admin or is_stdio) else principal
+            registered = app.datasets.list(principal=list_principal)
 
             inbox_files = []
             if is_admin or is_stdio:
@@ -231,14 +227,27 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
         try:
             principal = resolve_context().principal
             require_scope(principal, scopes_for_tool("inspect_dataset")[0])
-            dataset = app.metadata.get_dataset(dataset_id)
+            t_id = principal.tenant_id if principal and principal.auth_type != "stdio" else None
+            dataset = app.metadata.get_dataset(dataset_id, tenant_id=t_id)
             if not dataset:
                 raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
             authorize_dataset(principal, dataset, action="read")
 
-            r = app.datasets.inspect(dataset_id)
+            r = app.datasets.inspect(dataset_id, principal=principal)
+            evidence: dict[str, Any] = {}
+            try:
+                df = app.datasets.load(dataset_id, principal=principal)
+                from marketing_mcp.intelligence.engine import MarketingDataIntelligenceEngine
+                contract = MarketingDataIntelligenceEngine().analyze_dataset(df, dataset_id=dataset_id)
+                evidence["semantic_contract"] = contract.model_dump()
+                evidence["transformation_plan"] = contract.transformation_plan.model_dump()
+                evidence["clarification_requests"] = [c.model_dump() for c in contract.clarification_requests]
+            except Exception:
+                pass
+
             return env(
                 summary=r.model_dump(),
+                evidence=evidence,
                 warnings=[x.model_dump() for x in r.issues],
                 next_actions=["validate_dataset"] if r.mmm_candidate else ["register_dataset"],
             )
@@ -264,7 +273,8 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
         try:
             principal = resolve_context().principal
             require_scope(principal, scopes_for_tool("validate_dataset")[0])
-            dataset = app.metadata.get_dataset(dataset_id)
+            t_id = principal.tenant_id if principal and principal.auth_type != "stdio" else None
+            dataset = app.metadata.get_dataset(dataset_id, tenant_id=t_id)
             if not dataset:
                 raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
             authorize_dataset(principal, dataset, action="read")
@@ -275,7 +285,8 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 target_column,
                 channel_columns,
                 control_columns or [],
-                dims or [],
+                dims=dims,
+                principal=principal,
             )
             summary = {"dataset_id": dataset_id, "valid_for_modeling": r.valid_for_modeling}
             evidence: dict[str, Any] = {"findings": [f.model_dump() for f in r.findings]}
@@ -287,6 +298,76 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 summary=summary,
                 evidence=evidence,
                 next_actions=["fit_mmm"] if r.valid_for_modeling else ["register_dataset"],
+            )
+        except DomainError as e:
+            return e.to_dict()
+
+    @mcp.tool(
+        name="transform_ad_export",
+        description=(
+            "Transform raw long-form advertising exports (e.g. from Google Ads, Meta Ads, LinkedIn) "
+            "into a clean, wide-format modeling dataset. Pivots channel spend, enforces ratio non-summation "
+            "invariants (CTR, CPA, ROAS recomputed from numerators/denominators), ensures calendar continuity, "
+            "and generates cryptographic provenance with financial reconciliation."
+        ),
+    )
+    @mcp_error_boundary(operation="transform_ad_export", component="DatasetService", stage="transformation")
+    async def transform_ad_export(
+        dataset_id: str,
+        date_column: str,
+        channel_column: str,
+        spend_column: str,
+        target_columns: list[str],
+        dimension_columns: list[str] | None = None,
+        frequency: str = "D",
+    ):
+        try:
+            principal = resolve_context().principal
+            require_scope(principal, scopes_for_tool("transform_ad_export")[0])
+            t_id = principal.tenant_id if principal and principal.auth_type != "stdio" else None
+            dataset = app.metadata.get_dataset(dataset_id, tenant_id=t_id)
+            if not dataset:
+                raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
+            authorize_dataset(principal, dataset, action="read")
+
+            registered, provenance, plan = app.datasets.transform_long_form(
+                dataset_id=dataset_id,
+                date_column=date_column,
+                channel_column=channel_column,
+                spend_column=spend_column,
+                target_columns=target_columns,
+                dimension_columns=dimension_columns,
+                frequency=frequency,
+                principal=principal,
+            )
+
+            from dataclasses import asdict
+
+            summary = {
+                "transformed_dataset_id": registered.dataset_id,
+                "input_dataset_id": dataset_id,
+                "rows": registered.rows,
+                "format": registered.format,
+                "spend_reconciled": provenance.spend_reconciled,
+                "spend_delta": provenance.spend_delta,
+                "calendar_frequency": plan.frequency,
+                "inserted_periods": provenance.inserted_periods,
+            }
+            evidence = {
+                "provenance": asdict(provenance),
+                "transformation_plan": asdict(plan),
+            }
+            warnings = list(provenance.warnings or [])
+            if not provenance.spend_reconciled:
+                warnings.append(
+                    f"Spend reconciliation discrepancy: input spend={provenance.spend_before:.2f} vs output spend={provenance.spend_after:.2f}"
+                )
+
+            return env(
+                summary=summary,
+                evidence=evidence,
+                warnings=warnings,
+                next_actions=["inspect_dataset", "validate_dataset"],
             )
         except DomainError as e:
             return e.to_dict()

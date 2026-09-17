@@ -10,8 +10,10 @@ from .services.clv_service import CLVService
 from .services.dataset_service import DatasetService
 from .services.decision_service import DecisionService
 from .services.diagnostics_service import DiagnosticsService
+from .services.insight_service import InsightService
 from .services.modeling_service import ModelingService
 from .services.plotting_service import PlottingService
+from .skillpack.registry import get_runtime_registry
 from .storage.artifacts import LocalArtifactStore
 
 
@@ -43,3 +45,5 @@ class Application:
         self.decisions = DecisionService(self.metadata, self.models)
         self.plots = PlottingService(self.artifacts, metadata=self.metadata)
         self.clv = CLVService(self.metadata, self.artifacts, datasets=self.datasets)
+        self.insights = InsightService(self.metadata)
+        self.skillpack = get_runtime_registry()

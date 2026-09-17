@@ -33,7 +33,7 @@ class SQLitePersistenceBackend:
 
     def __init__(self, database: Path | str):
         self.metadata = SQLiteMetadataStore(database)
-        self.jobs = SQLiteJobRepository(self.metadata.conn)
+        self.jobs = SQLiteJobRepository(self.metadata.conn, lock=self.metadata._lock)
         self.credentials = SQLiteCredentialRepository(database)
 
     def probe(self) -> None:

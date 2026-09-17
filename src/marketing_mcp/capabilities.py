@@ -35,6 +35,8 @@ CAPABILITY_DOMAINS: tuple[str, ...] = (
     "clv",
     "jobs",
     "artifacts",
+    "insights",
+    "skills",
 )
 
 
@@ -142,6 +144,17 @@ _INVENTORY: tuple[Capability, ...] = (
             "tests/statistical/test_real_pymc_sampling.py::test_real_pymc_mmm_end_to_end_statistical_workflow",
             "tests/statistical/test_multidimensional_pymc_sampling.py::test_real_multidimensional_mmm_panel_sampling",
             "tests/integration/test_workflow_without_sampling.py::test_dataset_workflow_persists",
+        ),
+    ),
+    _tool(
+        "transform_ad_export",
+        "datasets",
+        "Pivot and transform raw ad-network export data into clean MMM modeling format with spend reconciliation.",
+        delegates_to="datasets.transform_long_form",
+        status="stable",
+        evidence_test_ids=(
+            "tests/unit/test_transform_ad_export_tool.py::test_transform_ad_export_tool_success_and_tenant_isolation",
+            "tests/unit/test_raw_export_transformation.py::test_transform_long_form_export_pivot_and_aggregation",
         ),
     ),
     # --- modeling ---------------------------------------------------------------------------
@@ -470,6 +483,44 @@ _INVENTORY: tuple[Capability, ...] = (
         delegates_to="artifacts.cleanup_storage",
         status="experimental",
     ),
+    _tool(
+        "record_agent_insight",
+        "insights",
+        "Record structured findings, hypotheses, diagnostic warnings, or budget decisions.",
+        delegates_to="insights.record_insight",
+        status="stable",
+        evidence_test_ids=("tests/unit/test_insight_service.py::test_insight_service_record_and_query",),
+    ),
+    _tool(
+        "get_agent_insights",
+        "insights",
+        "Retrieve previously recorded agent insights, filterable by model, dataset, or category.",
+        delegates_to="insights.list_insights",
+        status="stable",
+        evidence_test_ids=("tests/unit/test_insight_service.py::test_insight_service_record_and_query",),
+    ),
+    # --- scientific skill guidance ----------------------------------------------------------
+    _tool(
+        "get_skill_guidance",
+        "skills",
+        "Route a task to one scientific workflow skill or fetch one selected skill package.",
+        delegates_to="skillpack.resolve_guidance",
+        status="experimental",
+    ),
+    _tool(
+        "list_agentic_skills",
+        "skills",
+        "List all registered agentic skills with summaries, maturity, and primary tools.",
+        delegates_to="skillpack.catalog",
+        status="experimental",
+    ),
+    _tool(
+        "get_skill_workflow_map",
+        "skills",
+        "Retrieve the dependency graph, prerequisites, and decision gates for all scientific skills.",
+        delegates_to="skillpack.workflow_map",
+        status="experimental",
+    ),
     # --- resources --------------------------------------------------------------------------
     _resource(
         "marketing://datasets/{dataset_id}",
@@ -501,6 +552,46 @@ _INVENTORY: tuple[Capability, ...] = (
         "marketing://clv/{model_id}",
         "clv",
         "Stored CLV model record and configuration.",
+    ),
+    _resource(
+        "marketing://skills",
+        "skills",
+        "Compact deterministic catalog of available scientific workflow skills.",
+    ),
+    _resource(
+        "marketing://skills/{skill_name}",
+        "skills",
+        "Canonical operational SKILL.md content for one allowed skill name.",
+    ),
+    _resource(
+        "marketing://skills/{skill_name}/manifest",
+        "skills",
+        "Machine-readable manifest for one allowed scientific workflow skill.",
+    ),
+    _resource(
+        "marketing://skills/tool-map",
+        "skills",
+        "Machine-readable classification of every public MCP tool into skill guidance.",
+    ),
+    _resource(
+        "marketing://skills/workflow-map",
+        "skills",
+        "Compact prerequisites, gates, continuations, and fallback workflow map.",
+    ),
+    _resource(
+        "marketing://skills/decision-gates",
+        "skills",
+        "Decision-gated tool map derived from the public capability registry.",
+    ),
+    _resource(
+        "marketing://skills/references/scientific-answer-contract",
+        "skills",
+        "Shared contract for communicating scientific analytical results and uncertainty.",
+    ),
+    _resource(
+        "marketing://skills/references/scientific-source-ledger",
+        "skills",
+        "Versioned source ledger for scientific rules used by the Skill Pack.",
     ),
 )
 

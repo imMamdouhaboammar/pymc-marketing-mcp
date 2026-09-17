@@ -438,6 +438,15 @@ ERROR_CATALOG: dict[str, ErrorDefinition] = {
         user_actionable=True,
         suggested_action="Increase warmup draws, tune target_accept, or adjust priors",
     ),
+    "NUMERICAL_INSTABILITY": ErrorDefinition(
+        code="NUMERICAL_INSTABILITY",
+        category=ErrorCategory.STATISTICAL,
+        severity=ErrorSeverity.ERROR,
+        retryable=False,
+        http_status=500,
+        user_actionable=True,
+        suggested_action="Check media and target scaling, remove highly collinear channels, or adjust prior parameters",
+    ),
     "SAMPLING_DIVERGED": ErrorDefinition(
         code="SAMPLING_DIVERGED",
         category=ErrorCategory.STATISTICAL,
@@ -979,13 +988,22 @@ class NormalizedError(BaseModel):
         from marketing_mcp.security.redaction import redact_secrets
 
         action = self.suggested_action or self.next_action
+        msg = self.message
+        evidence = dict(self.evidence) if self.evidence else None
+
+        if self.code == "AUTH_FORBIDDEN":
+            import re
+            msg = re.sub(r"belonging to tenant '[^']+'", "belonging to another tenant", msg)
+            if evidence and "record_tenant" in evidence:
+                evidence = dict(evidence)
+                evidence.pop("record_tenant", None)
 
         payload: dict[str, Any] = {
             "error_id": self.error_id,
             "code": self.code,
             "category": self.category,
             "severity": self.severity,
-            "message": self.message,
+            "message": msg,
             "retryable": self.retryable,
             "user_actionable": self.user_actionable,
             "timestamp": self.timestamp,
@@ -995,8 +1013,8 @@ class NormalizedError(BaseModel):
             payload["suggested_action"] = action
             payload["next_action"] = action
 
-        if self.evidence:
-            payload["evidence"] = self.evidence
+        if evidence:
+            payload["evidence"] = evidence
 
         if self.original_error is not None:
             orig_dict: dict[str, Any] = {
