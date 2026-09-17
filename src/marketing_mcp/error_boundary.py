@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import functools
 import logging
-from collections.abc import Callable
-from typing import Any, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from marketing_mcp.error_classifier import classify_exception
 from marketing_mcp.errors import DomainError, NormalizedError

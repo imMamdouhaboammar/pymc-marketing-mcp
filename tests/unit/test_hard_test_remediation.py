@@ -22,9 +22,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import asdict
 from pathlib import Path
-from tempfile import TemporaryDirectory
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -32,16 +31,14 @@ import pytest
 from marketing_mcp.domain.decisions.allocation import apply_changes
 from marketing_mcp.domain.decisions.flighting import (
     build_official_response_evaluator,
-    compute_net_profit,
     optimize_flighting_schedule,
 )
-from marketing_mcp.errors import DomainError, ErrorCategory
+from marketing_mcp.errors import DomainError
 from marketing_mcp.schemas.models import (
+    BudgetChange,
     CLVModelRecord,
     EstimateCLVInput,
     FitMMMInput,
-    ModelRecord,
-    BudgetChange,
 )
 
 
@@ -286,12 +283,10 @@ class TestValidationAndErrorTaxonomy:
     def test_mmm_val_001_submit_job_validates_dataset(self, tmp_path):
         """Submitting an MMM job against an invalid dataset fails synchronously."""
         import asyncio
-        import json
-        import pandas as pd
+
         from marketing_mcp.app import Application
         from marketing_mcp.config import Settings
         from marketing_mcp.mcp.server import create_server
-        from marketing_mcp.schemas.models import FitMMMInput
 
         app = Application(
             Settings(
@@ -333,7 +328,7 @@ class TestValidationAndErrorTaxonomy:
     def test_list_jobs_tool_verbose_and_compact(self, tmp_path):
         """list_jobs returns compact summary by default and full record with verbose=True."""
         import asyncio
-        import json
+
         from marketing_mcp.app import Application
         from marketing_mcp.config import Settings
         from marketing_mcp.mcp.server import create_server
@@ -380,6 +375,7 @@ class TestValidationAndErrorTaxonomy:
         """Every tool next_actions must resolve to an exposed tool name."""
         import ast
         import glob
+
         from tests.integration.test_mcp_discovery_snapshot import EXPECTED_TOOLS
 
         for filepath in glob.glob("src/marketing_mcp/mcp/tools/*.py"):
@@ -405,10 +401,7 @@ class TestValidationAndErrorTaxonomy:
 
     def test_cv_001_decision_provenance(self):
         """cross_validate_mmm output contains full decision provenance contract."""
-        from marketing_mcp.adapters.pymc_marketing import PyMCMarketingAdapter
-
-        adapter = PyMCMarketingAdapter()
-        # Mock empty folds to verify provenance schema
+        # Verify provenance schema
         # Directly test internal computation logic
         mean_nrmse = 0.4796
         decision_provenance = {
@@ -427,8 +420,9 @@ class TestValidationAndErrorTaxonomy:
 
     def test_sens_001_prior_sensitivity_provenance(self):
         """evaluate_prior_sensitivity returns explicit ranking metric provenance."""
+        from unittest import mock
+
         from marketing_mcp.adapters.pymc_marketing import PyMCMarketingAdapter
-        import unittest.mock as mock
 
         adapter = PyMCMarketingAdapter()
         adapter.channel_contributions = mock.MagicMock(return_value={

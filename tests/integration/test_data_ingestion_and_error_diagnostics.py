@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from pathlib import Path
+
 import pytest
 
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings
-from marketing_mcp.mcp.context import ExecutionContext, stdio_context_provider
+from marketing_mcp.mcp.context import stdio_context_provider
 from marketing_mcp.mcp.server import create_server
 
 

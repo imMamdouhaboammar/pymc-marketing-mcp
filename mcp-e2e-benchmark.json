@@ -1,0 +1,245 @@
+{
+  "backends": {
+    "python": {
+      "cpu_seconds": 2.7522,
+      "engine": {
+        "backend": "python-standard",
+        "rust_accelerated": false,
+        "version": "python-fallback"
+      },
+      "iterations": 50,
+      "max_rss_mib": 300.67,
+      "native_counters": {
+        "native_admission_calls_total": 0,
+        "native_cancellation_calls_total": 0,
+        "native_fallback_calls_total": 0,
+        "native_job_admission_calls_total": 0,
+        "native_range_parse_calls_total": 0,
+        "native_serialization_calls_total": 0
+      },
+      "scenarios": {
+        "artifact_delivery": {
+          "latency": {
+            "mean_ms": 2.6108,
+            "p50_ms": 2.5483,
+            "p95_ms": 3.1863,
+            "p99_ms": 3.3121
+          },
+          "requested_range": "bytes=100-2000",
+          "throughput_requests_per_second": 383.02
+        },
+        "curves_lttb": {
+          "latency": {
+            "mean_ms": 0.5244,
+            "p50_ms": 0.5175,
+            "p95_ms": 0.5641,
+            "p99_ms": 0.7238
+          },
+          "source_points": 5000,
+          "target_points": 30,
+          "throughput_requests_per_second": 1906.87
+        },
+        "dataset_inspection": {
+          "latency": {
+            "mean_ms": 8.0486,
+            "p50_ms": 7.507,
+            "p95_ms": 11.34,
+            "p99_ms": 12.1203
+          },
+          "throughput_requests_per_second": 124.25
+        },
+        "job_polling": {
+          "latency": {
+            "mean_ms": 5.1055,
+            "p50_ms": 5.0691,
+            "p95_ms": 5.9677,
+            "p99_ms": 6.2799
+          },
+          "throughput_requests_per_second": 195.87
+        },
+        "job_submission": {
+          "latency": {
+            "mean_ms": 13.5795,
+            "p50_ms": 12.2393,
+            "p95_ms": 19.166,
+            "p99_ms": 19.4007
+          },
+          "throughput_requests_per_second": 73.64
+        },
+        "mcp_discovery": {
+          "latency": {
+            "mean_ms": 20.804,
+            "p50_ms": 16.5296,
+            "p95_ms": 61.6348,
+            "p99_ms": 90.725
+          },
+          "throughput_requests_per_second": 48.07,
+          "tool_count": 39
+        },
+        "tiny_tool": {
+          "latency": {
+            "mean_ms": 4.6323,
+            "p50_ms": 4.497,
+            "p95_ms": 5.7793,
+            "p99_ms": 6.8202
+          },
+          "throughput_requests_per_second": 215.87
+        }
+      },
+      "wall_seconds": 3.347,
+      "warmup": 5
+    },
+    "rust": {
+      "cpu_seconds": 3.0199,
+      "engine": {
+        "backend": "rust-native",
+        "rust_accelerated": true,
+        "version": "0.1.1"
+      },
+      "iterations": 50,
+      "max_rss_mib": 305.2,
+      "native_counters": {
+        "native_admission_calls_total": 277,
+        "native_cancellation_calls_total": 0,
+        "native_fallback_calls_total": 0,
+        "native_job_admission_calls_total": 55,
+        "native_range_parse_calls_total": 55,
+        "native_serialization_calls_total": 0
+      },
+      "scenarios": {
+        "artifact_delivery": {
+          "latency": {
+            "mean_ms": 3.8746,
+            "p50_ms": 3.7816,
+            "p95_ms": 4.7105,
+            "p99_ms": 5.5638
+          },
+          "requested_range": "bytes=100-2000",
+          "throughput_requests_per_second": 258.09
+        },
+        "curves_lttb": {
+          "latency": {
+            "mean_ms": 0.1151,
+            "p50_ms": 0.106,
+            "p95_ms": 0.1551,
+            "p99_ms": 0.1613
+          },
+          "source_points": 5000,
+          "target_points": 30,
+          "throughput_requests_per_second": 8686.4
+        },
+        "dataset_inspection": {
+          "latency": {
+            "mean_ms": 7.8845,
+            "p50_ms": 7.9613,
+            "p95_ms": 9.0809,
+            "p99_ms": 9.3364
+          },
+          "throughput_requests_per_second": 126.83
+        },
+        "job_polling": {
+          "latency": {
+            "mean_ms": 7.6215,
+            "p50_ms": 7.4004,
+            "p95_ms": 10.9352,
+            "p99_ms": 11.4863
+          },
+          "throughput_requests_per_second": 131.21
+        },
+        "job_submission": {
+          "latency": {
+            "mean_ms": 22.0153,
+            "p50_ms": 18.239,
+            "p95_ms": 33.0033,
+            "p99_ms": 109.7559
+          },
+          "throughput_requests_per_second": 45.42
+        },
+        "mcp_discovery": {
+          "latency": {
+            "mean_ms": 12.8106,
+            "p50_ms": 10.2982,
+            "p95_ms": 13.5766,
+            "p99_ms": 119.4204
+          },
+          "throughput_requests_per_second": 78.06,
+          "tool_count": 39
+        },
+        "tiny_tool": {
+          "latency": {
+            "mean_ms": 5.8319,
+            "p50_ms": 5.8033,
+            "p95_ms": 7.842,
+            "p99_ms": 9.6651
+          },
+          "throughput_requests_per_second": 171.47
+        }
+      },
+      "wall_seconds": 3.5163,
+      "warmup": 5
+    }
+  },
+  "comparison": {
+    "artifact_delivery": {
+      "python_mean_ms": 2.6108,
+      "python_p95_ms": 3.1863,
+      "rust_mean_ms": 3.8746,
+      "rust_p95_ms": 4.7105,
+      "speedup_mean": 0.67,
+      "speedup_p95": 0.68
+    },
+    "curves_lttb": {
+      "python_mean_ms": 0.5244,
+      "python_p95_ms": 0.5641,
+      "rust_mean_ms": 0.1151,
+      "rust_p95_ms": 0.1551,
+      "speedup_mean": 4.56,
+      "speedup_p95": 3.64
+    },
+    "dataset_inspection": {
+      "python_mean_ms": 8.0486,
+      "python_p95_ms": 11.34,
+      "rust_mean_ms": 7.8845,
+      "rust_p95_ms": 9.0809,
+      "speedup_mean": 1.02,
+      "speedup_p95": 1.25
+    },
+    "job_polling": {
+      "python_mean_ms": 5.1055,
+      "python_p95_ms": 5.9677,
+      "rust_mean_ms": 7.6215,
+      "rust_p95_ms": 10.9352,
+      "speedup_mean": 0.67,
+      "speedup_p95": 0.55
+    },
+    "job_submission": {
+      "python_mean_ms": 13.5795,
+      "python_p95_ms": 19.166,
+      "rust_mean_ms": 22.0153,
+      "rust_p95_ms": 33.0033,
+      "speedup_mean": 0.62,
+      "speedup_p95": 0.58
+    },
+    "mcp_discovery": {
+      "python_mean_ms": 20.804,
+      "python_p95_ms": 61.6348,
+      "rust_mean_ms": 12.8106,
+      "rust_p95_ms": 13.5766,
+      "speedup_mean": 1.62,
+      "speedup_p95": 4.54
+    },
+    "tiny_tool": {
+      "python_mean_ms": 4.6323,
+      "python_p95_ms": 5.7793,
+      "rust_mean_ms": 5.8319,
+      "rust_p95_ms": 7.842,
+      "speedup_mean": 0.79,
+      "speedup_p95": 0.74
+    }
+  },
+  "scope": "real local HTTP/SSE MCP transport across 7 operational scenarios",
+  "units": {
+    "latency": "milliseconds",
+    "memory": "MiB"
+  }
+}

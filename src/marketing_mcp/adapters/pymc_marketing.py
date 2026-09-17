@@ -691,7 +691,7 @@ class PyMCMarketingAdapter:
                     if hasattr(model, "X") and hasattr(model.X, "columns") and str(ch) in model.X.columns:
                         col_s = pd.to_numeric(model.X[str(ch)], errors="coerce").fillna(0)
                         pos_s = col_s[col_s > 0]
-                        n_nonzero = int(len(pos_s))
+                        n_nonzero = len(pos_s)
                         hist_min = round(float(pos_s.min()), 2) if n_nonzero > 0 else 0.0
                         hist_max = round(float(col_s.max()), 2)
                         hist_p95 = round(float(col_s.quantile(0.95)), 2)
@@ -992,7 +992,7 @@ class PyMCMarketingAdapter:
             "fallback_used": fallback_used,
             "initialization_strategy": winning_strategy,
             "constraint_validation": constraint_val,
-            "objective_value": float(getattr(result, "fun", 0.0)) if hasattr(result, "fun") and getattr(result, "fun") is not None else None,
+            "objective_value": float(getattr(result, "fun", 0.0)) if hasattr(result, "fun") and result.fun is not None else None,
             "planning_start": str(dates.min().date()),
             "planning_end": str(dates.max().date()),
         }

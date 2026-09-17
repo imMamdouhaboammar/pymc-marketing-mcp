@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
+
 import pytest
 
 from marketing_mcp.app import Application

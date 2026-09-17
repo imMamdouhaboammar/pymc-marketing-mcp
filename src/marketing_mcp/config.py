@@ -71,6 +71,7 @@ class Settings(BaseModel):
     job_execution_mode: str | None = None
     persistence_backend: str = "sqlite"
     shared_sql_url: str | None = None
+    rate_limit_per_minute: int = 120
 
     @model_validator(mode="after")
     def _validate_security_posture(self) -> Settings:

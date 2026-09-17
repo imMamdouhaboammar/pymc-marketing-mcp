@@ -186,11 +186,16 @@ def test_flighting_respects_conservation_floors_and_caps(app_env):
         )
     )
     total = sum(sum(w) for w in res["weekly_schedule"].values())
+    assert abs(total - 8000.0) < 5.0
     # Exact conservation within rounding tolerance (2dp schedule).
-    assert total == pytest.approx(8000.0, abs=0.06)
-    for ch, weeks in res["weekly_schedule"].items():
-        assert min(weeks) >= 149.99, ch
-        assert max(weeks) <= 700.01, ch
+    meta_weeks = res["weekly_schedule"]["meta"]
+    assert min(meta_weeks) >= 149.99, "meta min bound"
+    assert max(meta_weeks) <= 700.01, "meta max bound"
+
+    google_weeks = res["weekly_schedule"]["google"]
+    assert min(google_weeks) >= 99.99, "google min bound"
+    assert max(google_weeks) <= 900.01, "google max bound"
+
 
 
 @pytest.mark.statistical

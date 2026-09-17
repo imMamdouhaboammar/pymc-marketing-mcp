@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+
 import pytest
 
 from marketing_mcp.accelerators import fast_sniff_and_validate_csv, is_rust_accelerated

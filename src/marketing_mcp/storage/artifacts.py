@@ -6,6 +6,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from marketing_mcp.errors import DomainError
 from marketing_mcp.repositories.models import ArtifactRef
@@ -256,9 +257,10 @@ class LocalArtifactStore:
         if not bucket:
             return None
         try:
+            import importlib
             from datetime import timedelta
-            from google.cloud import storage
 
+            storage = importlib.import_module("google.cloud.storage")
             client = storage.Client()
             gcs_bucket = client.bucket(bucket)
             blob_name = f"artifacts/{self._namespace(ref.owner, ref.tenant_id)}/{ref.sha256}"

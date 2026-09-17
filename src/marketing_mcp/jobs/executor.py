@@ -97,7 +97,7 @@ class AsyncioJobExecutor:
             self.repo.update_job(
                 job.job_id,
                 JobStatus.FAILED,
-                error=norm.to_dict(),
+                error=norm.model_dump(),
             )
         finally:
             self._tasks.pop(job.job_id, None)

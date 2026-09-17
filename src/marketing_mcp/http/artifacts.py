@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import os
 import re
-from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse

@@ -379,3 +379,73 @@ def test_get_native_invocation_stats_has_all_counters():
     assert not missing, f"Missing counter keys: {missing}"
     for key, val in stats.items():
         assert isinstance(val, int) and val >= 0, f"{key} must be non-negative int, got {val}"
+
+
+def test_typed_boundary_request_and_response():
+    """Phase 4: BoundaryRequest and BoundaryResponse typed contract validation."""
+    from marketing_mcp.accelerators import (
+        BoundaryRequest,
+        BoundaryResponse,
+        create_boundary_request,
+        create_boundary_response,
+    )
+
+    req = create_boundary_request(
+        request_id="req-test-1",
+        correlation_id="corr-test-1",
+        tool_name="get_model_status",
+        arguments={"model_id": "mmm-123"},
+        tenant_id="tenant-x",
+        deadline_ms=10000,
+        cancellation_token="tok-1",
+    )
+    assert req.request_id == "req-test-1"
+    assert req.correlation_id == "corr-test-1"
+    assert req.tool_name == "get_model_status"
+    assert req.arguments == {"model_id": "mmm-123"}
+    assert req.tenant_id == "tenant-x"
+    assert req.deadline_ms == 10000
+    assert req.cancellation_token == "tok-1"
+
+    d = req.to_dict()
+    assert BoundaryRequest.from_dict(d) == req
+
+    resp = create_boundary_response(
+        correlation_id="corr-test-1",
+        status="ok",
+        data={"status": "ready"},
+        execution_time_ms=2.5,
+    )
+    assert resp.correlation_id == "corr-test-1"
+    assert resp.status == "ok"
+    assert resp.success is True
+    assert resp.data == {"status": "ready"}
+    assert resp.error is None
+    assert resp.execution_time_ms == 2.5
+
+    d_resp = resp.to_dict()
+    assert BoundaryResponse.from_dict(d_resp) == resp
+
+
+def test_production_decision_paths_do_not_import_experimental_rust_diagnostics():
+    """Phase 7: Production decision and diagnostic modules must never import experimental Rust functions."""
+    import inspect
+
+    import marketing_mcp.domain.decisions.allocation as alloc
+    import marketing_mcp.domain.decisions.flighting as flight
+    import marketing_mcp.domain.diagnostics.engine as diag
+    import marketing_mcp.services.decision_service as dec_svc
+
+    for mod in (alloc, flight, diag, dec_svc):
+        src = inspect.getsource(mod)
+        assert "fast_mcmc_diagnostics" not in src, (
+            f"Module {mod.__name__} illegally references fast_mcmc_diagnostics. "
+            "Python/ArviZ is the sole statistical authority for production decisions."
+        )
+        assert "EXPERIMENTAL_fast_mcmc_diagnostics" not in src, (
+            f"Module {mod.__name__} illegally references EXPERIMENTAL_fast_mcmc_diagnostics."
+        )
+        assert "fast_compute_split_rhat" not in src, (
+            f"Module {mod.__name__} illegally references fast_compute_split_rhat."
+        )
+

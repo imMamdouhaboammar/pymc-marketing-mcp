@@ -83,7 +83,10 @@ def create_http_app(
     # supplies rate limiting/correlation next, then native admission rejects malformed
     # authorized MCP traffic before the SDK parses it.
     app.add_middleware(NativeAdmissionMiddleware, mcp_path="/mcp")
-    app.add_middleware(RequestSafetyMiddleware)
+    app.add_middleware(
+        RequestSafetyMiddleware,
+        requests_per_minute=getattr(actual_settings, "rate_limit_per_minute", 120),
+    )
     app.add_middleware(MCPAuthMiddleware, auth_manager=auth_mgr)
 
     async def health_check(_request):

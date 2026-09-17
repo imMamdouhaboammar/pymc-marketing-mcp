@@ -10,13 +10,13 @@ Verifies platform behavior against the 6 standardized harsh fixtures:
 """
 
 from pathlib import Path
+
 import pandas as pd
 import pytest
 
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings
 from marketing_mcp.domain.datasets.validation import validate_mmm_dataset
-
 
 FIXTURE_DIR = Path(__file__).parents[2] / "migration" / "baselines" / "golden_datasets"
 

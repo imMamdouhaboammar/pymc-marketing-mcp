@@ -1,9 +1,9 @@
-import os
 import pytest
 from starlette.testclient import TestClient
+
 from marketing_mcp.app import Application
-from marketing_mcp.config import Settings
 from marketing_mcp.cli import create_http_app
+from marketing_mcp.config import Settings
 from marketing_mcp.errors import DomainError
 
 
@@ -74,7 +74,7 @@ def test_export_artifact_never_leaks_server_api_key(tmp_path, monkeypatch):
     assert secret_key not in result_str, "CRITICAL: Server API Key leaked into export payload!"
     assert "Authorization: Bearer sk-super-secret" not in result["sandbox_curl_command"]
     assert "Authorization: Bearer sk-super-secret" not in result["python_snippet"]
-    
+
     # Must provide scoped download token or signed URL
     assert "download_url" in result
     assert "download_token" in result or "is_signed_url" in result

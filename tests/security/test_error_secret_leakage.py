@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
-from marketing_mcp.errors import DomainError, ErrorCategory, NormalizedError
 from marketing_mcp.error_boundary import mcp_error_boundary
+from marketing_mcp.errors import DomainError
 from marketing_mcp.security.redaction import redact_string, redact_url
 
 

@@ -707,3 +707,36 @@ def fast_acknowledge_cancellation(job_id: str, in_process: bool = True) -> dict[
     if _IS_RUST_AVAILABLE and hasattr(_rust_core, "fast_acknowledge_cancellation"):
         return _rust_core.fast_acknowledge_cancellation(job_id, in_process)
     return _py_fast_acknowledge_cancellation(job_id, in_process)
+
+
+# ---------------------------------------------------------------------------
+# Typed Boundary Re-exports (Phase 4)
+# ---------------------------------------------------------------------------
+from marketing_mcp.accelerators.boundary import (  # noqa: E402
+    BoundaryRequest,
+    BoundaryResponse,
+    create_boundary_request,
+    create_boundary_response,
+)
+
+__all__ = [
+    "NATIVE_FALLBACK_COUNT_REF",
+    "BoundaryRequest",
+    "BoundaryResponse",
+    "compress_curve_lttb",
+    "create_boundary_request",
+    "create_boundary_response",
+    "fast_acknowledge_cancellation",
+    "fast_admit_job",
+    "fast_admit_request",
+    "fast_compute_quantiles",
+    "fast_parse_range_header",
+    "fast_serialize_json",
+    "fast_serialize_json_bytes",
+    "fast_sniff_and_validate_csv",
+    "generate_sparkline",
+    "get_engine_info",
+    "get_native_invocation_stats",
+    "is_rust_accelerated",
+]
+

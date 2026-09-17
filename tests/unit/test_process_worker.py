@@ -13,8 +13,8 @@ from marketing_mcp.jobs.executor import EnqueueOnlyJobExecutor
 from marketing_mcp.jobs.models import JobRecord, JobStatus
 from marketing_mcp.jobs.process_worker import ProcessJobWorker
 from marketing_mcp.jobs.repository import SQLiteJobRepository
-from marketing_mcp.persistence import SQLitePersistenceBackend
 from marketing_mcp.jobs.worker_cli import build_fit_mmm_handler
+from marketing_mcp.persistence import SQLitePersistenceBackend
 from marketing_mcp.storage.migrations import MigrationRunner
 
 

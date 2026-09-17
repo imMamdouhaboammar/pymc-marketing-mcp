@@ -9,6 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from marketing_mcp import __version__
+from marketing_mcp.accelerators import get_engine_info
 from marketing_mcp.app import Application
 
 SERVICE_NAME = "pymc-marketing-mcp"
@@ -24,9 +25,6 @@ def _dependency_check(checks: dict[str, Any], name: str, probe) -> bool:
         return False
     checks[name] = {"status": "ok"}
     return True
-
-
-from marketing_mcp.accelerators import get_engine_info
 
 
 def check_readiness(app: Application) -> tuple[bool, dict[str, Any]]:

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-from pathlib import Path
 import pytest
 
+from marketing_mcp.accelerators import get_engine_info, is_rust_accelerated
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings
 from marketing_mcp.mcp.server import create_server
-from marketing_mcp.accelerators import is_rust_accelerated, get_engine_info
 
 
 @pytest.fixture
@@ -31,7 +29,7 @@ def test_rust_acceleration_active():
 
 
 def test_e2e_mcp_dataset_registration_with_rust(mcp_app):
-    server = create_server(mcp_app)
+    assert create_server(mcp_app) is not None
 
     # Ingest a sample CSV via direct content payload
     sample_csv = (

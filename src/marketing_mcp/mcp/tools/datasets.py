@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -14,12 +18,6 @@ from marketing_mcp.mcp.envelope import env
 from marketing_mcp.security import safe_ingest_path
 from marketing_mcp.security.ownership import authorize_dataset
 from marketing_mcp.security.policy import require_scope, scopes_for_tool
-
-
-import base64
-import urllib.error
-import urllib.parse
-import urllib.request
 
 
 def register_datasets_tools(mcp, app: Application, context_provider: Any = None) -> None:
@@ -210,7 +208,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                             "rows": d.get("rows"),
                             "format": d.get("format"),
                             "created_at": d.get("created_at"),
-                            "fingerprint": d.get("fingerprint")[:12] if d.get("fingerprint") else None,
+                            "fingerprint": str(d.get("fingerprint"))[:12] if d.get("fingerprint") is not None else None,
                         }
                         for d in registered
                     ],
@@ -280,7 +278,7 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 dims or [],
             )
             summary = {"dataset_id": dataset_id, "valid_for_modeling": r.valid_for_modeling}
-            evidence = {"findings": [f.model_dump() for f in r.findings]}
+            evidence: dict[str, Any] = {"findings": [f.model_dump() for f in r.findings]}
             if r.temporal_summary:
                 summary.update(r.temporal_summary)
                 evidence["temporal_summary"] = r.temporal_summary

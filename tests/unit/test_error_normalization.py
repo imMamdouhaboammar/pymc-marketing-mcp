@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import sqlite3
 import urllib.error
+
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
+from marketing_mcp.error_boundary import mcp_error_boundary
+from marketing_mcp.error_classifier import classify_exception, extract_cause_chain
 from marketing_mcp.errors import (
     ERROR_CATALOG,
     DomainError,
@@ -17,9 +19,7 @@ from marketing_mcp.errors import (
     generate_error_id,
     get_error_definition,
 )
-from marketing_mcp.error_classifier import classify_exception, extract_cause_chain
-from marketing_mcp.error_boundary import mcp_error_boundary
-from marketing_mcp.observability.errors import ErrorDiagnosticRegistry, GLOBAL_ERROR_REGISTRY
+from marketing_mcp.observability.errors import GLOBAL_ERROR_REGISTRY, ErrorDiagnosticRegistry
 
 
 class DummySchema(BaseModel):

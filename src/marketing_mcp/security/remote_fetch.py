@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
+
 from marketing_mcp.errors import DomainError
 from marketing_mcp.security.redaction import redact_url
 
@@ -117,7 +118,6 @@ def safe_fetch_remote_dataset(
                         evidence={"status": status, "url": current_url},
                     )
 
-                content_type = resp.headers.get("Content-Type", "")
                 chunks = []
                 total_bytes = 0
                 while True:

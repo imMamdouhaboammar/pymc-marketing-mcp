@@ -13,17 +13,10 @@ Exhaustive regression and adversarial edge cases:
 
 from __future__ import annotations
 
-import hashlib
-from dataclasses import asdict
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from typing import Any
+import sqlite3
 
-import numpy as np
 import pandas as pd
 import pytest
-
-import sqlite3
 
 from marketing_mcp.domain.decisions.flighting import (
     build_official_response_evaluator,
@@ -36,7 +29,6 @@ from marketing_mcp.jobs.models import JobRecord, JobStatus
 from marketing_mcp.jobs.repository import SQLiteJobRepository
 from marketing_mcp.jobs.service import JobService
 from marketing_mcp.jobs.state import can_transition, validate_transition
-from marketing_mcp.storage.metadata import SQLiteMetadataRepository
 from marketing_mcp.schemas.models import (
     CLVModelRecord,
     EstimateCLVInput,
@@ -45,8 +37,8 @@ from marketing_mcp.schemas.models import (
     PredictExpectedPurchasesInput,
 )
 from marketing_mcp.services.clv_service import CLVService
+from marketing_mcp.storage.metadata import SQLiteMetadataRepository
 from marketing_mcp.storage.migrations import MigrationRunner
-
 
 # =====================================================================
 # 1. Decision & Flighting Optimization Adversarial Tests (DEC-001/002)
@@ -524,8 +516,7 @@ class TestResponseCurvesEmpiricalSupport:
         def classify_channel(ch_name: str, max_eval_spend: float):
             col_s = pd.to_numeric(df[ch_name], errors="coerce").fillna(0)
             pos_s = col_s[col_s > 0]
-            n_nonzero = int(len(pos_s))
-            hist_min = round(float(pos_s.min()), 2) if n_nonzero > 0 else 0.0
+            n_nonzero = len(pos_s)
             hist_max = round(float(col_s.max()), 2)
 
             if n_nonzero == 0:

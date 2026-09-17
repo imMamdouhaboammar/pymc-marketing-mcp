@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -13,7 +14,6 @@ from marketing_mcp.mcp.server import create_server
 from marketing_mcp.schemas.models import DatasetValidationResult, Finding
 from marketing_mcp.services.decision_service import DecisionService
 from marketing_mcp.services.plotting_service import PlottingService
-
 
 # ---------------------------------------------------------------------------
 # Finding A: Schema Discoverability for register_dataset

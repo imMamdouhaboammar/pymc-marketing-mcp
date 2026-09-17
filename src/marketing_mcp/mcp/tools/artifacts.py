@@ -104,9 +104,10 @@ def register_artifacts_tools(mcp, app: Application, context_provider=None) -> No
         export_payload["metadata"] = meta_info
 
         # Record in artifact_lifecycle for TTL tracking and server cleanup
-        if hasattr(app.persistence, "metadata") and hasattr(app.persistence.metadata, "conn"):
+        metadata_repo = getattr(app.persistence, "metadata", None)
+        conn = getattr(metadata_repo, "conn", None) if metadata_repo is not None else None
+        if conn is not None:
             try:
-                conn = app.persistence.metadata.conn
                 now_dt = datetime.now(UTC)
                 expires_dt = now_dt + timedelta(hours=24)
                 conn.execute(

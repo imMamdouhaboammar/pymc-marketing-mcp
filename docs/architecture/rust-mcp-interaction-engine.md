@@ -55,18 +55,18 @@ AI Client (Cursor / Claude / ChatGPT)
 │                Rust MCP Interaction Engine                  │
 │               (crates/marketing_mcp_fast)                   │
 ├─────────────────────────────────────────────────────────────┤
-│ • Protocol Framing & Size Enforcement (Max 50MB)            │
+│ • Protocol Framing & Size Enforcement (10 MB request limit) │
 │ • Early Malformed Payload Fast-Rejection                    │
 │ • Correlation & Request ID Tracking                         │
 │ • Zero-Copy Native JSON Serialization (serde_json)          │
 │ • LTTB Transport Compression for Dense Curves               │
-│ • Range-Request (206) & Chunked Artifact Streaming          │
-│ • SIMD SHA-256 Checksums                                    │
-│ • Truthful Job Cancellation Propagation                     │
+│ • HTTP Range-Header Parsing (fast_parse_range_header)       │
+│ • Truthful Job Admission & Cancellation Acknowledgment      │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                │ Typed Python Boundary (PyO3)
-                               │ (BridgeRequest -> BridgeResponse)
+                               │ (BoundaryRequest -> BoundaryResponse)
+                               │ (InteractionRequest -> InteractionResponse)
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 Python Application Services                 │
@@ -98,11 +98,11 @@ AI Client (Cursor / Claude / ChatGPT)
 ### Rust Owns:
 - Raw byte validation, delimiter detection, and CSV parsing preflight.
 - MCP protocol framing and JSON-RPC structure verification.
-- Enforcing request size limits and early malformed request rejection.
+- Enforcing request size limits (10 MB aligned) and early malformed request rejection.
 - Zero-copy JSON serialization of typed envelopes via `serde_json`.
 - LTTB downsampling of visual curves for transport representations.
-- Chunked artifact streaming, HTTP 206 Partial Content range parsing, and SHA-256 digests.
-- Sub-millisecond async job admission acknowledgment.
+- HTTP 206 Partial Content Range header parsing via `fast_parse_range_header`.
+- Sub-millisecond async job admission check (`fast_admit_job`) with `adm-*` interaction tokens.
 - Interaction-level cancellation tracking.
 
 ### Python Owns:
@@ -161,8 +161,8 @@ class BoundaryResponse:
 ## 5. Data, Error, Job & Cancellation Flows
 
 ### Data Flow
-1. **Inbound**: The HTTP/stdio payload arrives as raw bytes. Rust validates content-length ($\le 50\text{ MB}$) and parses JSON framing in native memory.
-2. **Dispatch**: Rust maps `tool_name` to the Python handler, passing normalized arguments.
+1. **Inbound**: The HTTP/stdio payload arrives as raw bytes. Rust validates content-length ($\le 10\text{ MB}$) and parses JSON framing in native memory.
+2. **Dispatch**: Rust maps `tool_name` to the Python handler, passing normalized arguments via `BoundaryRequest` / `InteractionRequest`.
 3. **Computation**: Python executes domain logic or queries the database.
 4. **Outbound**: Python passes the resulting envelope to Rust; Rust applies LTTB compression to any large curves, computes unicode sparklines for metrics, and serializes the final envelope directly to bytes with `serde_json`.
 
@@ -172,17 +172,16 @@ class BoundaryResponse:
 - Rust transport errors (`REQUEST_TOO_LARGE`, `INVALID_JSON_RPC`, `TIMEOUT`) emit the exact same normalized JSON schema as Python errors.
 
 ### Job & Cancellation Flow
-1. **Submission**: AI Client requests `fit_mmm`. Rust admits request, generates `req-xxxx` and `job-xxxx`, registers the pending job in Python, and immediately returns `accepted` within 0.5 ms.
-2. **Polling**: Client calls `poll_job_progress`. Rust returns current progress directly from the fast status cache.
-3. **Cancellation**: If client calls `cancel_job` or disconnects, Rust marks the interaction handle as cancelled and invokes Python worker task cancellation. A job is only reported as cancelled once the Python worker acknowledges task termination.
+1. **Submission**: AI Client requests `submit_fit_mmm_job`. Rust admits request, generates interaction-level `adm-xxxx` token, validates payload bounds, registers the pending job in Python JobService (which assigns the canonical `job-xxxx` ID), and returns queued status.
+2. **Polling**: Client calls `poll_job_progress`. Python returns current progress directly from the repository.
+3. **Cancellation**: If client calls `cancel_job`, Python JobService transitions the job to `cancelling`, and Rust `fast_acknowledge_cancellation` fences and acknowledges the state. A job transitions to terminal `cancelled` once the worker observes cancellation.
 
 ---
 
 ## 6. Streaming & Artifact Delivery
 
-- **Range Requests (HTTP 206)**: Rust parses `Range: bytes=start-end`, validates against file size, and slices binary buffers without loading the complete file into RAM.
-- **SIMD Hashing**: Rust computes SHA-256 digests over 1MB chunks using streaming cryptographic primitives.
-- **Bounded Buffers**: Buffer allocation is capped at 1MB per active stream with backpressure, preventing high concurrency memory spikes.
+- **Range Requests (HTTP 206)**: Rust parses `Range: bytes=start-end` via `fast_parse_range_header`, validating against file size.
+- **Streaming & Cryptographic Audit**: Artifact delivery uses Python ASGI `StreamingResponse` (1MB chunks) with backpressure managed by the ASGI server. Hashing uses Python standard library `hashlib.sha256` (SIMD SHA-256 claims are removed as ungrounded).
 
 ---
 

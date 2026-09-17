@@ -415,6 +415,7 @@ fn fast_serialize_json_bytes(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
 }
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 #[pyo3(signature = (request_id=None, correlation_id=None, tool_name=None, arguments_json=None, tenant_id=None, deadline_ms=None, cancellation_token=None))]
 fn fast_create_interaction_request(
     py: Python,

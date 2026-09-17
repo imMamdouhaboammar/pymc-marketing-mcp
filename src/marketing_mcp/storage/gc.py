@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import tempfile
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -99,7 +98,7 @@ class StorageGarbageCollector:
                         d = json.loads(row[0])
                         if "fingerprint" in d:
                             referenced_digests.add(d["fingerprint"])
-                        if "artifact_ref" in d and d["artifact_ref"]:
+                        if d.get("artifact_ref"):
                             referenced_digests.add(d["artifact_ref"].get("sha256", ""))
                     except Exception as exc:
                         gc_errors.append(f"Skipping corrupt dataset payload: {exc}")
@@ -107,7 +106,7 @@ class StorageGarbageCollector:
                 for row in self.metadata_conn.execute("SELECT payload FROM models").fetchall():
                     try:
                         d = json.loads(row[0])
-                        if "artifact_ref" in d and d["artifact_ref"]:
+                        if d.get("artifact_ref"):
                             referenced_digests.add(d["artifact_ref"].get("sha256", ""))
                     except Exception as exc:
                         gc_errors.append(f"Skipping corrupt model payload: {exc}")
@@ -115,7 +114,7 @@ class StorageGarbageCollector:
                 for row in self.metadata_conn.execute("SELECT result FROM jobs WHERE result IS NOT NULL").fetchall():
                     try:
                         d = json.loads(row[0])
-                        if "artifact_ref" in d and d["artifact_ref"]:
+                        if d.get("artifact_ref"):
                             referenced_digests.add(d["artifact_ref"].get("sha256", ""))
                     except Exception as exc:
                         gc_errors.append(f"Skipping corrupt job result: {exc}")

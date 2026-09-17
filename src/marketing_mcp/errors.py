@@ -1150,8 +1150,8 @@ class DomainError(Exception):
 
 
 __all__ = [
-    "DomainError",
     "ERROR_CATALOG",
+    "DomainError",
     "ErrorCategory",
     "ErrorDefinition",
     "ErrorSeverity",

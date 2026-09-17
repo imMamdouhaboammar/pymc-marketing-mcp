@@ -11,8 +11,8 @@ Verifies:
 from __future__ import annotations
 
 from typing import Any
+
 import pandas as pd
-import pytest
 
 from marketing_mcp.adapters.pymc_marketing import PyMCMarketingAdapter
 
