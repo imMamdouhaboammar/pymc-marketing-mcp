@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -68,9 +69,12 @@ def _nodeids_from_collection_output(output: str) -> tuple[str, ...]:
 
 def collect_statistical_nodeids(repo_root: Path) -> tuple[str, ...]:
     """Return the actual repository-wide collection carrying the statistical marker."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = f"{repo_root / 'src'}:{env.get('PYTHONPATH', '')}"
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q", "-m", "statistical"],
         cwd=repo_root,
+        env=env,
         check=False,
         capture_output=True,
         text=True,

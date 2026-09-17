@@ -1,17 +1,20 @@
 # End-to-End E-Commerce MMM Walkthrough
 
-This walkthrough demonstrates the full 6-stage lifecycle for an e-commerce retailer evaluating 104 weeks of marketing spend across 4 channels.
+This walkthrough demonstrates the full lifecycle for an e-commerce brand evaluating marketing spend across channels.
 
 ---
 
 ### Step 1: Ingest & Inspection
-We register the CSV data containing weekly observations:
+We register the dataset using `register_dataset`:
 
 **Tool Call:**
 ```json
 {
   "tool": "register_dataset",
-  "arguments": {"path": "data/ecommerce_weekly_spend.csv"}
+  "arguments": {
+    "file_path": "data/ecommerce_weekly_spend.csv",
+    "format": "csv"
+  }
 }
 ```
 **Tool Response:**
@@ -24,7 +27,7 @@ We register the CSV data containing weekly observations:
 }
 ```
 
-We inspect the dataset to ensure inferred frequency is weekly (`W-MON`) with zero missing date periods:
+We inspect the dataset:
 **Tool Call:**
 ```json
 {
@@ -35,8 +38,8 @@ We inspect the dataset to ensure inferred frequency is weekly (`W-MON`) with zer
 
 ---
 
-### Step 2: Statistical Validation
-We run pre-fit econometric checks:
+### Step 2: Validation Gate
+We validate column roles and pre-fit requirements:
 **Tool Call:**
 ```json
 {
@@ -54,20 +57,15 @@ We run pre-fit econometric checks:
 **Tool Response:**
 ```json
 {
-  "status": "valid",
-  "checks": {
-    "sample_size": {"status": "passed", "n_obs": 104},
-    "zero_variance": {"status": "passed"},
-    "collinearity": {"status": "passed", "max_vif": 2.1},
-    "non_negative_spend": {"status": "passed"}
-  }
+  "is_valid": true,
+  "findings": []
 }
 ```
 
 ---
 
-### Step 3: Model Formulation & Fitting
-We configure Geometric adstock for digital channels and Delayed adstock for TV, with Logistic saturation across channels:
+### Step 3: Model Fitting
+We fit the Bayesian MMM with appropriate transformation structure:
 **Tool Call:**
 ```json
 {
@@ -81,12 +79,6 @@ We configure Geometric adstock for digital channels and Delayed adstock for TV, 
     "yearly_seasonality": 2,
     "adstock": {"type": "geometric", "l_max": 8},
     "saturation": {"type": "logistic"},
-    "channel_priors": {
-      "tv_spend": {
-        "adstock": {"type": "delayed", "l_max": 12},
-        "saturation": {"type": "hill"}
-      }
-    },
     "sampler": {
       "draws": 1000,
       "tune": 1000,
@@ -101,15 +93,14 @@ We configure Geometric adstock for digital channels and Delayed adstock for TV, 
 ```json
 {
   "model_id": "mmm_ecom_v1",
-  "status": "fitted",
-  "sampling_duration_seconds": 45.2
+  "status": "fitted"
 }
 ```
 
 ---
 
-### Step 4: Diagnostic Gate
-We immediately evaluate MCMC health:
+### Step 4: Diagnostic Gate (Mandatory)
+Before any downstream interpretation or budget optimization, we evaluate diagnostics:
 **Tool Call:**
 ```json
 {
@@ -124,16 +115,16 @@ We immediately evaluate MCMC health:
   "decision_status": "approved",
   "divergences": 0,
   "max_rhat": 1.004,
-  "min_ess_bulk": 1120.5,
-  "posterior_predictive_coverage": 0.942,
+  "min_ess": 1120.5,
+  "failures": [],
   "warnings": []
 }
 ```
-`decision_status: "approved"` confirms that convergence is clean and downstream decision tools are unlocked.
 
 ---
 
-### Step 5: Posterior Contributions & iROAS
+### Step 5: Incremental Evidence
+With `decision_status: "approved"`, decision-gated tools are unlocked:
 **Tool Call:**
 ```json
 {
@@ -141,30 +132,8 @@ We immediately evaluate MCMC health:
   "arguments": {"model_id": "mmm_ecom_v1"}
 }
 ```
-**Tool Response:**
-```json
-{
-  "channels": {
-    "search_spend": {
-      "total_iroas": {"median": 3.42, "hdi_94": [2.95, 3.91]},
-      "marginal_iroas": {"median": 2.10, "hdi_94": [1.72, 2.48]},
-      "prob_profitable": 0.999
-    },
-    "meta_spend": {
-      "total_iroas": {"median": 2.65, "hdi_94": [2.20, 3.12]},
-      "marginal_iroas": {"median": 1.75, "hdi_94": [1.38, 2.12]},
-      "prob_profitable": 0.995
-    },
-    "tv_spend": {
-      "total_iroas": {"median": 0.85, "hdi_94": [0.45, 1.25]},
-      "marginal_iroas": {"median": 0.42, "hdi_94": [0.18, 0.68]},
-      "prob_profitable": 0.320
-    }
-  }
-}
-```
 
 ---
 
-### Step 6: Strategic Delivery
-The findings are synthesized into `templates/executive-brief.md` highlighting the strategic reallocation of TV budget into Search and Meta.
+### Step 6: Artifact Delivery
+Results are packaged into posterior plots and executive summaries using `pymc-artifact-delivery`.

@@ -1,19 +1,73 @@
 {
+  "schema_version": "1",
   "name": "pymc-lift-calibration",
-  "version": "2.0.0",
-  "description": "Lift test calibration, incrementality triangulation, and model lineage for PyMC-Marketing",
-  "entrypoint": "SKILL.md",
+  "version": "2.1.0",
+  "domain": "mmm-calibration",
+  "summary": "Calibrate an existing MMM with experimental lift measurements while preserving lineage and requiring fresh diagnosis of the child model.",
+  "triggers": [
+    "calibrate this MMM with our lift test",
+    "incorporate this geo experiment",
+    "reconcile MMM with an experiment"
+  ],
+  "negative_triggers": [
+    "fit the first MMM",
+    "optimize this already diagnosed model",
+    "estimate customer CLV"
+  ],
+  "primary_tools": [
+    "calibrate_mmm"
+  ],
+  "secondary_tools": [
+    "get_model_status"
+  ],
+  "deprecated_tools": [],
+  "administrative_tools": [],
+  "required_resources": [
+    "marketing://models/{model_id}",
+    "marketing://models/{model_id}/lineage",
+    "marketing://models/{model_id}/diagnostics"
+  ],
+  "prerequisites": [
+    "completed parent MMM and experimental measurements in the calibrate_mmm contract, including measurement uncertainty"
+  ],
+  "gates": [
+    "calibrated_child_rediagnosed"
+  ],
+  "forbidden_before": [
+    {
+      "operations": [
+        "get_incremental_roas",
+        "simulate_budget",
+        "optimize_budget",
+        "optimize_flighting"
+      ],
+      "until": "calibrated_child_rediagnosed"
+    }
+  ],
+  "fallback_skills": [
+    "pymc-mmm-workflow"
+  ],
+  "continuations": [
+    "pymc-diagnostics-gate",
+    "pymc-model-validation",
+    "pymc-incrementality-evidence",
+    "pymc-budget-optimization"
+  ],
+  "maturity": "stable",
+  "authoritative_sources": [
+    "marketing://skills/references/scientific-answer-contract",
+    "marketing://skills/references/scientific-source-ledger"
+  ],
   "files": {
     "references": [
-      "references/experiment-design.md",
-      "references/triangulation-framework.md"
-    ],
-    "templates": [
-      "templates/lift-test-input.json",
-      "templates/calibration-checklist.md"
+      "references/experiment-design.md"
     ],
     "examples": [
       "examples/tv-geo-experiment-calibration-walkthrough.md"
+    ],
+    "templates": [
+      "templates/calibration-checklist.md",
+      "templates/lift-test-input.json"
     ],
     "evals": [
       "evals/evals.json"

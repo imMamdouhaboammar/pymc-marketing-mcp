@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Validate lift test measurement inputs and calculate standard error sigma from confidence intervals.
-
-Ensures payload matches PyMC-Marketing LiftTestMeasurement schema.
-"""
+"""Validate lift test measurement parameters and derive standard error sigma."""
 
 from __future__ import annotations
 
@@ -27,7 +24,7 @@ def compute_lift_measurement(
     if baseline_x < 0:
         return {"valid": False, "error": "baseline_x cannot be negative"}
 
-    # Derive delta_y and sigma from CI if provided
+    # Derive delta_y and sigma from symmetric Gaussian CI if provided
     if ci_lower is not None and ci_upper is not None:
         if ci_lower >= ci_upper:
             return {"valid": False, "error": "ci_lower must be less than ci_upper"}
@@ -71,14 +68,14 @@ def compute_lift_measurement(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Validate lift test measurement and calculate sigma.")
+    parser = argparse.ArgumentParser(description="Validate lift test measurement.")
     parser.add_argument("--channel", required=True, help="Marketing channel name")
     parser.add_argument("--baseline-x", type=float, required=True, help="Baseline spend x")
     parser.add_argument("--delta-x", type=float, required=True, help="Incremental spend delta_x")
     parser.add_argument("--delta-y", type=float, help="Incremental KPI delta_y")
     parser.add_argument("--sigma", type=float, help="Standard error of delta_y")
-    parser.add_argument("--ci-lower", type=float, help="Lower bound of confidence interval")
-    parser.add_argument("--ci-upper", type=float, help="Upper bound of confidence interval")
+    parser.add_argument("--ci-lower", type=float, help="Lower bound of CI")
+    parser.add_argument("--ci-upper", type=float, help="Upper bound of CI")
     parser.add_argument("--confidence", type=float, default=0.95, help="Confidence level (e.g. 0.95)")
     parser.add_argument("--desc", help="Description of experiment")
     args = parser.parse_args()

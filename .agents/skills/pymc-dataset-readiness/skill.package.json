@@ -1,0 +1,54 @@
+{
+  "schema_version": "1",
+  "name": "pymc-dataset-readiness",
+  "version": "1.0.0",
+  "domain": "dataset-readiness",
+  "summary": "Register, inspect, and validate datasets using the server\u2019s actual ingestion and MMM validation contract.",
+  "triggers": [
+    "inspect this marketing dataset",
+    "validate my MMM data",
+    "register this CSV for MMM"
+  ],
+  "negative_triggers": [
+    "fit the validated MMM",
+    "diagnose this fitted model",
+    "estimate customer lifetime value"
+  ],
+  "primary_tools": [
+    "register_dataset",
+    "list_datasets",
+    "inspect_dataset",
+    "validate_dataset",
+    "transform_ad_export"
+  ],
+  "secondary_tools": [],
+  "deprecated_tools": [],
+  "administrative_tools": [],
+  "required_resources": [
+    "marketing://datasets/{dataset_id}"
+  ],
+  "prerequisites": [],
+  "gates": [],
+  "forbidden_before": [],
+  "fallback_skills": [],
+  "continuations": [
+    "pymc-mmm-workflow",
+    "pymc-clv-customer-analytics"
+  ],
+  "maturity": "stable",
+  "authoritative_sources": [
+    "marketing://skills/references/scientific-answer-contract",
+    "marketing://skills/references/scientific-source-ledger"
+  ],
+  "files": {
+    "references": [],
+    "examples": [],
+    "templates": [],
+    "evals": [
+      "evals/evals.json"
+    ],
+    "scripts": [
+      "scripts/dataset_precheck.py"
+    ]
+  }
+}

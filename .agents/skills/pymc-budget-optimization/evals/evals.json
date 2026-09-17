@@ -1,51 +1,78 @@
-[
-  {
-    "id": "opt-trigger-001",
-    "type": "should_trigger",
-    "query": "How should we allocate our $600k marketing budget across Google, Meta, and TV for maximum revenue?",
-    "expected": "Activates pymc-budget-optimization, verifies model decision gate, and calls optimize_budget with constraints.",
-    "forbidden": "Does not allocate based on historical average ROAS."
-  },
-  {
-    "id": "opt-trigger-002",
-    "type": "should_trigger",
-    "query": "What happens to total sales if we reduce our TV spend by 30% and reinvest that money into Google Non-Brand?",
-    "expected": "Loads pymc-budget-optimization and runs simulate_budget with the counterfactual changes.",
-    "forbidden": "Does not substitute optimize_budget for simulate_budget."
-  },
-  {
-    "id": "opt-trigger-003",
-    "type": "should_trigger",
-    "query": "Build a 12-week dynamic flighting schedule with a pulsed TV pattern and frontloaded Meta spend.",
-    "expected": "Calls optimize_flighting with weekly planning horizon and specified pattern constraints.",
-    "forbidden": "Does not ignore adstock carryover in weekly scheduling."
-  },
-  {
-    "id": "opt-negative-001",
-    "type": "should_not_trigger",
-    "query": "Fit a new Bayesian MMM model on data/media_2026.csv with 4 chains.",
-    "expected": "Routes to pymc-mmm-workflow.",
-    "forbidden": "Does not attempt budget optimization before model fit."
-  },
-  {
-    "id": "opt-negative-002",
-    "type": "should_not_trigger",
-    "query": "Model mmm_q3 was rejected with 15 divergences. How do I fix the sampler?",
-    "expected": "Routes to pymc-diagnostics-gate.",
-    "forbidden": "Does not run optimize_budget on rejected model."
-  },
-  {
-    "id": "opt-behavioral-001",
-    "type": "behavioral",
-    "query": "We want to simulate spending $2M on TikTok next month, which is 5x higher than we ever spent historically.",
-    "expected": "Executes simulate_budget, identifies EXTRAPOLATION_RISK, highlights wide posterior uncertainty intervals, and advises incrementality testing.",
-    "forbidden": "Never hides or omits extrapolation warnings from output."
-  },
-  {
-    "id": "opt-behavioral-002",
-    "type": "behavioral",
-    "query": "Optimize our $300k budget, but our channel minimum floors sum to $450k.",
-    "expected": "Identifies constraint infeasibility before execution, reports mathematical conflict to user, and requests adjusted parameters.",
-    "forbidden": "Never silently relaxes minimum spend constraints without user consent."
-  }
-]
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-budget-optimization-trigger",
+      "type": "should_trigger",
+      "query": "optimize my media budget",
+      "expected_skill": "pymc-budget-optimization"
+    },
+    {
+      "id": "pymc-budget-optimization-near-miss",
+      "type": "should_not_trigger",
+      "query": "why is this MMM rejected",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-budget-optimization-ambiguous",
+      "type": "ambiguous",
+      "query": "Meta looks efficient; should I simulate a 20% increase or optimize the whole budget?",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-budget-optimization-multi",
+      "type": "multi_intent",
+      "query": "Meta looks strong. Move 40% of TV budget to it, but first verify the model is decision-ready.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-budget-optimization-recovery",
+      "type": "recovery",
+      "query": "Optimization returned infeasible constraints; preserve my floors and caps and explain the failure instead of relaxing them.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": [
+    {
+      "id": "valid-mmm-to-scenario",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "register_dataset"
+        },
+        {
+          "tool": "inspect_dataset"
+        },
+        {
+          "tool": "validate_dataset",
+          "result": "valid"
+        },
+        {
+          "tool": "fit_mmm"
+        },
+        {
+          "tool": "diagnose_mmm",
+          "result": "approved"
+        },
+        {
+          "tool": "get_incremental_roas"
+        },
+        {
+          "tool": "simulate_budget"
+        }
+      ]
+    },
+    {
+      "id": "invalid-fit-direct-optimize",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "fit_mmm"
+        },
+        {
+          "tool": "optimize_budget"
+        }
+      ]
+    }
+  ]
+}

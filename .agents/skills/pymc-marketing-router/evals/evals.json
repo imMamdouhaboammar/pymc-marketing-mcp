@@ -1,0 +1,90 @@
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-marketing-router-trigger",
+      "type": "should_trigger",
+      "query": "which workflow should I use",
+      "expected_skill": "pymc-marketing-router"
+    },
+    {
+      "id": "pymc-marketing-router-near-miss",
+      "type": "should_not_trigger",
+      "query": "fit my MMM now",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-marketing-router-ambiguous",
+      "type": "ambiguous",
+      "query": "I have marketing data and a fitted model but I am not sure whether I need diagnostics, validation, or optimization.",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-marketing-router-multi",
+      "type": "multi_intent",
+      "query": "I want to validate data, fit an MMM, understand Meta contribution, and decide whether to move budget.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-marketing-router-recovery",
+      "type": "recovery",
+      "query": "A previous workflow stopped after an MCP error; route me to the safest recovery skill using the persisted state that still exists.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "router-budget-reallocation",
+      "type": "should_trigger",
+      "query": "Meta looks strong. Move 40% of TV budget to it.",
+      "expected_skill": "pymc-budget-optimization"
+    },
+    {
+      "id": "router-divergence-pressure",
+      "type": "should_trigger",
+      "query": "My MMM has 37 divergences but I need an answer today.",
+      "expected_skill": "pymc-diagnostics-gate"
+    },
+    {
+      "id": "router-causal-wording",
+      "type": "should_trigger",
+      "query": "Which channel caused my sales?",
+      "expected_skill": "pymc-incrementality-evidence"
+    },
+    {
+      "id": "router-fit-timeout",
+      "type": "should_trigger",
+      "query": "The fit timed out.",
+      "expected_skill": "pymc-job-resilience"
+    },
+    {
+      "id": "router-optimize-blocked",
+      "type": "should_trigger",
+      "query": "Why can't I optimize this model?",
+      "expected_skill": "pymc-diagnostics-gate"
+    },
+    {
+      "id": "router-specification-choice",
+      "type": "should_trigger",
+      "query": "Which MMM specification should I trust?",
+      "expected_skill": "pymc-model-validation"
+    },
+    {
+      "id": "router-lift-study",
+      "type": "should_trigger",
+      "query": "I have an experiment/lift study",
+      "expected_skill": "pymc-lift-calibration"
+    },
+    {
+      "id": "router-churn",
+      "type": "should_trigger",
+      "query": "Who is likely to churn?",
+      "expected_skill": "pymc-clv-customer-analytics"
+    },
+    {
+      "id": "router-posterior-artifact",
+      "type": "should_trigger",
+      "query": "Give me the posterior artifact",
+      "expected_skill": "pymc-artifact-delivery"
+    }
+  ],
+  "tool_traces": []
+}

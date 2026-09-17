@@ -7,15 +7,7 @@
       "delta_x": 30000.0,
       "delta_y": 72000.0,
       "sigma": 14000.0,
-      "description": "Q3 Meta Geo-Holdout Test (5 DMAs)"
-    },
-    {
-      "channel": "tv_spend",
-      "x": 120000.0,
-      "delta_x": 60000.0,
-      "delta_y": 28000.0,
-      "sigma": 9000.0,
-      "description": "TV Heavy-Up Matched-Market Study"
+      "description": "Q3 Meta Geo-Holdout Test"
     }
   ],
   "sampler": {

@@ -21,24 +21,24 @@ PyMC-Marketing requires **rectangular panels**. Every cross-sectional unit must 
 $$\text{Total Rows} = N_{\text{dates}} \times N_{\text{dims}_1} \times \dots \times N_{\text{dims}_k}$$
 
 ### Common Violations & Solutions:
-1. **Missing Geo-Date Rows**: If a DMA had zero sales in a given week, the row is missing rather than containing $0$.
+1. **Missing Geo-Date Rows**: If a DMA had zero sales in a given week, the row must not be missing; it should contain explicit $0.0$.
    - *Fix*: Reindex the DataFrame using `pd.MultiIndex.from_product([dates, geos])` and fill missing sales/spend with $0.0$.
 2. **Unbalanced Geographies**: New markets launched halfway through the observation window.
-   - *Fix*: Filter analysis to continuous operating markets, or impute pre-launch periods with zero revenue and zero spend.
+   - *Fix*: Filter analysis to continuous operating markets, or explicitly model the truncated operational window.
 
 ---
 
 ## 3. Configuring Panel MMM in MCP
 
-In `validate_dataset` and `fit_mmm`, specify the dimension columns in `dims`:
+In `validate_dataset` and `fit_mmm`, specify dimension columns in `dims`:
 
 ```json
 {
   "dataset_id": "ds_panel_dma",
   "date_column": "week_start",
   "target_column": "sales_units",
-  "channel_columns": ["tv_grp", "digital_impressions", "local_radio_spend"],
-  "control_columns": ["unemployment_rate", "avg_temperature"],
+  "channel_columns": ["tv_spend", "digital_spend", "radio_spend"],
+  "control_columns": ["economic_index"],
   "dims": ["dma"],
   "sampler": {
     "draws": 1000,
@@ -54,7 +54,7 @@ In `validate_dataset` and `fit_mmm`, specify the dimension columns in `dims`:
 ## 4. Multi-Level Hierarchical Shrinkage
 
 In panel models, PyMC-Marketing applies Bayesian hierarchical shrinkage:
-- Individual geo parameters $\beta_{c, g}$ are drawn from a shared national distribution:
+- Individual geo parameters $\beta_{c, g}$ are drawn from a shared distribution:
   $$\beta_{c, g} \sim \text{HalfNormal}(\mu_c, \sigma_c)$$
 - Markets with low spend or high noise shrink toward the national mean $\mu_c$.
 - Markets with high spend and clean data maintain distinct local response estimates.

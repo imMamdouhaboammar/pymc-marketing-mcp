@@ -1,79 +1,36 @@
-[
-  {
-    "id": "mmm-trigger-001",
-    "type": "should_trigger",
-    "query": "Can you run a media mix model on our last 2 years of weekly advertising data in marketing_data.csv?",
-    "expected": "Activates pymc-mmm-workflow, registers dataset, runs validate_dataset, and constructs fit_mmm configuration.",
-    "forbidden": "Does not invoke CLV models or skip validate_dataset."
-  },
-  {
-    "id": "mmm-trigger-002",
-    "type": "should_trigger",
-    "query": "Which of our marketing channels (Meta, Search, TV) contributed the most revenue and what is the marginal iROAS of each?",
-    "expected": "Uses fit_mmm, enforces diagnose_mmm gate, and calls get_channel_contributions and get_incremental_roas.",
-    "forbidden": "Does not fabricate iROAS values without a diagnosed model."
-  },
-  {
-    "id": "mmm-trigger-003",
-    "type": "should_trigger",
-    "query": "We need to understand advertising carryover and saturation curves for our digital spend channels.",
-    "expected": "Triggers pymc-mmm-workflow, references transforms-guide.md for adstock/saturation parameters, and calls get_response_curves.",
-    "forbidden": "Does not advise linear regressions with zero carryover."
-  },
-  {
-    "id": "mmm-trigger-004",
-    "type": "should_trigger",
-    "query": "Help me evaluate if our TV campaigns are suffering from diminishing returns compared to Google Ads.",
-    "expected": "Applies MMM workflow, compares Hill vs Logistic saturation curves, and calculates marginal iROAS.",
-    "forbidden": "Does not report point estimates without credible intervals."
-  },
-  {
-    "id": "mmm-trigger-005",
-    "type": "should_trigger",
-    "query": "I have panel marketing data across 10 US DMAs and want to fit a hierarchical Bayesian MMM.",
-    "expected": "Loads pymc-mmm-workflow, inspects panel rectangularity, and configures validate_dataset with dims=[\"geo\"].",
-    "forbidden": "Does not treat panel data as aggregate national spend without dims."
-  },
-  {
-    "id": "mmm-negative-001",
-    "type": "should_not_trigger",
-    "query": "I need to calculate customer churn probability and expected 12-month LTV from our transaction database.",
-    "expected": "Routes to pymc-clv-customer-analytics.",
-    "forbidden": "Does not load pymc-mmm-workflow."
-  },
-  {
-    "id": "mmm-negative-002",
-    "type": "should_not_trigger",
-    "query": "Our fitted model mmm_q2 had 45 divergences and R-hat of 1.12. How do I fix the sampling geometry?",
-    "expected": "Routes to pymc-diagnostics-gate.",
-    "forbidden": "Does not attempt to call get_incremental_roas or budget optimization."
-  },
-  {
-    "id": "mmm-negative-003",
-    "type": "should_not_trigger",
-    "query": "We have an approved model mmm_v1 and want to allocate our $1.5M Q4 budget across channels with a $200k TV cap.",
-    "expected": "Routes to pymc-budget-optimization.",
-    "forbidden": "Does not refit the model from scratch."
-  },
-  {
-    "id": "mmm-negative-004",
-    "type": "should_not_trigger",
-    "query": "We just ran a geo lift experiment in 5 test markets that showed 2.4x incrementality on YouTube. Incorporate this test into our MMM.",
-    "expected": "Routes to pymc-lift-calibration.",
-    "forbidden": "Does not overwrite parent model without lineage tracking."
-  },
-  {
-    "id": "mmm-behavioral-001",
-    "type": "behavioral",
-    "query": "Fit an MMM on data/weekly_spend.csv and immediately give me the optimal budget allocation.",
-    "expected": "Executes register_dataset -> inspect_dataset -> validate_dataset -> fit_mmm -> diagnose_mmm. Only proceeds to budget optimization if decision_status is approved or approved_with_caution.",
-    "forbidden": "Never calls optimize_budget or get_incremental_roas prior to running diagnose_mmm."
-  },
-  {
-    "id": "mmm-behavioral-002",
-    "type": "behavioral",
-    "query": "The client wants a quick point estimate of Meta ROI and does not care about Bayesian credible intervals or sampler warnings.",
-    "expected": "Politely rejects omitting uncertainty; reports posterior median alongside 94% HDI credible intervals and maintains all diagnostic warnings visible in the output.",
-    "forbidden": "Never outputs naked point estimates or suppresses diagnostic warnings."
-  }
-]
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-mmm-workflow-trigger",
+      "type": "should_trigger",
+      "query": "fit a media mix model",
+      "expected_skill": "pymc-mmm-workflow"
+    },
+    {
+      "id": "pymc-mmm-workflow-near-miss",
+      "type": "should_not_trigger",
+      "query": "why was my MMM rejected",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-mmm-workflow-ambiguous",
+      "type": "ambiguous",
+      "query": "I have a registered dataset and want an MMM, but I do not know whether it has passed readiness validation.",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-mmm-workflow-multi",
+      "type": "multi_intent",
+      "query": "Validate this registered dataset, fit the MMM, diagnose it, then continue to contribution evidence only if supported.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-mmm-workflow-recovery",
+      "type": "recovery",
+      "query": "Synchronous fitting disconnected; check whether an async/persisted job exists before fitting the same model again.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": []
+}

@@ -7,11 +7,10 @@ Outputs frequency, recency, T, and average monetary_value per repeat purchase.
 from __future__ import annotations
 
 import argparse
-import json
-import sys
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 
 def summary_data_from_transactions(
@@ -22,13 +21,13 @@ def summary_data_from_transactions(
     observation_period_end: str | None = None,
     freq: str = "W",
 ) -> pd.DataFrame:
+    df = df.copy()
     df[datetime_col] = pd.to_datetime(df[datetime_col])
     if observation_period_end is None:
         end_date = df[datetime_col].max()
     else:
         end_date = pd.to_datetime(observation_period_end)
 
-    # Filter to transactions on or before end_date
     df = df[df[datetime_col] <= end_date]
 
     def _calc_rfm(group: pd.DataFrame) -> pd.Series:
@@ -36,25 +35,22 @@ def summary_data_from_transactions(
         dates = group[datetime_col].sort_values()
         first_date = dates.iloc[0]
         last_date = dates.iloc[-1]
-        
-        # Frequency is count of repeat transactions (total distinct purchase periods - 1)
+
         unique_dates = dates.dt.to_period(freq).unique()
         d["frequency"] = max(0, len(unique_dates) - 1)
-        
-        # Recency is time from first purchase to last purchase in units of freq
+
         if freq == "W":
             d["recency"] = (last_date - first_date).days / 7.0
             d["T"] = (end_date - first_date).days / 7.0
         elif freq == "D":
-            d["recency"] = (last_date - first_date).days
-            d["T"] = (end_date - first_date).days
+            d["recency"] = float((last_date - first_date).days)
+            d["T"] = float((end_date - first_date).days)
         elif freq == "M":
             d["recency"] = (last_date - first_date).days / 30.4375
             d["T"] = (end_date - first_date).days / 30.4375
 
         if monetary_value_col and monetary_value_col in group.columns:
             if len(group) > 1:
-                # Average spend on repeat purchases (excluding first)
                 repeat_spend = group.iloc[1:][monetary_value_col].mean()
                 d["monetary_value"] = repeat_spend if not np.isnan(repeat_spend) else 0.0
             else:
@@ -62,7 +58,12 @@ def summary_data_from_transactions(
 
         return pd.Series(d)
 
-    rfm = df.groupby(customer_id_col).apply(_calc_rfm).reset_index()
+    # Use include_groups=False for compatibility with pandas >= 2.2
+    try:
+        rfm = df.groupby(customer_id_col).apply(_calc_rfm, include_groups=False).reset_index()
+    except TypeError:
+        rfm = df.groupby(customer_id_col).apply(_calc_rfm).reset_index()
+
     return rfm
 
 

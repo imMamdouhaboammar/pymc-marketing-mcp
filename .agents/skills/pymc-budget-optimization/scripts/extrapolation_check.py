@@ -10,8 +10,8 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
 import pandas as pd
-import numpy as np
 
 
 def check_extrapolation(
@@ -57,7 +57,7 @@ def check_extrapolation(
         "channel_assessment": report,
         "recommendation": (
             "Extrapolation risk detected: proposed spend exceeds 1.5x historical p95. "
-            "Consider reducing spend scale or running an incrementality test before full budget commitment."
+            "Consider reducing spend scale or running an incrementality test."
             if has_risk
             else "All proposed spends are within safe historical boundaries."
         ),

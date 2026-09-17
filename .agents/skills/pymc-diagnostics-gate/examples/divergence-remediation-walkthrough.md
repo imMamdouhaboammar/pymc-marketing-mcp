@@ -1,6 +1,6 @@
 # Walkthrough: Remediating MCMC Divergences
 
-This walkthrough shows the complete workflow when a model is initially rejected due to MCMC divergences.
+This walkthrough demonstrates the workflow when an initial model fit encounters divergences and is remediated.
 
 ---
 
@@ -17,24 +17,22 @@ This walkthrough shows the complete workflow when a model is initially rejected 
 {
   "model_id": "mmm_initial_v1",
   "decision_status": "rejected",
-  "divergences": 18,
+  "divergences": 14,
   "max_rhat": 1.021,
-  "min_ess_bulk": 310.4,
-  "posterior_predictive_coverage": 0.84,
-  "failures": ["Divergences (18) exceed zero-tolerance project threshold"],
-  "warnings": ["Bulk ESS is in caution zone (< 400)"]
+  "min_ess": 310.0,
+  "failures": ["Sampler had 14 divergent transition(s)"]
 }
 ```
 
 ---
 
-### Step 2: Agent Halts Decision Tools
-Because `decision_status` is `rejected`, the agent informs the user that budget optimization is locked and proposes a remediation refit.
+### Step 2: Decision Tools Locked
+Because `decision_status` is `rejected`, downstream decision tools (`get_incremental_roas`, `optimize_budget`) are blocked. The agent explains the rejection and plans a refit.
 
 ---
 
 ### Step 3: Refit with Stepped-Up Sampler Controls
-We increase `target_accept` to 0.96 and `tune` to 2000 to eliminate leapfrog integration overshoot:
+We increase `target_accept` to 0.95 and `tune` to 2000:
 
 **Tool Call:**
 ```json
@@ -52,7 +50,7 @@ We increase `target_accept` to 0.96 and `tune` to 2000 to eliminate leapfrog int
       "draws": 1000,
       "tune": 2000,
       "chains": 4,
-      "target_accept": 0.96,
+      "target_accept": 0.95,
       "random_seed": 42
     }
   }
@@ -68,7 +66,7 @@ We increase `target_accept` to 0.96 and `tune` to 2000 to eliminate leapfrog int
 
 ---
 
-### Step 4: Verification of Gate Passage
+### Step 4: Re-Diagnosis Confirms Gate Passage
 **Tool Call:**
 ```json
 {
@@ -83,10 +81,9 @@ We increase `target_accept` to 0.96 and `tune` to 2000 to eliminate leapfrog int
   "decision_status": "approved",
   "divergences": 0,
   "max_rhat": 1.002,
-  "min_ess_bulk": 1420.8,
-  "posterior_predictive_coverage": 0.915,
+  "min_ess": 1240.0,
   "failures": [],
   "warnings": []
 }
 ```
-With `decision_status: "approved"`, the agent unlocks `get_incremental_roas` and `optimize_budget`.
+With `decision_status: "approved"`, decision-gated tools are unlocked.

@@ -1,19 +1,72 @@
 {
+  "schema_version": "1",
   "name": "pymc-budget-optimization",
-  "version": "2.0.0",
-  "description": "Media budget optimization, counterfactual simulation, and dynamic flighting for PyMC-Marketing",
-  "entrypoint": "SKILL.md",
+  "version": "2.1.0",
+  "domain": "mmm-decision",
+  "summary": "Evaluate spend scenarios, static allocations, and weekly flighting only after the model\u2019s diagnostic decision gate permits them.",
+  "triggers": [
+    "optimize my media budget",
+    "simulate moving TV spend to Search",
+    "build a weekly flighting schedule"
+  ],
+  "negative_triggers": [
+    "why is this MMM rejected",
+    "which channel contributed most",
+    "calibrate from this lift test"
+  ],
+  "primary_tools": [
+    "simulate_budget",
+    "optimize_budget",
+    "optimize_flighting"
+  ],
+  "secondary_tools": [
+    "get_model_status"
+  ],
+  "deprecated_tools": [],
+  "administrative_tools": [],
+  "required_resources": [
+    "marketing://models/{model_id}",
+    "marketing://models/{model_id}/diagnostics"
+  ],
+  "prerequisites": [
+    "completed MMM with persisted diagnostics"
+  ],
+  "gates": [
+    "diagnostic_gate"
+  ],
+  "forbidden_before": [
+    {
+      "operations": [
+        "simulate_budget",
+        "optimize_budget",
+        "optimize_flighting"
+      ],
+      "until": "diagnostic_gate"
+    }
+  ],
+  "fallback_skills": [
+    "pymc-diagnostics-gate"
+  ],
+  "continuations": [
+    "pymc-incrementality-evidence",
+    "pymc-lift-calibration"
+  ],
+  "maturity": "stable",
+  "authoritative_sources": [
+    "marketing://skills/references/scientific-answer-contract",
+    "marketing://skills/references/scientific-source-ledger"
+  ],
   "files": {
     "references": [
-      "references/optimization-math.md",
-      "references/flighting-strategies.md"
+      "references/flighting-strategies.md",
+      "references/optimization-math.md"
+    ],
+    "examples": [
+      "examples/q4-budget-reallocation-walkthrough.md"
     ],
     "templates": [
       "templates/optimize-budget-input.json",
       "templates/simulate-scenario-input.json"
-    ],
-    "examples": [
-      "examples/q4-budget-reallocation-walkthrough.md"
     ],
     "evals": [
       "evals/evals.json"

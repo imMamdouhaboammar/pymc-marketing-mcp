@@ -1,24 +1,23 @@
 # Dynamic Media Flighting Strategies
 
-Media flighting schedules spend across multi-week planning horizons accounting for adstock memory decay.
+Media flighting schedules spend across multi-week planning horizons accounting for adstock carryover.
 
 ---
 
 ## 1. Flighting Patterns
 
-### A. Flat / Continuous Allocation
-- Uniform spend $x_{k, t} = B_k / T$ across all weeks $t \in \{1, \dots, T\}$.
-- Optimal for channels with zero or low carryover ($lpha \approx 0$) such as Brand Search or direct performance retargeting.
+### A. Uniform / Continuous Allocation
+- Equal spend $x_{k, t} = B_k / T$ across all periods.
+- Appropriate for channels with minimal carryover decay.
 
 ### B. Pulsed Flighting
-- Alternates high-spend burst weeks with zero or maintenance-spend dark weeks.
-- Exploits high adstock carryover ($lpha > 0.6$):
+- Alternates high-spend flight periods with lower maintenance periods.
+- Leverages adstock carryover ($\alpha$):
   $$\text{Adstock}_t = x_t + \alpha \cdot \text{Adstock}_{t-1}$$
-- While spend $x_t = 0$ in week $t$, effective adstock remains high, delivering continuous brand impact at lower total cost.
+- Sustains effective media presence during dark periods through accumulated adstock.
 
 ### C. Frontloaded Flighting
-- Concentrates $50\%$ of budget in the first $25\%$ of campaign weeks.
-- Best for product launches, brand pivots, or major promotional events.
+- Concentrates budget in early weeks of a campaign (e.g. product launches).
 
 ### D. Backloaded Flighting
-- Escalates spend toward end of period (e.g. Q4 holiday peak).
+- Escalates spend toward high-demand seasonal peaks (e.g. Q4 holiday).

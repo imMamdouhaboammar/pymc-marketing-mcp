@@ -1,5 +1,5 @@
 {
-  "total": 39,
+  "total": 45,
   "tools": [
     {
       "name": "archive_model",
@@ -1180,6 +1180,69 @@
       }
     },
     {
+      "name": "get_agent_insights",
+      "description": "Retrieve previously recorded agent insights, hypotheses, diagnostic notes, or decisions, filter by model, dataset, category, or tag.",
+      "input_schema": {
+        "properties": {
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dataset Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Category"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tag"
+          },
+          "limit": {
+            "default": 50,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "title": "get_agent_insightsArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "get_channel_contributions",
       "description": "Return posterior channel contribution summaries from the fitted PyMC-Marketing model. Does not fabricate estimates.",
       "input_schema": {
@@ -1349,6 +1412,49 @@
       }
     },
     {
+      "name": "get_skill_guidance",
+      "description": "Route a marketing-science task to one workflow skill, or fetch one named skill. Use this when the client has not already loaded marketing://skills guidance.",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task"
+          },
+          "skill_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skill Name"
+          }
+        },
+        "title": "get_skill_guidanceArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_skill_workflow_map",
+      "description": "Retrieve the dependency graph, prerequisites, decision gates, and continuations for all scientific skills.",
+      "input_schema": {
+        "properties": {},
+        "title": "get_skill_workflow_mapArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "inspect_dataset",
       "description": "Inspect a registered dataset before MMM configuration. Returns candidate targets, channels, controls, frequency, and data issues.",
       "input_schema": {
@@ -1362,6 +1468,15 @@
           "dataset_id"
         ],
         "title": "inspect_datasetArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_agentic_skills",
+      "description": "List all registered agentic skills with summaries, maturity, triggers, and primary tools.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_agentic_skillsArguments",
         "type": "object"
       }
     },
@@ -1395,6 +1510,11 @@
             "default": 50,
             "title": "Limit",
             "type": "integer"
+          },
+          "verbose": {
+            "default": false,
+            "title": "Verbose",
+            "type": "boolean"
           }
         },
         "title": "list_jobsArguments",
@@ -1623,7 +1743,7 @@
               },
               "margin_pct": {
                 "default": 1.0,
-                "description": "Revenue margin fraction for net-profit objective (revenue \u00d7 margin \u2212 spend)",
+                "description": "Revenue margin fraction for net-profit objective (revenue × margin − spend)",
                 "maximum": 1.0,
                 "minimum": 0.0,
                 "title": "Margin Pct",
@@ -1967,6 +2087,96 @@
       }
     },
     {
+      "name": "record_agent_insight",
+      "description": "Record structured findings, hypotheses, diagnostic warnings, anomalies, or budget decisions to persistent institutional memory for subsequent coding agents and runs.",
+      "input_schema": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Details"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dataset Id"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Agent Id"
+          },
+          "severity": {
+            "default": "info",
+            "title": "Severity",
+            "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tags"
+          }
+        },
+        "required": [
+          "category",
+          "summary"
+        ],
+        "title": "record_agent_insightArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "recover_execution_state",
       "description": "Recover execution state and intermediate checkpoints after an unexpected disconnect or restart.",
       "input_schema": {
@@ -1985,21 +2195,9 @@
     },
     {
       "name": "register_dataset",
-      "description": "Register a marketing dataset for MMM or CLV analysis and return a stable dataset reference. Supports direct CSV text in 'content', base64-encoded CSV/Parquet in 'content_base64', remote HTTP/HTTPS URL in 'url' or 'path', or an existing server path in 'path'.",
+      "description": "Register a marketing dataset for MMM or CLV analysis and return a stable dataset reference. For chat sessions (Claude.ai, web clients), pass raw CSV text directly in 'content' with 'filename'. Supports binary/parquet in 'content_base64', remote download in 'url', or server paths in 'path'.",
       "input_schema": {
         "properties": {
-          "path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Path"
-          },
           "content": {
             "anyOf": [
               {
@@ -2010,7 +2208,21 @@
               }
             ],
             "default": null,
+            "description": "Direct CSV or tabular plain-text data. Recommended for Claude.ai, ChatGPT, and remote sessions.",
             "title": "Content"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional filename (e.g. 'campaigns.csv') to preserve file format and extension metadata.",
+            "title": "Filename"
           },
           "content_base64": {
             "anyOf": [
@@ -2022,6 +2234,7 @@
               }
             ],
             "default": null,
+            "description": "Base64-encoded file bytes for binary, gzipped, or parquet datasets.",
             "title": "Content Base64"
           },
           "url": {
@@ -2034,9 +2247,10 @@
               }
             ],
             "default": null,
+            "description": "Publicly accessible HTTP or HTTPS URL to download and ingest the dataset from.",
             "title": "Url"
           },
-          "filename": {
+          "path": {
             "anyOf": [
               {
                 "type": "string"
@@ -2046,7 +2260,8 @@
               }
             ],
             "default": null,
-            "title": "Filename"
+            "description": "Path to a file on the server filesystem (server-side only; client sandbox paths are rejected).",
+            "title": "Path"
           }
         },
         "title": "register_datasetArguments",
@@ -2078,7 +2293,7 @@
           "ModelComparisonInput": {
             "properties": {
               "model_ids": {
-                "description": "List of 2\u201310 model IDs to compare. All must be fitted on the same dataset.",
+                "description": "List of 2–10 model IDs to compare. All must be fitted on the same dataset.",
                 "items": {
                   "type": "string"
                 },
@@ -2152,7 +2367,11 @@
               "type": {
                 "enum": [
                   "relative",
-                  "absolute"
+                  "absolute",
+                  "set_spend",
+                  "add_spend",
+                  "multiply_spend",
+                  "percent_change"
                 ],
                 "title": "Type",
                 "type": "string"
@@ -2199,7 +2418,11 @@
               "type": {
                 "enum": [
                   "relative",
-                  "absolute"
+                  "absolute",
+                  "set_spend",
+                  "add_spend",
+                  "multiply_spend",
+                  "percent_change"
                 ],
                 "title": "Type",
                 "type": "string"
@@ -2538,6 +2761,66 @@
           "config"
         ],
         "title": "submit_fit_mmm_jobArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "transform_ad_export",
+      "description": "Transform raw long-form advertising exports (e.g. from Google Ads, Meta Ads, LinkedIn) into a clean, wide-format modeling dataset. Pivots channel spend, enforces ratio non-summation invariants (CTR, CPA, ROAS recomputed from numerators/denominators), ensures calendar continuity, and generates cryptographic provenance with financial reconciliation.",
+      "input_schema": {
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "date_column": {
+            "title": "Date Column",
+            "type": "string"
+          },
+          "channel_column": {
+            "title": "Channel Column",
+            "type": "string"
+          },
+          "spend_column": {
+            "title": "Spend Column",
+            "type": "string"
+          },
+          "target_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Columns",
+            "type": "array"
+          },
+          "dimension_columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dimension Columns"
+          },
+          "frequency": {
+            "default": "D",
+            "title": "Frequency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "date_column",
+          "channel_column",
+          "spend_column",
+          "target_columns"
+        ],
+        "title": "transform_ad_exportArguments",
         "type": "object"
       }
     },

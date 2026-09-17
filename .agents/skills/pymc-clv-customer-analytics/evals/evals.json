@@ -1,44 +1,36 @@
-[
-  {
-    "id": "clv-trigger-001",
-    "type": "should_trigger",
-    "query": "Can you estimate 12-month Customer Lifetime Value for our e-commerce buyers from customer_rfm.csv?",
-    "expected": "Activates pymc-clv-customer-analytics, fits BG/NBD purchase model and Gamma-Gamma value model, and estimates discounted CLV.",
-    "forbidden": "Does not route to Media Mix Modeling."
-  },
-  {
-    "id": "clv-trigger-002",
-    "type": "should_trigger",
-    "query": "Which of our customer cohorts have a dropping P(alive) and are at high risk of churning?",
-    "expected": "Uses fit_purchase_model and predict_probability_alive to identify churn risk cohorts.",
-    "forbidden": "Does not use Gamma-Gamma model ID for P(alive) calls."
-  },
-  {
-    "id": "clv-trigger-003",
-    "type": "should_trigger",
-    "query": "What is the maximum allowable CAC we should target in our ad campaigns based on our customer lifetime value?",
-    "expected": "Estimates Bayesian CLV and calculates max CAC using gross margin and profit margin targets.",
-    "forbidden": "Does not use raw historical customer revenue without future discounting."
-  },
-  {
-    "id": "clv-negative-001",
-    "type": "should_not_trigger",
-    "query": "Run a media mix model to determine how much revenue Meta Ads and Google Search drove last quarter.",
-    "expected": "Routes to pymc-mmm-workflow.",
-    "forbidden": "Does not load pymc-clv-customer-analytics."
-  },
-  {
-    "id": "clv-negative-002",
-    "type": "should_not_trigger",
-    "query": "Allocate our $400k Q4 marketing budget across search and TV channels.",
-    "expected": "Routes to pymc-budget-optimization.",
-    "forbidden": "Does not load pymc-clv-customer-analytics."
-  },
-  {
-    "id": "clv-behavioral-001",
-    "type": "behavioral",
-    "query": "Fit a CLV model using the legacy fit_clv_model and predict_customer_clv wrappers.",
-    "expected": "Recognizes that fit_clv_model is deprecated; uses modern explicit tools fit_purchase_model, fit_value_model, and estimate_customer_lifetime_value.",
-    "forbidden": "Never recommends or prioritizes deprecated compatibility wrappers over explicit tools."
-  }
-]
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-clv-customer-analytics-trigger",
+      "type": "should_trigger",
+      "query": "estimate customer lifetime value",
+      "expected_skill": "pymc-clv-customer-analytics"
+    },
+    {
+      "id": "pymc-clv-customer-analytics-near-miss",
+      "type": "should_not_trigger",
+      "query": "run a media mix model",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-clv-customer-analytics-ambiguous",
+      "type": "ambiguous",
+      "query": "Who is likely to churn and what are those customers worth over the next year?",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-clv-customer-analytics-multi",
+      "type": "multi_intent",
+      "query": "Fit purchase frequency and monetary value models, then estimate CLV for the same customer data.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-clv-customer-analytics-recovery",
+      "type": "recovery",
+      "query": "The value model failed but the purchase model completed; do not invent CLV from purchase frequency alone.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": []
+}

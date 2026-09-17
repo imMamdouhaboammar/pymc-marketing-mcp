@@ -1,52 +1,25 @@
 # Diagnostic Remediation Checklist
 
-Use this checklist when a model receives `decision_status: "rejected"` or `decision_status: "approved_with_caution"`.
+Use this checklist when a model receives `decision_status: "rejected"` or `decision_status: "caution"`.
 
 ## 1. Diagnosis Summary
-- **Model ID**: `mmm_rejected_v1`
-- **Reported Failures**:
-  - [x] Divergences $> 0$ (Observed: 14 divergences)
-  - [ ] $\hat{R} > 1.05$ (Observed: 1.008)
-  - [ ] Min Bulk ESS $< 50$ (Observed: 540)
-  - [ ] Coverage $< 50\%$ (Observed: 88.5%)
+- **Model ID**: `[model_id]`
+- **Divergences**: `[count]` (Must be 0 for full approval)
+- **Max R-hat**: `[max_rhat]` (Must be $\le 1.05$; target $\le 1.01$)
+- **Min Bulk ESS**: `[min_ess]` (Target $\ge 400$)
 
-## 2. Remediation Actions
-1. **Sampler Reconfiguration**:
-   - `target_accept`: Increase from `0.90` to `0.95`.
-   - `tune`: Increase from `1000` to `2000`.
-   - `draws`: Maintain `1000` per chain across 4 chains.
-2. **Prior Adjustments**:
-   - Channel: `tv_spend`
-   - Action: Replace wide `hill` saturation with regularized `logistic` saturation.
+## 2. Remediation Protocol
+1. **If Divergences Present**:
+   - Elevate `target_accept` from 0.90 to 0.95 or 0.98.
+   - Increase warmup iterations (`tune`) to 2000.
+2. **If High R-hat ($> 1.05$)**:
+   - Check channel correlations for near-perfect collinearity.
+   - Increase `draws` and `tune` to give chains more exploration time.
+   - Re-evaluate prior plausibility and simplify saturation curves if needed.
+3. **If Low ESS ($< 400$)**:
+   - Autocorrelation is high. Verify adstock lag lengths are not excessively long.
+   - Increase total draws.
 
-## 3. Remediation Refit Input Payload
-```json
-{
-  "dataset_id": "ds_ecommerce_2026",
-  "date_column": "date",
-  "target_column": "revenue",
-  "channel_columns": ["meta_spend", "search_spend", "tv_spend"],
-  "control_columns": ["promo_flag"],
-  "yearly_seasonality": 2,
-  "adstock": {"type": "geometric", "l_max": 8},
-  "saturation": {"type": "logistic"},
-  "channel_priors": {
-    "tv_spend": {
-      "adstock": {"type": "delayed", "l_max": 12},
-      "saturation": {"type": "logistic"}
-    }
-  },
-  "sampler": {
-    "draws": 1000,
-    "tune": 2000,
-    "chains": 4,
-    "target_accept": 0.95,
-    "random_seed": 101
-  }
-}
-```
-
-## 4. Re-Diagnosis Verification
-- New Model ID: `mmm_remediated_v2`
-- Re-run `diagnose_mmm(model_id="mmm_remediated_v2")`
+## 3. Verification Step
+- Execute `diagnose_mmm(model_id=new_model_id)` on the refitted model.
 - Confirm `decision_status == "approved"` before proceeding to decision tools.

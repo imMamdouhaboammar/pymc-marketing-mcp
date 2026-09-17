@@ -6,7 +6,7 @@ This guide details the mathematical foundations, parameter interpretations, and 
 
 ## 1. Adstock Transformations (Carryover / Memory)
 
-Adstock models the delayed and decaying effect of advertising impressions or spend over time.
+Adstock models the delayed and decaying effect of advertising impressions or spend over time. Parameters are estimated from data through prior distributions, not assumed as fixed constants.
 
 ### A. Geometric Adstock (`type: "geometric"`)
 
@@ -15,47 +15,44 @@ The classical Koyck transformation. Each period's effective adstock is a weighte
 $$\text{Adstock}_t = x_t + \alpha \cdot \text{Adstock}_{t-1}$$
 
 - **Parameters**:
-  - `alpha` ($\alpha \in [0, 1)$): Retention rate. $\alpha = 0$ means immediate decay; $\alpha = 0.8$ means 80% carryover into the next period.
-  - `l_max` (default: 8): Maximum lag window computed.
+  - `alpha` ($\alpha \in [0, 1)$): Retention rate. Estimated via prior (e.g. Beta prior).
+  - `l_max`: Maximum lag window computed.
 - **Half-Life Formula**:
   $$t_{1/2} = \frac{-\ln(2)}{\ln(\alpha)}$$
-- **When to Choose**:
-  - Performance marketing (Search, Meta direct-response, display retargeting).
-  - Fast-moving consumer goods with rapid conversion cycles.
+- **Behavioral Fit**:
+  - Immediate-response performance channels (search, direct-response social, retargeting).
 
 ### B. Delayed Adstock (`type: "delayed"`)
 
-Captures a buildup phase where maximum impact occurs $k$ periods after initial exposure.
+Captures a buildup phase where maximum impact occurs $\theta$ periods after initial exposure.
 
 $$\text{Weights}_l = \alpha^{(l - \theta)^2}, \quad l \in [0, l_{\max}]$$
 
 - **Parameters**:
   - `alpha` ($\alpha \in (0, 1)$): Decay rate post-peak.
   - `theta` ($\theta \ge 0$): Delay period until peak effectiveness.
-- **When to Choose**:
-  - TV brand campaigns, billboard/OOH, sponsorship events.
-  - High-consideration purchases (automotive, B2B SaaS, luxury goods) with long consideration windows.
+- **Behavioral Fit**:
+  - High-consideration purchases (automotive, luxury, B2B) and brand-building media (TV, sponsorships).
 
 ### C. Weibull Adstock (`type: "weibull_cdf"` / `"weibull_pdf"`)
 
-Highly flexible two-parameter distribution capable of modeling skewed, delayed, or heavy-tailed memory curves.
+Two-parameter distribution capable of modeling skewed, delayed, or heavy-tailed memory curves.
 
 - **Parameters**:
   - `shape` ($k > 0$): $k < 1$ produces heavy-tailed immediate decay; $k > 1$ produces S-shaped delayed peak.
-  - `scale` ($\lambda > 0$): Controls duration/stretch of the window.
-- **When to Choose**:
-  - Multi-channel campaigns with uncertain lag dynamics.
-  - Channels where geometric decay is too restrictive.
+  - `scale` ($\lambda > 0$): Controls duration/stretch of the lag window.
+- **Behavioral Fit**:
+  - Channels where rigid geometric decay is too restrictive and flexible shapes are needed.
 
 ---
 
 ## 2. Saturation Functions (Diminishing Returns)
 
-Saturation models the non-linear relationship where successive dollar increments yield progressively smaller incremental returns.
+Saturation models the non-linear relationship where successive spend yields diminishing incremental returns.
 
 ### A. Logistic Saturation (`type: "logistic"`)
 
-Standard S-shaped sigmoidal response curve.
+Standard sigmoidal response curve.
 
 $$f(x) = \frac{1 - e^{-\lambda x}}{1 + e^{-\lambda x}} = \tanh\left(\frac{\lambda x}{2}\right)$$
 
@@ -71,9 +68,9 @@ $$f(x) = \frac{x^S}{K^S + x^S}$$
 
 - **Parameters**:
   - `K` ($K > 0$): Half-saturation spend level ($f(K) = 0.5$).
-  - `S` ($S > 0$): Hill slope/shape parameter. $S > 1$ produces an S-curve with initial threshold before rapid growth; $S \le 1$ produces strictly concave diminishing returns.
-- **When to Choose**:
-  - Channels with minimum effective frequency (where low spend does nothing, medium spend works well, high spend saturates).
+  - `S` ($S > 0$): Hill slope parameter. $S > 1$ produces an S-curve with initial threshold before rapid growth; $S \le 1$ produces concave diminishing returns.
+- **Behavioral Fit**:
+  - Channels with minimum effective frequency (threshold effect before noticeable return).
 
 ### C. Hyperbolic Tangent (`type: "tanh"` / `"tanh_baselined"`)
 
@@ -85,19 +82,12 @@ $$f(x) = \tanh(b \cdot x)$$
 
 $$f(x) = \frac{\alpha \cdot x}{k + x}$$
 
-- Non-inflected concave curve. Excellent for direct performance search where every dollar immediately faces diminishing bid auctions without threshold effects.
+- Non-inflected concave curve. Appropriate for performance search where every dollar immediately faces auction diminishing returns without threshold dynamics.
 
 ---
 
-## 3. Transformation Selection Matrix
+## 3. Prior Specification Best Practices
 
-| Channel Archetype | Recommended Adstock | Recommended Saturation | Typical $l_{\max}$ (Weekly) |
-|---|---|---|---|
-| **Google Brand Search** | `none` or `geometric` ($\alpha \approx 0.1$) | `michaelis_menten` or `logistic` | 2–4 weeks |
-| **Google Non-Brand Search** | `geometric` ($\alpha \approx 0.3$) | `logistic` | 4–6 weeks |
-| **Meta Direct Response** | `geometric` ($\alpha \approx 0.4$) | `logistic` or `hill` | 4–8 weeks |
-| **Linear / Connected TV** | `delayed` or `weibull_pdf` | `hill` ($S > 1$) | 8–16 weeks |
-| **Digital Video / YouTube** | `geometric` ($\alpha \approx 0.5$) | `logistic` | 6–10 weeks |
-| **Out of Home (OOH)** | `delayed` | `tanh` | 8–12 weeks |
-| **Influencer / Creator** | `weibull_cdf` | `hill` | 6–12 weeks |
-| **Direct Mail / Catalogs** | `delayed` ($\theta \approx 2$) | `logistic` | 8–14 weeks |
+- Avoid inventing hard-coded "typical" channel parameters (e.g. asserting carryover is universally 0.4 for social).
+- Rely on weakly informative priors centered on plausible domain scales, allowing the MCMC sampler to update posteriors based on empirical likelihood evidence.
+- Run `evaluate_prior_sensitivity` when assessing how prior choices influence commercial conclusions.

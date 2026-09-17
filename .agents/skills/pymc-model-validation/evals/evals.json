@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-model-validation-trigger",
+      "type": "should_trigger",
+      "query": "compare these MMM specifications",
+      "expected_skill": "pymc-model-validation"
+    },
+    {
+      "id": "pymc-model-validation-near-miss",
+      "type": "should_not_trigger",
+      "query": "why did diagnose_mmm reject this fit",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-model-validation-ambiguous",
+      "type": "ambiguous",
+      "query": "Two MMMs converged; which specification should I trust and what additional validation distinguishes them?",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-model-validation-multi",
+      "type": "multi_intent",
+      "query": "Cross-validate both specifications, inspect prior sensitivity, then use the server comparison tool rather than hand-ranking them.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-model-validation-recovery",
+      "type": "recovery",
+      "query": "Model comparison failed because the models use different datasets; stop instead of manufacturing a ranking.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": []
+}

@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "RoutingCase": {
+      "properties": {
+        "expected_behavior": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Behavior"
+        },
+        "expected_skill": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Skill"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "should_trigger",
+            "should_not_trigger",
+            "ambiguous",
+            "multi_intent",
+            "recovery"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "query"
+      ],
+      "title": "RoutingCase",
+      "type": "object"
+    },
+    "ToolTrace": {
+      "properties": {
+        "expected_valid": {
+          "title": "Expected Valid",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "max_consecutive_polls": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Consecutive Polls"
+        },
+        "steps": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "expected_valid",
+        "steps"
+      ],
+      "title": "ToolTrace",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "routing_cases": {
+      "items": {
+        "$ref": "#/$defs/RoutingCase"
+      },
+      "minItems": 1,
+      "title": "Routing Cases",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tool_traces": {
+      "items": {
+        "$ref": "#/$defs/ToolTrace"
+      },
+      "title": "Tool Traces",
+      "type": "array"
+    }
+  },
+  "required": [
+    "routing_cases"
+  ],
+  "title": "SkillEvalFile",
+  "type": "object"
+}

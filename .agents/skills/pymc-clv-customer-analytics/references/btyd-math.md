@@ -11,7 +11,7 @@ The Beta-Geometric / Negative Binomial Distribution (BG/NBD) model governs non-c
 ### Assumptions:
 1. While active, customer $i$ makes purchases according to a Poisson process with transaction rate $\lambda_i$:
    $$P(X(t) = x \mid \lambda_i) = \frac{(\lambda_i t)^x e^{-\lambda_i t}}{x!}$$
-2. Heterogeneity in $\lambda_i$ across customers follows a Gamma distribution:
+2. Heterogeneity in $\lambda_i$ follows a Gamma distribution:
    $$\lambda_i \sim \text{Gamma}(r, \alpha)$$
 3. After any transaction, customer $i$ becomes inactive with probability $p_i$.
 4. Heterogeneity in $p_i$ follows a Beta distribution:
@@ -30,7 +30,7 @@ Models average transaction monetary value $m_x$ across $x$ repeat transactions.
 1. Customer $i$'s transaction value $v$ follows a Gamma distribution with mean $\mathbb{E}[V] = \nu_i / p$.
 2. Heterogeneity in $\nu_i$ across customers follows a Gamma distribution:
    $$\nu_i \sim \text{Gamma}(q, \gamma)$$
-3. **Crucial Assumption**: Monetary value is independent of transaction frequency.
+3. **Core Assumption**: Monetary value is independent of transaction frequency.
 
 ---
 

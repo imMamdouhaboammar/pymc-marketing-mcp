@@ -1,0 +1,50 @@
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-dataset-readiness-trigger",
+      "type": "should_trigger",
+      "query": "inspect this marketing dataset",
+      "expected_skill": "pymc-dataset-readiness"
+    },
+    {
+      "id": "pymc-dataset-readiness-near-miss",
+      "type": "should_not_trigger",
+      "query": "fit the validated MMM",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-dataset-readiness-ambiguous",
+      "type": "ambiguous",
+      "query": "Here is a CSV; I think date is week and sales is the target, but I am not sure which spend columns are channels.",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-dataset-readiness-multi",
+      "type": "multi_intent",
+      "query": "Upload this remote CSV, inspect its roles, validate it for MMM, and fit only if validation passes.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-dataset-readiness-recovery",
+      "type": "recovery",
+      "query": "The server rejected my laptop path /Users/alice/Desktop/data.csv; use remote content or upload-compatible input instead.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": [
+    {
+      "id": "invalid-remote-client-local-path",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "register_dataset",
+          "client": "remote",
+          "arguments": {
+            "path": "/Users/alice/Desktop/marketing.csv"
+          }
+        }
+      ]
+    }
+  ]
+}

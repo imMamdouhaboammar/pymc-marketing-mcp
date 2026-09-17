@@ -6,12 +6,10 @@
     "tv_spend",
     "search_brand_spend",
     "search_nonbrand_spend",
-    "meta_spend",
-    "youtube_spend"
+    "meta_spend"
   ],
   "control_columns": [
     "holiday_event",
-    "competitor_pricing_index",
     "macro_economic_index"
   ],
   "yearly_seasonality": 2,
@@ -22,48 +20,11 @@
   "saturation": {
     "type": "logistic"
   },
-  "channel_priors": {
-    "tv_spend": {
-      "adstock": {
-        "type": "delayed",
-        "l_max": 12
-      },
-      "saturation": {
-        "type": "hill"
-      }
-    },
-    "search_brand_spend": {
-      "adstock": {
-        "type": "none"
-      },
-      "saturation": {
-        "type": "michaelis_menten"
-      }
-    },
-    "search_nonbrand_spend": {
-      "adstock": {
-        "type": "geometric",
-        "l_max": 4
-      },
-      "saturation": {
-        "type": "logistic"
-      }
-    },
-    "youtube_spend": {
-      "adstock": {
-        "type": "weibull_pdf",
-        "l_max": 10
-      },
-      "saturation": {
-        "type": "logistic"
-      }
-    }
-  },
   "sampler": {
     "draws": 1000,
     "tune": 1000,
     "chains": 4,
-    "target_accept": 0.9,
+    "target_accept": 0.90,
     "random_seed": 42
   }
 }

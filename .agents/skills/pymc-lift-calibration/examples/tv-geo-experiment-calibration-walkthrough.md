@@ -1,17 +1,16 @@
-# Walkthrough: Calibrating MMM with TV Matched-Market Experiment
+# Walkthrough: Calibrating MMM with Geo-Lift Experiment
 
-This walkthrough demonstrates calibrating an observational MMM using a 6-week matched-market TV experiment.
+This walkthrough demonstrates calibrating an existing MMM model with a matched-market experiment.
 
 ---
 
-### Step 1: Base Model Diagnosis Verified
-Base model `mmm_base_v1` is diagnosed as `approved`. Observational iROAS estimates TV at $1.20, but the marketing team suspects endogeneity.
+### Step 1: Base Model Verified
+Base model `mmm_base_v1` is diagnosed and approved.
 
 ---
 
 ### Step 2: Execute Calibration
-We calibrate with the matched-market test results ($\Delta x = $50,000, $\Delta y = $30,000, $\sigma = $8,000):
-
+We calibrate with experiment measurements:
 **Tool Call:**
 ```json
 {
@@ -44,6 +43,7 @@ We calibrate with the matched-market test results ($\Delta x = $50,000, $\Delta 
 ---
 
 ### Step 3: Diagnose Calibrated Child Model
+Calibration does not inherit approval; the child model must be diagnosed independently:
 **Tool Call:**
 ```json
 {
@@ -58,29 +58,6 @@ We calibrate with the matched-market test results ($\Delta x = $50,000, $\Delta 
   "decision_status": "approved",
   "divergences": 0,
   "max_rhat": 1.003,
-  "min_ess_bulk": 1180
+  "min_ess": 1180.0
 }
 ```
-
----
-
-### Step 4: Compare Pre vs Post iROAS
-**Tool Call:**
-```json
-{
-  "tool": "compare_models",
-  "arguments": {"model_ids": ["mmm_base_v1", "mmm_calibrated_tv_v2"]}
-}
-```
-**Tool Response:**
-```json
-{
-  "comparisons": {
-    "tv_spend": {
-      "base_marginal_iroas": {"median": 1.15, "hdi_94": [0.85, 1.45]},
-      "calibrated_marginal_iroas": {"median": 0.62, "hdi_94": [0.45, 0.81]}
-    }
-  }
-}
-```
-The experimental likelihood anchor corrected the observational over-estimation of TV, pulling marginal iROAS to $0.62 and preventing budget waste in future allocation cycles.

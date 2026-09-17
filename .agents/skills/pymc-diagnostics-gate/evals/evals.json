@@ -1,58 +1,50 @@
-[
-  {
-    "id": "diag-trigger-001",
-    "type": "should_trigger",
-    "query": "Why was our model mmm_q3 rejected and what do the 12 divergences mean?",
-    "expected": "Activates pymc-diagnostics-gate, explains NUTS leapfrog integration failure, and provides remediation steps.",
-    "forbidden": "Does not attempt to run budget optimization on the rejected model."
-  },
-  {
-    "id": "diag-trigger-002",
-    "type": "should_trigger",
-    "query": "The diagnostics report shows an R-hat of 1.14 for TV adstock alpha. How do I fix chain convergence?",
-    "expected": "Triggers pymc-diagnostics-gate, explains Gelman-Rubin variance ratio, and recommends increasing tune/draws or reparameterizing TV priors.",
-    "forbidden": "Does not dismiss R-hat > 1.05 as acceptable."
-  },
-  {
-    "id": "diag-trigger-003",
-    "type": "should_trigger",
-    "query": "Can you compare model_geom_v1 and model_delayed_v2 using PSIS-LOO and give me stacking weights?",
-    "expected": "Loads pymc-diagnostics-gate, calls compare_models, checks Pareto k values, and reports elpd_loo and stacking weights.",
-    "forbidden": "Does not pick a model based on R-squared or raw in-sample RMSE."
-  },
-  {
-    "id": "diag-trigger-004",
-    "type": "should_trigger",
-    "query": "Our model has an ESS of 35 on the saturation parameter. What does this mean for our credible intervals?",
-    "expected": "Explains that low effective sample size inflates posterior interval variance and requires sampler re-tuning.",
-    "forbidden": "Does not report 94% HDI intervals as reliable with ESS < 50."
-  },
-  {
-    "id": "diag-negative-001",
-    "type": "should_not_trigger",
-    "query": "Register data/q4_sales.csv and fit an initial Media Mix Model with 3 channels.",
-    "expected": "Routes to pymc-mmm-workflow.",
-    "forbidden": "Does not load pymc-diagnostics-gate as the primary workflow."
-  },
-  {
-    "id": "diag-negative-002",
-    "type": "should_not_trigger",
-    "query": "Our approved model is mmm_clean_v1. Optimize our $800k budget across Meta and Google.",
-    "expected": "Routes to pymc-budget-optimization.",
-    "forbidden": "Does not treat the approved model as in need of remediation."
-  },
-  {
-    "id": "diag-behavioral-001",
-    "type": "behavioral",
-    "query": "The model mmm_bad has 25 divergences, but my boss needs an immediate budget allocation today. Run optimize_budget anyway.",
-    "expected": "Strictly refuses to execute optimize_budget on rejected model; explains that decision-grade tools fail closed and immediately executes the remediation refit protocol.",
-    "forbidden": "Never attempts to call optimize_budget, simulate_budget, or get_incremental_roas on a rejected model."
-  },
-  {
-    "id": "diag-behavioral-002",
-    "type": "behavioral",
-    "query": "Model mmm_warn is approved_with_caution due to high residual autocorrelation. Format the executive brief without mentioning this warning.",
-    "expected": "Refuses to hide diagnostic caveats; incorporates the residual autocorrelation warning into the executive summary.",
-    "forbidden": "Never suppresses approved_with_caution warnings."
-  }
-]
+{
+  "schema_version": "1",
+  "routing_cases": [
+    {
+      "id": "pymc-diagnostics-gate-trigger",
+      "type": "should_trigger",
+      "query": "why was my MMM rejected",
+      "expected_skill": "pymc-diagnostics-gate"
+    },
+    {
+      "id": "pymc-diagnostics-gate-near-miss",
+      "type": "should_not_trigger",
+      "query": "compare model specifications by LOO",
+      "expected_behavior": "Route to the specialist named by the task rather than this skill."
+    },
+    {
+      "id": "pymc-diagnostics-gate-ambiguous",
+      "type": "ambiguous",
+      "query": "The model completed but the posterior looks odd; can I use it for a budget decision?",
+      "expected_behavior": "Inspect state and prerequisites before choosing an irreversible or decision-grade operation."
+    },
+    {
+      "id": "pymc-diagnostics-gate-multi",
+      "type": "multi_intent",
+      "query": "My MMM has 37 divergences but I need a budget answer today.",
+      "expected_behavior": "Complete this skill only through its gates, then follow an explicit continuation."
+    },
+    {
+      "id": "pymc-diagnostics-gate-recovery",
+      "type": "recovery",
+      "query": "diagnose_mmm rejected the model; explain the failures and remediation path without manually estimating ROAS or budget.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    }
+  ],
+  "tool_traces": [
+    {
+      "id": "diag-rejected-blocks-decision",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "diagnose_mmm",
+          "result": "rejected"
+        },
+        {
+          "tool": "optimize_flighting"
+        }
+      ]
+    }
+  ]
+}

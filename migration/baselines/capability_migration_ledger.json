@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "total_capabilities_tracked": 49,
+  "total_capabilities_tracked": 57,
   "tools": [
     {
       "name": "archive_model",
@@ -101,6 +101,13 @@
       "adapter_compatibility_required": true
     },
     {
+      "name": "get_agent_insights",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/insights",
+      "cutover_gate": "G_ASSISTANT_BROKER",
+      "adapter_compatibility_required": true
+    },
+    {
       "name": "get_channel_contributions",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/modeling",
@@ -150,10 +157,31 @@
       "adapter_compatibility_required": true
     },
     {
+      "name": "get_skill_guidance",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "get_skill_workflow_map",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT",
+      "adapter_compatibility_required": true
+    },
+    {
       "name": "inspect_dataset",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/datasets",
       "cutover_gate": "G_DATASET_PARITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "list_agentic_skills",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT",
       "adapter_compatibility_required": true
     },
     {
@@ -227,6 +255,13 @@
       "adapter_compatibility_required": true
     },
     {
+      "name": "record_agent_insight",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/insights",
+      "cutover_gate": "G_ASSISTANT_BROKER",
+      "adapter_compatibility_required": true
+    },
+    {
       "name": "recover_execution_state",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "services/analytics-worker/jobs",
@@ -274,6 +309,13 @@
       "target_owner": "packages/python/marketing_core/datasets",
       "cutover_gate": "G_DATASET_PARITY",
       "adapter_compatibility_required": true
+    },
+    {
+      "name": "transform_ad_export",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "packages/python/marketing_core/datasets",
+      "cutover_gate": "G_DATASET_PARITY",
+      "adapter_compatibility_required": true
     }
   ],
   "resources": [
@@ -309,6 +351,18 @@
     },
     {
       "uri_template": "marketing://models/{model_id}/plots/{plot_type}",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://skills/{skill_name}",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "apps/gateway/resources",
+      "cutover_gate": "G_RESOURCE_CONTRACT"
+    },
+    {
+      "uri_template": "marketing://skills/{skill_name}/manifest",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "apps/gateway/resources",
       "cutover_gate": "G_RESOURCE_CONTRACT"
