@@ -1,0 +1,202 @@
+{
+  "application_version": "0.4.0",
+  "artifacts": [
+    {
+      "bytes": 216064,
+      "name": "pymc_marketing_mcp-0.4.0-py3-none-any.whl",
+      "sha256": "55951e2069ccdb2b5db0e87936a3f9ad0328418abc357e6379288f735edf9997"
+    },
+    {
+      "bytes": 543680,
+      "name": "pymc_marketing_mcp-0.4.0.tar.gz",
+      "sha256": "a1c47e694007fbedf5cfed0f0c244b4a2fd047c36cf2fc36de4d2d31303e1942"
+    }
+  ],
+  "ci": {
+    "candidate_matches": false,
+    "is_ci": false,
+    "provider": null,
+    "reported_commit_sha": null,
+    "run_attempt": null,
+    "run_id": null,
+    "workflow": null
+  },
+  "collected_at": "2026-09-17T11:57:04Z",
+  "commands": [
+    {
+      "command": "uv run pytest -n auto -q -m \"not statistical\"",
+      "duration_seconds": 27.26,
+      "exit_code": 0,
+      "passed_all": true,
+      "proofs": [],
+      "stdout_tail": "681 passed, 26 warnings in 26.72s",
+      "tests_errors": 0,
+      "tests_failed": 0,
+      "tests_passed": 681,
+      "tests_skipped": 0
+    },
+    {
+      "command": "uv run ruff check src tests scripts",
+      "duration_seconds": 0.11,
+      "exit_code": 0,
+      "passed_all": true,
+      "proofs": [],
+      "stdout_tail": "All checks passed!"
+    },
+    {
+      "command": "uv run pyright",
+      "duration_seconds": 2.86,
+      "exit_code": 0,
+      "passed_all": true,
+      "proofs": [],
+      "stdout_tail": "Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to `latest`"
+    },
+    {
+      "command": "uv run python scripts/generate_capability_inventory.py --check",
+      "duration_seconds": 0.1,
+      "exit_code": 0,
+      "passed_all": true,
+      "proofs": [],
+      "stdout_tail": "/Users/mamdouhaboammar/Documents/pymc-unified-platform-spec/pymc-marketing-mcp/docs/CAPABILITIES.md matches the capability registry (45 capabilities)"
+    },
+    {
+      "command": "uv run python scripts/check_docs_drift.py",
+      "duration_seconds": 0.19,
+      "exit_code": 0,
+      "passed_all": true,
+      "proofs": [],
+      "stdout_tail": "no documentation drift across 11 document(s)"
+    },
+    {
+      "command": "uv build",
+      "duration_seconds": 1.06,
+      "exit_code": 0,
+      "passed_all": true,
+      "proofs": [],
+      "stdout_tail": "Successfully built dist/pymc_marketing_mcp-0.4.0-py3-none-any.whl"
+    }
+  ],
+  "commit_sha": "cb8575b0e6d505d991c3db3658f81185de3c845e",
+  "dependencies": {
+    "arviz": "1.3.0",
+    "h5netcdf": "1.8.1",
+    "mcp": "2.0.0",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "pydantic": "2.12.5",
+    "pymc": "6.0.1",
+    "pymc-marketing": "1.0.0",
+    "xarray": "2026.7.0"
+  },
+  "environment": {},
+  "gate_results": {
+    "AQG": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "aqg-agent-quality"
+      ],
+      "status": "not_proven"
+    },
+    "G0": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "g0-truth"
+      ],
+      "status": "not_proven"
+    },
+    "G1": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "g1-statistical"
+      ],
+      "status": "not_proven"
+    },
+    "G2": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "g2-recovery"
+      ],
+      "status": "not_proven"
+    },
+    "G3": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "g3-security"
+      ],
+      "status": "not_proven"
+    },
+    "G4": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "g4-operability"
+      ],
+      "status": "not_proven"
+    },
+    "G5": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "g5-artifacts"
+      ],
+      "status": "not_proven"
+    },
+    "H0": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "h0-runtime"
+      ],
+      "status": "not_proven"
+    },
+    "H1": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "h1-http-identity"
+      ],
+      "status": "not_proven"
+    },
+    "H2": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "h2-isolation"
+      ],
+      "status": "not_proven"
+    },
+    "H3": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "h3-credentials"
+      ],
+      "status": "not_proven"
+    },
+    "H4": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "h4-worker"
+      ],
+      "status": "not_proven"
+    },
+    "H5": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "h5-agent-evals"
+      ],
+      "status": "not_proven"
+    },
+    "H6": {
+      "observed_proofs": [],
+      "required_proofs": [
+        "h6-upstream"
+      ],
+      "status": "not_proven"
+    }
+  },
+  "platform": {
+    "machine": "arm64",
+    "python_implementation": "CPython",
+    "python_version": "3.12.13",
+    "release": "25.6.0",
+    "system": "Darwin"
+  },
+  "release_authorized": false,
+  "schema_version": 2,
+  "verdict": "PASS"
+}
