@@ -24,7 +24,7 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
     reasons: list[str] = []
     decision_ready = False
     disconnected = False
-    recovered_after_disconnect = False
+    resubmit_allowed_after_recovery = False
     consecutive_polls = 0
 
     for index, step in enumerate(trace.steps):
@@ -34,7 +34,7 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
 
         if event == "disconnect":
             disconnected = True
-            recovered_after_disconnect = False
+            resubmit_allowed_after_recovery = False
             consecutive_polls = 0
             continue
 
@@ -68,8 +68,16 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
             reasons.append(f"{tool} called before an approved diagnostic gate at step {index}")
 
         if disconnected and tool == "recover_execution_state":
-            recovered_after_disconnect = True
-        if disconnected and tool == "submit_fit_mmm_job" and not recovered_after_disconnect:
-            reasons.append("expensive fit resubmitted after disconnect before recovery attempt")
+            recovery = result if isinstance(result, dict) else {}
+            resubmit_allowed_after_recovery = (
+                recovery.get("status") in {"failed", "cancelled"}
+                and recovery.get("can_resume") is False
+                and recovery.get("has_usable_result") is False
+            )
+        if disconnected and tool == "submit_fit_mmm_job" and not resubmit_allowed_after_recovery:
+            reasons.append(
+                "expensive fit resubmitted after disconnect without authoritative terminal "
+                "unrecoverable state"
+            )
 
     return TraceEvaluation(valid=not reasons, reasons=tuple(reasons))

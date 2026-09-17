@@ -85,6 +85,78 @@
           "tool": "submit_fit_mmm_job"
         }
       ]
+    },
+    {
+      "id": "invalid-resubmit-after-recoverable-state",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "submit_fit_mmm_job"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resubmit-after-active-state",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "running",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "poll_job_progress"
+          }
+        },
+        {
+          "tool": "submit_fit_mmm_job"
+        }
+      ]
+    },
+    {
+      "id": "valid-resubmit-after-terminal-unrecoverable-state",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "poll_job_progress"
+          }
+        },
+        {
+          "tool": "submit_fit_mmm_job"
+        }
+      ]
     }
   ]
 }

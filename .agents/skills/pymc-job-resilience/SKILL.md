@@ -16,6 +16,6 @@ Use this for long-running or interrupted MMM fitting. Current repository jobs ar
 
 ## Disconnect recovery
 
-When the client loses its connection, **do not immediately resubmit the expensive fit**. First inspect/list the existing job, then `recover_execution_state`. Use `resume_job` only when the returned lifecycle state permits resumption and a valid checkpoint exists. Resubmission is a last resort after authoritative state shows there is no recoverable execution.
+When the client loses its connection, **do not immediately resubmit the expensive fit**. First inspect/list the existing job, then `recover_execution_state`. Use `resume_job` only when the returned lifecycle state permits resumption and a valid checkpoint exists. Resubmission is a last resort only when authoritative recovery returns a terminal `failed`/`cancelled` state with `can_resume=false` and `has_usable_result=false`. Active, recoverable, successful, or unavailable state is not permission to submit a duplicate fit.
 
 Use `cancel_job` only on a queued/running job when cancellation is actually requested. After a recovered/completed fit, confirm the persisted model state and run `diagnose_mmm` before any decision-grade use.
