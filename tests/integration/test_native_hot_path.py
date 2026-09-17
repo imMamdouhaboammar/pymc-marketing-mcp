@@ -86,7 +86,7 @@ async def _asgi_post_mcp(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_native_admission_counter_increments_on_valid_request(http_app):
     """Core production proof: native admission counter increments on POST /mcp."""
     if not is_rust_accelerated():
@@ -112,7 +112,7 @@ async def test_native_admission_counter_increments_on_valid_request(http_app):
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_malformed_json_rejected_by_rust_before_mcp_sdk(http_app):
     """Malformed JSON must return 400 with MALFORMED_JSON_RPC code — Rust rejects it."""
     malformed = b"{not valid json at all..."
@@ -144,7 +144,7 @@ def test_native_rejection_preserves_outer_safety_headers(http_app):
     assert response.headers["x-correlation-id"] == "corr-native-rejection"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_missing_jsonrpc_version_rejected_by_rust(http_app):
     """Missing jsonrpc field must be rejected with MISSING_JSONRPC_VERSION by Rust."""
     no_version = json.dumps(
@@ -162,7 +162,7 @@ async def test_missing_jsonrpc_version_rejected_by_rust(http_app):
     assert data.get("native_code") == "MISSING_JSONRPC_VERSION", f"Got: {body}"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_invalid_request_preserves_jsonrpc_id(http_app):
     """Protocol errors for requests must echo the valid JSON-RPC id."""
     invalid = json.dumps(
@@ -179,7 +179,7 @@ async def test_invalid_request_preserves_jsonrpc_id(http_app):
     assert body["error"]["data"]["native_code"] == "MISSING_METHOD"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_invalid_params_preserves_numeric_id_and_protocol_code(http_app):
     invalid = json.dumps(
         {
@@ -197,7 +197,7 @@ async def test_invalid_params_preserves_numeric_id_and_protocol_code(http_app):
     assert body["error"]["data"]["native_code"] == "INVALID_PARAMS"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_wrong_jsonrpc_version_rejected_by_rust(http_app):
     """Wrong jsonrpc version (e.g. '1.0') must be rejected."""
     wrong_version = json.dumps(
@@ -213,7 +213,7 @@ async def test_wrong_jsonrpc_version_rejected_by_rust(http_app):
     assert body.get("error", {}).get("data", {}).get("native_code") == "INVALID_JSONRPC_VERSION"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_oversized_body_rejected_with_413(http_app):
     """Body exceeding 10 MB must be rejected with 413 PAYLOAD_TOO_LARGE."""
     oversized = b"x" * (11 * 1024 * 1024)  # 11 MB > 10 MB limit
@@ -225,7 +225,7 @@ async def test_oversized_body_rejected_with_413(http_app):
     assert data.get("native_code") == "PAYLOAD_TOO_LARGE", f"Got: {body}"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_notification_has_null_id_in_jsonrpc_response(http_app):
     """Notification (no 'id' field) must pass through; response should have null id."""
     notification = json.dumps(
@@ -244,7 +244,7 @@ async def test_notification_has_null_id_in_jsonrpc_response(http_app):
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_invalid_notification_gets_no_jsonrpc_error_response(http_app):
     """JSON-RPC notifications never receive a response, even when their params are invalid."""
     notification = json.dumps(
@@ -260,7 +260,7 @@ async def test_invalid_notification_gets_no_jsonrpc_error_response(http_app):
     assert body == {}
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_native_range_parse_counter_increments_on_artifact_download(tmp_path):
     """Range header parsing counter must increment on artifact download requests."""
     if not is_rust_accelerated():
@@ -278,7 +278,7 @@ async def test_native_range_parse_counter_increments_on_artifact_download(tmp_pa
     assert after > before, "Range parse counter did not increment"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_admission_id_different_from_job_id():
     """Prove that fast_admit_job returns 'admission_id', not 'job_id' (the old buggy field).
 

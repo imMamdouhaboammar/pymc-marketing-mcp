@@ -52,7 +52,7 @@ async def test_inspect_and_validate_do_not_suggest_phantom_repair_dataset():
     from marketing_mcp.schemas.models import DatasetInspection
 
     mock_app = MagicMock()
-    mock_app.metadata.get_dataset.return_value = {"owner": "test", "dataset_id": "d1"}
+    mock_app.metadata.get_dataset.return_value = {"owner": "test", "dataset_id": "d1", "tenant_id": "test"}
     mock_app.datasets.inspect.return_value = DatasetInspection(
         dataset_id="d1",
         rows=3,

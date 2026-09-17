@@ -58,6 +58,12 @@ EXPECTED_TOOLS = frozenset(
         "list_jobs",
         "export_artifact_to_sandbox",
         "cleanup_server_storage",
+        "record_agent_insight",
+        "get_agent_insights",
+        "transform_ad_export",
+        "list_agentic_skills",
+        "get_skill_guidance",
+        "get_skill_workflow_map",
     }
 )
 
@@ -69,6 +75,19 @@ EXPECTED_RESOURCE_TEMPLATES = frozenset(
         "marketing://models/{model_id}/diagnostics",
         "marketing://models/{model_id}/lineage",
         "marketing://clv/{model_id}",
+        "marketing://skills/{skill_name}",
+        "marketing://skills/{skill_name}/manifest",
+    }
+)
+
+EXPECTED_STATIC_RESOURCES = frozenset(
+    {
+        "marketing://skills",
+        "marketing://skills/tool-map",
+        "marketing://skills/workflow-map",
+        "marketing://skills/decision-gates",
+        "marketing://skills/references/scientific-answer-contract",
+        "marketing://skills/references/scientific-source-ledger",
     }
 )
 
@@ -99,9 +118,9 @@ def test_snapshot_resource_templates_exact(mcp):
 
 
 def test_discovered_tools_match_capability_inventory():
-    # The registry covers tools AND resource templates: together they must
-    # exactly equal the MCP discovery surface.
+    # The registry covers tools, resource templates, and static resources:
+    # together they must exactly equal the MCP discovery surface.
     inventory_names = {cap.name for cap in get_capability_inventory()}
-    assert inventory_names == EXPECTED_TOOLS | EXPECTED_RESOURCE_TEMPLATES, (
+    assert inventory_names == EXPECTED_TOOLS | EXPECTED_RESOURCE_TEMPLATES | EXPECTED_STATIC_RESOURCES, (
         "Capability inventory and MCP discovery surface have drifted"
     )
