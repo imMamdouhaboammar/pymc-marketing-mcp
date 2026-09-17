@@ -52,7 +52,7 @@ fn make_id(prefix: &str) -> String {
 // Error types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NormalizedEngineError {
     pub code: String,
     pub category: String,
@@ -479,6 +479,66 @@ pub fn acknowledge_job_cancellation(
 }
 
 // ---------------------------------------------------------------------------
+// Typed Interaction Boundary (Phase 4 Contract)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InteractionRequest {
+    pub request_id: Option<String>,
+    pub correlation_id: Option<String>,
+    pub tool_name: Option<String>,
+    pub arguments_json: Option<String>,
+    pub tenant_id: Option<String>,
+    pub deadline_ms: Option<u64>,
+    pub cancellation_token: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InteractionResponse {
+    pub correlation_id: Option<String>,
+    pub status: String, // "ok", "error", "accepted", "cancelling", "cancelled"
+    pub payload_json: Option<String>,
+    pub normalized_error: Option<NormalizedEngineError>,
+    pub execution_time_ms: f64,
+}
+
+pub fn create_interaction_request(
+    request_id: Option<String>,
+    correlation_id: Option<String>,
+    tool_name: Option<String>,
+    arguments_json: Option<String>,
+    tenant_id: Option<String>,
+    deadline_ms: Option<u64>,
+    cancellation_token: Option<String>,
+) -> InteractionRequest {
+    InteractionRequest {
+        request_id,
+        correlation_id,
+        tool_name,
+        arguments_json,
+        tenant_id,
+        deadline_ms,
+        cancellation_token,
+    }
+}
+
+pub fn create_interaction_response(
+    correlation_id: Option<String>,
+    status: String,
+    payload_json: Option<String>,
+    normalized_error: Option<NormalizedEngineError>,
+    execution_time_ms: f64,
+) -> InteractionResponse {
+    InteractionResponse {
+        correlation_id,
+        status,
+        payload_json,
+        normalized_error,
+        execution_time_ms,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Native stats snapshot
 // ---------------------------------------------------------------------------
 
@@ -707,5 +767,32 @@ mod tests {
             10 * 1024 * 1024,
             "Rust limit must match Python RequestSafetyMiddleware limit"
         );
+    }
+
+    #[test]
+    fn test_typed_interaction_boundary_roundtrip() {
+        let req = create_interaction_request(
+            Some("req-123".to_string()),
+            Some("corr-456".to_string()),
+            Some("get_model_status".to_string()),
+            Some(r#"{"model_id":"m-1"}"#.to_string()),
+            Some("tenant-a".to_string()),
+            Some(5000),
+            Some("cancel-tok-1".to_string()),
+        );
+        let serialized = serde_json::to_string(&req).unwrap();
+        let deserialized: InteractionRequest = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(req, deserialized);
+
+        let resp = create_interaction_response(
+            Some("corr-456".to_string()),
+            "ok".to_string(),
+            Some(r#"{"status":"ready"}"#.to_string()),
+            None,
+            1.23,
+        );
+        let resp_json = serde_json::to_string(&resp).unwrap();
+        let resp_deser: InteractionResponse = serde_json::from_str(&resp_json).unwrap();
+        assert_eq!(resp, resp_deser);
     }
 }

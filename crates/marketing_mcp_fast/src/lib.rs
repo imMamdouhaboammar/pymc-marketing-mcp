@@ -414,6 +414,63 @@ fn fast_serialize_json_bytes(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
     serde_json::to_vec(&value).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
+#[pyfunction]
+#[pyo3(signature = (request_id=None, correlation_id=None, tool_name=None, arguments_json=None, tenant_id=None, deadline_ms=None, cancellation_token=None))]
+fn fast_create_interaction_request(
+    py: Python,
+    request_id: Option<String>,
+    correlation_id: Option<String>,
+    tool_name: Option<String>,
+    arguments_json: Option<String>,
+    tenant_id: Option<String>,
+    deadline_ms: Option<u64>,
+    cancellation_token: Option<String>,
+) -> PyResult<PyObject> {
+    let req = engine::create_interaction_request(
+        request_id,
+        correlation_id,
+        tool_name,
+        arguments_json,
+        tenant_id,
+        deadline_ms,
+        cancellation_token,
+    );
+    let dict = PyDict::new(py);
+    dict.set_item("request_id", req.request_id)?;
+    dict.set_item("correlation_id", req.correlation_id)?;
+    dict.set_item("tool_name", req.tool_name)?;
+    dict.set_item("arguments_json", req.arguments_json)?;
+    dict.set_item("tenant_id", req.tenant_id)?;
+    dict.set_item("deadline_ms", req.deadline_ms)?;
+    dict.set_item("cancellation_token", req.cancellation_token)?;
+    Ok(dict.into())
+}
+
+#[pyfunction]
+#[pyo3(signature = (correlation_id=None, status="ok".to_string(), payload_json=None, execution_time_ms=0.0))]
+fn fast_create_interaction_response(
+    py: Python,
+    correlation_id: Option<String>,
+    status: String,
+    payload_json: Option<String>,
+    execution_time_ms: f64,
+) -> PyResult<PyObject> {
+    let resp = engine::create_interaction_response(
+        correlation_id,
+        status,
+        payload_json,
+        None,
+        execution_time_ms,
+    );
+    let dict = PyDict::new(py);
+    dict.set_item("correlation_id", resp.correlation_id)?;
+    dict.set_item("status", resp.status)?;
+    dict.set_item("payload_json", resp.payload_json)?;
+    dict.set_item("error", py.None())?;
+    dict.set_item("execution_time_ms", resp.execution_time_ms)?;
+    Ok(dict.into())
+}
+
 // ---------------------------------------------------------------------------
 // Module registration
 // ---------------------------------------------------------------------------
@@ -434,6 +491,8 @@ fn marketing_mcp_fast(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fast_acknowledge_cancellation, m)?)?;
     m.add_function(wrap_pyfunction!(get_native_invocation_stats, m)?)?;
     m.add_function(wrap_pyfunction!(increment_native_fallback_count, m)?)?;
+    m.add_function(wrap_pyfunction!(fast_create_interaction_request, m)?)?;
+    m.add_function(wrap_pyfunction!(fast_create_interaction_response, m)?)?;
     // Experimental / benchmark-only — see module docstring
     m.add_function(wrap_pyfunction!(fast_mcmc_diagnostics, m)?)?;
     m.add_function(wrap_pyfunction!(fast_compute_split_rhat, m)?)?;
