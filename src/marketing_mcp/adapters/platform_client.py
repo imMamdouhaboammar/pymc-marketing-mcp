@@ -121,20 +121,63 @@ class PlatformClient:
 
     async def dispatch_run(
         self,
-        model_spec_id: str | UUID,
+        project_id: str | UUID,
+        model_spec_version_id: str | UUID,
+        dataset_version_id: str | UUID,
         requested_via: str = "mcp",
         trace_id: str | None = None,
     ) -> dict[str, Any]:
-        """Dispatch model run through Axum gateway transactional outbox."""
+        """Dispatch MMM fit run through Axum gateway transactional outbox (UP-063).
+
+        Sends POST /api/v1/runs with the canonical CreateRunInput payload matching
+        the gateway Rust struct: project_id, model_spec_version_id, dataset_version_id.
+        Returns CreateRunResponse {run, job} with immediate job_id so the MCP tool
+        can return a job ticket URI without blocking for MCMC sampling.
+        """
         client = await self._get_client()
         headers = self.build_headers(trace_id=trace_id)
         payload = {
-            "model_spec_id": str(model_spec_id),
+            "project_id": str(project_id),
+            "model_spec_version_id": str(model_spec_version_id),
+            "dataset_version_id": str(dataset_version_id),
             "requested_via": requested_via,
         }
         resp = await client.post("/api/v1/runs", json=payload, headers=headers)
         resp.raise_for_status()
         return resp.json()
+
+    async def get_run_status(
+        self,
+        run_id: str | UUID,
+        trace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Poll run status from gateway (UP-063).
+
+        Returns the Run record with current ``status`` and ``decision_status``
+        so AI clients can poll for completion without holding open long connections.
+        """
+        client = await self._get_client()
+        headers = self.build_headers(trace_id=trace_id)
+        resp = await client.get(f"/api/v1/runs/{run_id}", headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_job_status(
+        self,
+        job_id: str | UUID,
+        trace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Poll job status from gateway (UP-063).
+
+        Returns the Job record with ``status``, ``stage``, ``progress_percent``
+        allowing AI clients to display progress without a blocking MCMC wait.
+        """
+        client = await self._get_client()
+        headers = self.build_headers(trace_id=trace_id)
+        resp = await client.get(f"/api/v1/jobs/{job_id}", headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
 
     async def route_dataset_preflight(
         self,

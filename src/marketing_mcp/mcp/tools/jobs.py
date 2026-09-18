@@ -96,6 +96,35 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
             )
             return res_dict
 
+        if getattr(app.settings, "platform_client_enabled", False) and hasattr(app, "platform_client"):
+            from uuid import uuid4
+
+            project_id = getattr(principal, "project_id", None) or uuid4()
+            model_spec_ver_id = uuid4()
+            ds_ver_id = getattr(config, "dataset_version_id", None) or uuid4()
+
+            dispatch_res = await app.platform_client.dispatch_run(
+                project_id=project_id,
+                model_spec_version_id=model_spec_ver_id,
+                dataset_version_id=ds_ver_id,
+                requested_via="mcp",
+            )
+            run_rec = dispatch_res["run"]
+            job_rec = dispatch_res["job"]
+            return env(
+                summary={
+                    "job_id": str(job_rec["job_id"]),
+                    "run_id": str(run_rec["run_id"]),
+                    "project_id": str(run_rec["project_id"]),
+                    "status": job_rec["status"],
+                    "stage": job_rec.get("stage", "validating"),
+                    "progress_percent": job_rec.get("progress_percent", 0),
+                    "sse_topic_uri": f"/api/v1/projects/{run_rec['project_id']}/events",
+                    "poll_url": f"/api/v1/runs/{run_rec['run_id']}",
+                },
+                next_actions=["poll_job_progress", "get_job_status"],
+            )
+
         job_rec = app.jobs.submit_job(
             job_type="fit_mmm",
             payload=payload_dict,
@@ -116,16 +145,25 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
     async def get_job_status(job_id: str):
         principal = resolve_context().principal
         require_scope(principal, scopes_for_tool("get_job_status")[0])
-        record = app.jobs.get_job(job_id, principal=principal)
-        next_acts = []
-        if record.status == JobStatus.SUCCEEDED:
-            next_acts = ["diagnose_mmm", "get_model_status", "export_artifact_to_sandbox"]
-        elif record.status == JobStatus.RUNNING:
-            next_acts = ["poll_job_progress", "get_job_status", "cancel_job"]
-        return env(
-            summary=record.to_dict(),
-            next_actions=next_acts,
-        )
+        try:
+            record = app.jobs.get_job(job_id, principal=principal)
+            next_acts = []
+            if record.status == JobStatus.SUCCEEDED:
+                next_acts = ["diagnose_mmm", "get_model_status", "export_artifact_to_sandbox"]
+            elif record.status == JobStatus.RUNNING:
+                next_acts = ["poll_job_progress", "get_job_status", "cancel_job"]
+            return env(
+                summary=record.to_dict(),
+                next_actions=next_acts,
+            )
+        except DomainError:
+            if getattr(app.settings, "platform_client_enabled", False) and hasattr(app, "platform_client"):
+                status_res = await app.platform_client.get_job_status(job_id)
+                return env(
+                    summary=status_res,
+                    next_actions=["poll_job_progress", "get_job_status"],
+                )
+            raise
 
     @mcp.tool(
         name="poll_job_progress",
