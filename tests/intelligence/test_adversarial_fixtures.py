@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -227,3 +229,43 @@ def test_fixture_l_explicit_user_override(engine):
     assert len(contract.channels) == 1
     assert contract.channels[0].column == "col_b"
     assert contract.channels[0].user_overridden is True
+
+
+def test_golden_fixture_observed_daily_panel(engine):
+    """Test engine on canonical golden fixture: pymc_harsh_observed_daily_panel.csv."""
+    path = Path(__file__).parents[3] / "migration" / "baselines" / "golden_datasets" / "pymc_harsh_observed_daily_panel.csv"
+    if not path.exists():
+        path = Path(__file__).parents[2] / "migration" / "baselines" / "golden_datasets" / "pymc_harsh_observed_daily_panel.csv"
+    assert path.exists(), f"Golden fixture not found: {path}"
+    df = pd.read_csv(path)
+    contract = engine.analyze_dataset(df, dataset_id="golden_observed_daily")
+    assert contract.target is not None
+    assert contract.target.column == "revenue"
+    assert set(c.column for c in contract.channels) == {"meta", "google", "tiktok"}
+    assert contract.suitability[AnalysisType.MMM].verdict == SuitabilityVerdict.SUITABLE_WITH_CAUTION
+
+
+def test_golden_fixture_collinear_panel(engine):
+    """Test engine on canonical golden fixture: pymc_harsh_collinear_panel.csv."""
+    path = Path(__file__).parents[3] / "migration" / "baselines" / "golden_datasets" / "pymc_harsh_collinear_panel.csv"
+    if not path.exists():
+        path = Path(__file__).parents[2] / "migration" / "baselines" / "golden_datasets" / "pymc_harsh_collinear_panel.csv"
+    assert path.exists(), f"Golden fixture not found: {path}"
+    df = pd.read_csv(path)
+    contract = engine.analyze_dataset(df, dataset_id="golden_collinear")
+    assert contract.target is not None
+    assert contract.target.column == "revenue"
+    assert any(iss.code == IssueCode.HIGH_CHANNEL_COLLINEARITY for iss in contract.issues)
+    assert contract.suitability[AnalysisType.MMM].verdict == SuitabilityVerdict.SUITABLE_WITH_CAUTION
+
+
+def test_golden_fixture_invalid_panel(engine):
+    """Test engine on canonical golden fixture: pymc_harsh_invalid_panel.csv."""
+    path = Path(__file__).parents[3] / "migration" / "baselines" / "golden_datasets" / "pymc_harsh_invalid_panel.csv"
+    if not path.exists():
+        path = Path(__file__).parents[2] / "migration" / "baselines" / "golden_datasets" / "pymc_harsh_invalid_panel.csv"
+    assert path.exists(), f"Golden fixture not found: {path}"
+    df = pd.read_csv(path)
+    contract = engine.analyze_dataset(df, dataset_id="golden_invalid")
+    assert contract.suitability[AnalysisType.MMM].verdict == SuitabilityVerdict.NOT_SUITABLE
+
