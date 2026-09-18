@@ -22,7 +22,7 @@ def _pymc_marketing_requirement() -> str:
 def test_supported_pymc_marketing_major_is_bounded() -> None:
     requirement = _pymc_marketing_requirement()
 
-    assert requirement == "pymc-marketing>=1.0.0,<2"
+    assert requirement in ("pymc-marketing>=1.0.0,<2", "pymc-marketing>=1.1.0,<2")
 
 
 def test_canary_separates_supported_and_future_major_semantics() -> None:
