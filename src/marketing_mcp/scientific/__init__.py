@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from marketing_mcp.scientific.artifacts import (
+    ArtifactManifest,
+    SUPPORTED_ARTIFACT_KINDS,
+    generate_mmm_artifacts,
+)
 from marketing_mcp.scientific.clv import (
     CLVFitResult,
     build_clv_purchase_from_spec,
@@ -28,9 +33,11 @@ from marketing_mcp.scientific.mmm import (
 )
 
 __all__ = [
+    "ArtifactManifest",
     "CLVFitResult",
     "DecisionPolicyVerdict",
     "MMMFitResult",
+    "SUPPORTED_ARTIFACT_KINDS",
     "build_clv_purchase_from_spec",
     "build_clv_value_from_spec",
     "build_mmm_from_spec",
@@ -41,6 +48,7 @@ __all__ = [
     "fit_clv_purchase_from_spec",
     "fit_clv_value_from_spec",
     "fit_mmm_from_spec",
+    "generate_mmm_artifacts",
     "inspect_dataset_frame",
     "summarize_dataset_frame",
     "validate_dataset_frame",
