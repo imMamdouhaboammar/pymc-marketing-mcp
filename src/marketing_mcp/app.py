@@ -4,6 +4,7 @@ from .adapters.platform_client import PlatformClient
 from .adapters.pymc_marketing import PyMCMarketingAdapter
 from .config import Settings
 from .credentials.service import CredentialService
+from .domain.experiments.registry import ExperimentRegistryService
 from .jobs.executor import EnqueueOnlyJobExecutor
 from .jobs.service import JobService
 from .persistence import PersistenceBackend, build_persistence
@@ -47,5 +48,6 @@ class Application:
         self.plots = PlottingService(self.artifacts, metadata=self.metadata)
         self.clv = CLVService(self.metadata, self.artifacts, datasets=self.datasets)
         self.insights = InsightService(self.metadata)
+        self.experiments = ExperimentRegistryService(self.metadata)
         self.skillpack = get_runtime_registry()
         self.platform_client = PlatformClient(self.settings)

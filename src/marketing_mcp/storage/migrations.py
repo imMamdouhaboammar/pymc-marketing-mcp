@@ -167,6 +167,23 @@ def migrate_007_mapping_profiles(conn: sqlite3.Connection):
     )
 
 
+@migration(8, "add_experiments_table")
+def migrate_008_experiments(conn: sqlite3.Connection):
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS experiments (
+            experiment_id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL DEFAULT 'default',
+            channel TEXT NOT NULL,
+            archived INTEGER NOT NULL DEFAULT 0,
+            payload TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_experiments_tenant ON experiments(tenant_id);
+        CREATE INDEX IF NOT EXISTS idx_experiments_channel ON experiments(channel);
+        """
+    )
+
+
 class MigrationRunner:
     """Applies ordered migrations and tracks schema version."""
 

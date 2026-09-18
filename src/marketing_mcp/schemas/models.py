@@ -442,11 +442,22 @@ class LiftTestMeasurement(BaseModel):
 class CalibrateMMMInput(BaseModel):
     model_id: str = Field(description="Fitted base model ID to calibrate")
     lift_tests: list[LiftTestMeasurement] = Field(
-        min_length=1, max_length=100, description="Lift test experimental measurements"
+        default_factory=list, max_length=100, description="Lift test experimental measurements"
+    )
+    experiment_ids: list[str] = Field(
+        default_factory=list,
+        max_length=100,
+        description="Registered experiment IDs from Experiment Evidence Registry",
     )
     sampler: SamplerConfig = Field(
         default_factory=SamplerConfig, description="Sampler settings for calibration fit"
     )
+
+    @model_validator(mode="after")
+    def _validate_evidence_source(self) -> CalibrateMMMInput:
+        if not self.lift_tests and not self.experiment_ids:
+            raise ValueError("At least one inline lift_test or registered experiment_id is required for calibration")
+        return self
 
 
 class CrossValidateMMMInput(BaseModel):
