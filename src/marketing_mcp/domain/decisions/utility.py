@@ -34,7 +34,9 @@ class UtilityObjective(Protocol):
     optimizer maximises this value.
     """
 
-    name: str
+    @property
+    def name(self) -> str:
+        ...
 
     def evaluate(
         self,
