@@ -40,13 +40,13 @@ def register_insights_tools(mcp, app: Application, context_provider: Any = None)
 
         try:
             inp = RecordInsightInput(
-                category=category,
+                category=category,  # type: ignore[arg-type]
                 summary=summary,
                 details=details,
                 model_id=model_id,
                 dataset_id=dataset_id,
                 agent_id=agent_id,
-                severity=severity,
+                severity=severity,  # type: ignore[arg-type]
                 tags=tags or [],
             )
         except Exception as err:
@@ -85,7 +85,7 @@ def register_insights_tools(mcp, app: Application, context_provider: Any = None)
             q = QueryInsightsInput(
                 model_id=model_id,
                 dataset_id=dataset_id,
-                category=category,
+                category=category,  # type: ignore[arg-type]
                 tag=tag,
                 limit=limit,
             )
