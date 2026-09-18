@@ -346,6 +346,10 @@ class ModelRecord(BaseModel):
     artifact_path: str | None = None
     artifact_ref: dict[str, Any] | None = None
     config: dict[str, Any]
+    requested_config: dict[str, Any] = Field(default_factory=dict, description="Exact user input configuration")
+    resolved_config: dict[str, Any] = Field(default_factory=dict, description="Resolved config with defaults and intelligence")
+    effective_config: dict[str, Any] = Field(default_factory=dict, description="Effective parameters used in sampling")
+    config_diff: dict[str, Any] = Field(default_factory=dict, description="Attributed config diff audit")
     package_provenance: dict[str, str] = Field(default_factory=dict)
     created_at: str
     updated_at: str

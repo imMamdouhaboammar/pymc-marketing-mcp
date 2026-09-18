@@ -90,6 +90,11 @@ class ModelingService:
         owner = principal.subject if principal is not None else "local"
         tenant_id = principal.tenant_id if principal is not None else None
 
+        requested_cfg = input.model_dump(exclude_unset=True)
+        resolved_cfg = input.model_dump()
+        from marketing_mcp.domain.configuration.transparency import build_config_audit
+        audit = build_config_audit(requested_cfg, resolved_cfg, resolved_cfg)
+
         rec = ModelRecord(
             model_id=model_id,
             parent_model_id=None,
@@ -99,6 +104,10 @@ class ModelingService:
             semantic_config_hash=cfg_hash,
             status="running",
             config=config,
+            requested_config=requested_cfg,
+            resolved_config=resolved_cfg,
+            effective_config=resolved_cfg,
+            config_diff=audit,
             package_provenance=versions,
             created_at=now,
             updated_at=now,
