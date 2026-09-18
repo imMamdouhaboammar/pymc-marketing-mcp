@@ -53,6 +53,21 @@ class TestErrorTaxonomyAndCatalog:
         assert defn.retryable is False
         assert defn.http_status == 500
 
+    @pytest.mark.parametrize(
+        "code",
+        [
+            "LONG_TERM_MULTIPLIER_UNDEFINED",
+            "LONG_TERM_UNCERTAINTY_REQUIRED",
+            "LONG_TERM_GATE_REJECTED",
+        ],
+    )
+    def test_long_term_scientific_errors_are_canonical_and_actionable(self, code):
+        defn = get_error_definition(code)
+        assert defn.category in {ErrorCategory.MODELING, ErrorCategory.STATISTICAL}
+        assert defn.http_status == 422
+        assert defn.user_actionable is True
+        assert defn.suggested_action
+
 
 class TestDomainErrorNormalization:
     def test_domain_error_preserves_legacy_and_enriched_fields(self):

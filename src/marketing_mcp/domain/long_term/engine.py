@@ -122,7 +122,7 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
 
             initial_val = float(resp_h[0])
             cum_val = float(sum(resp_h))
-            if is_stationary and abs(initial_val) < 1e-8:
+            if abs(initial_val) < 1e-8:
                 raise DomainError(
                     "LONG_TERM_MULTIPLIER_UNDEFINED",
                     f"Channel '{ch}' has near-zero contemporaneous target impact; "

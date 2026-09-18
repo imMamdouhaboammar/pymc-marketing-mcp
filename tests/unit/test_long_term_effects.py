@@ -131,6 +131,21 @@ class TestDeterministicVARLongTermEngine:
 
         assert exc_info.value.code == "LONG_TERM_MULTIPLIER_UNDEFINED"
 
+    def test_near_zero_initial_effect_rejects_even_when_var_is_explosive(self, engine):
+        n = 40
+        target = 1.2 ** np.arange(n, dtype=float)
+        df = pd.DataFrame({"media": np.zeros(n), "target": target})
+
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=df,
+                endogenous_columns=["target"],
+                exogenous_channels=["media"],
+                horizon=4,
+            )
+
+        assert exc_info.value.code == "LONG_TERM_MULTIPLIER_UNDEFINED"
+
     def test_deterministic_rollup_cannot_become_decision_evidence(self, engine, synthetic_var_data):
         rollup = engine.fit_var(
             df=synthetic_var_data,

@@ -14,7 +14,7 @@ The engine:
 
 - jointly coerces and filters all endogenous and exogenous columns so time rows stay aligned;
 - estimates one VARX(1) coefficient matrix with ridge-regularized least squares;
-- rejects explosive dynamics when the maximum transition-matrix eigenvalue is at least 1;
+- marks explosive dynamics as rejected for downstream decision rollup when the maximum transition-matrix eigenvalue is at least 1;
 - computes deterministic exogenous impulse-response curves;
 - reports a finite-horizon multiplier as cumulative target response divided by contemporaneous target response; and
 - refuses to attach deterministic point estimates to decision-grade provenance with `LONG_TERM_UNCERTAINTY_REQUIRED`.

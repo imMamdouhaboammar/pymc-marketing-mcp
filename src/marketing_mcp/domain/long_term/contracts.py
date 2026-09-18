@@ -15,7 +15,10 @@ class ImpulseResponseCurve(BaseModel):
     horizons: list[int] = Field(description="Time lag horizon steps (0, 1, ..., H)")
     responses: list[float] = Field(description="Response magnitude at each horizon step")
     cumulative_multiplier: float = Field(
-        description="Long-run multiplier: (total cumulative response over H) / (initial impact)"
+        description=(
+            "Finite-horizon cumulative response divided by contemporaneous response: "
+            "(total response over H) / (initial impact)"
+        )
     )
 
 
