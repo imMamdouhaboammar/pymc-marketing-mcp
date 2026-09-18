@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from marketing_mcp.app import Application
 from marketing_mcp.mcp.resources import register_resources
+from marketing_mcp.mcp.skills import register_skill_delivery
 from marketing_mcp.mcp.tools.artifacts import register_artifacts_tools
 from marketing_mcp.mcp.tools.clv import register_clv_tools
 from marketing_mcp.mcp.tools.datasets import register_datasets_tools
@@ -10,7 +11,6 @@ from marketing_mcp.mcp.tools.insights import register_insights_tools
 from marketing_mcp.mcp.tools.jobs import register_jobs_tools
 from marketing_mcp.mcp.tools.mmm import register_mmm_tools
 from marketing_mcp.mcp.tools.model_selection import register_model_selection_tools
-from marketing_mcp.mcp.skills import register_skill_delivery
 
 
 def create_server(app: Application | None = None, context_provider=None):

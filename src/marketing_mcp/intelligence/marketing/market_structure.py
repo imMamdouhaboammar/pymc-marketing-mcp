@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+
 import pandas as pd
+
 from marketing_mcp.intelligence.contracts.issues import IntelligenceIssue, IssueCode, IssueSeverity
 
 

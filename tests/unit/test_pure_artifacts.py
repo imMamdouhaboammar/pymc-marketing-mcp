@@ -6,12 +6,11 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 from uuid import uuid4
+
 import numpy as np
-import pytest
 
 from marketing_mcp.scientific.artifacts import (
     generate_mmm_artifacts,
-    SUPPORTED_ARTIFACT_KINDS,
 )
 
 

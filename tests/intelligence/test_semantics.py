@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
+
 from marketing_mcp.intelligence.contracts.evidence import ConfidenceLevel
 from marketing_mcp.intelligence.contracts.issues import IssueCode
 from marketing_mcp.intelligence.contracts.semantics import SemanticRole
@@ -61,7 +61,10 @@ def test_target_inference_flags_attributed_revenue():
 
 
 def test_currency_inference_and_fx_consistency():
-    from marketing_mcp.intelligence.semantics.currencies import infer_currencies, verify_fx_consistency
+    from marketing_mcp.intelligence.semantics.currencies import (
+        infer_currencies,
+        verify_fx_consistency,
+    )
 
     df = pd.DataFrame({
         "spend_local": [1000.0, 2000.0, 3000.0],

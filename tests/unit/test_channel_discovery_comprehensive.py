@@ -1,6 +1,7 @@
 import pandas as pd
-import pytest
+
 from marketing_mcp.scientific.datasets import inspect_dataset_frame
+
 
 def test_channel_discovery_detects_all_six_platforms():
     df = pd.DataFrame({
@@ -31,9 +32,9 @@ def test_long_form_dataset_detection():
     assert any("Google Ads" in ch for ch in inspection.detected_categorical_channels)
 
 def test_dataset_service_inspect_uses_comprehensive_channel_and_long_form(tmp_path):
-    from marketing_mcp.storage.metadata import SQLiteMetadataStore
-    from marketing_mcp.storage.artifacts import LocalArtifactStore
     from marketing_mcp.services.dataset_service import DatasetService
+    from marketing_mcp.storage.artifacts import LocalArtifactStore
+    from marketing_mcp.storage.metadata import SQLiteMetadataStore
 
     csv = tmp_path / "all_channels.csv"
     pd.DataFrame({

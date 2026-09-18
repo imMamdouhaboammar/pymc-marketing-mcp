@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import pandas as pd
+
 from marketing_mcp.intelligence.contracts.profile import (
     CategoricalDistribution,
     ColumnProfile,
     StructuralProfile,
 )
+
 from .dates import detect_temporal_profile
 from .missingness import profile_missingness
 from .numeric import profile_numeric

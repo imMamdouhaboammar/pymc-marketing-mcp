@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from marketing_mcp.errors import DomainError
 from marketing_mcp.services.decision_service import DecisionService

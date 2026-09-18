@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+
 from marketing_mcp.intelligence.contracts.profile import MissingnessDetail
 
 

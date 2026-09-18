@@ -9,14 +9,12 @@ from typing import Any
 
 import pandas as pd
 
-from marketing_mcp.domain.datasets.validation import validate_mmm_dataset
 from marketing_mcp.errors import DomainError
 from marketing_mcp.repositories.models import ArtifactRef
 from marketing_mcp.schemas.models import (
     DatasetInspection,
     DatasetRegistration,
     DatasetValidationResult,
-    Finding,
 )
 from marketing_mcp.security import safe_source_path
 from marketing_mcp.storage.artifacts import LocalArtifactStore

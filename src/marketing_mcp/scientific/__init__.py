@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from marketing_mcp.scientific.artifacts import (
-    ArtifactManifest,
     SUPPORTED_ARTIFACT_KINDS,
+    ArtifactManifest,
     generate_mmm_artifacts,
 )
 from marketing_mcp.scientific.clv import (

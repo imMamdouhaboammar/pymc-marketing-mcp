@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from uuid import uuid4
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -12,7 +13,6 @@ from marketing_mcp.scientific.mmm import (
     MMMFitResult,
     build_mmm_from_spec,
     fit_mmm_from_spec,
-    extract_mcmc_diagnostics,
 )
 
 
@@ -59,11 +59,11 @@ def test_build_mmm_from_spec_geometric_logistic():
 def test_build_mmm_from_canonical_pydantic_model_spec():
     try:
         from packages.contracts.python.models import (
-            MMMModelSpec,
-            MMMConfiguration,
             AdstockConfig,
-            SaturationConfig,
+            MMMConfiguration,
+            MMMModelSpec,
             SamplerConfig,
+            SaturationConfig,
         )
     except ImportError:
         pytest.skip("packages.contracts not available on PYTHONPATH")

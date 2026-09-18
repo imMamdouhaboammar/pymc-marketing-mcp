@@ -1,7 +1,7 @@
-import numpy as np
 import pandas as pd
-import pytest
+
 from marketing_mcp.domain.datasets.validation import validate_mmm_dataset
+
 
 def test_fixture_a_clean_single_market():
     """Fixture A: Clean single-market revenue MMM without confounding."""

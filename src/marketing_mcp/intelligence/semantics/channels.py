@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import pandas as pd
+
 from marketing_mcp.intelligence.contracts.evidence import (
     ConfidenceLevel,
     EvidenceSignal,
     HeuristicConfidence,
 )
 from marketing_mcp.intelligence.contracts.profile import ColumnProfile
-from marketing_mcp.intelligence.contracts.semantics import InferredColumn, SemanticRole, SemanticType
+from marketing_mcp.intelligence.contracts.semantics import (
+    InferredColumn,
+    SemanticRole,
+    SemanticType,
+)
 
 MEDIA_PLATFORMS = (
     "google", "meta", "facebook", "fb", "instagram", "ig",

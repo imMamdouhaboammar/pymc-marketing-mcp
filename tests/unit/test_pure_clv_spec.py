@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from uuid import uuid4
+
 import pandas as pd
 import pytest
 
@@ -57,10 +58,10 @@ def test_build_clv_purchase_from_spec():
 def test_build_clv_from_canonical_pydantic_specs():
     try:
         from packages.contracts.python.models import (
-            CLVPurchaseModelSpec,
             CLVPurchaseConfiguration,
-            CLVValueModelSpec,
+            CLVPurchaseModelSpec,
             CLVValueConfiguration,
+            CLVValueModelSpec,
         )
     except ImportError:
         pytest.skip("packages.contracts not available on PYTHONPATH")

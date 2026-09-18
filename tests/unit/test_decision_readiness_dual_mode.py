@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from marketing_mcp.domain.diagnostics.gate import DecisionGate, DecisionReadiness
+from marketing_mcp.domain.diagnostics.gate import DecisionGate
 from marketing_mcp.errors import DomainError
 
 

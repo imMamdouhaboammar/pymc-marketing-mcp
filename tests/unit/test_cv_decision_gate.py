@@ -1,12 +1,15 @@
-import pytest
 from unittest.mock import MagicMock
-from marketing_mcp.security.principal import Principal
+
+import pytest
+
 from marketing_mcp.domain.diagnostics.gate import DecisionGate
 from marketing_mcp.errors import DomainError
-from marketing_mcp.schemas.models import ModelRecord, CrossValidateMMMInput, SamplerConfig
-from marketing_mcp.services.diagnostics_service import DiagnosticsService
+from marketing_mcp.schemas.models import CrossValidateMMMInput, ModelRecord, SamplerConfig
+from marketing_mcp.security.principal import Principal
 from marketing_mcp.services.decision_service import DecisionService
+from marketing_mcp.services.diagnostics_service import DiagnosticsService
 from marketing_mcp.storage.metadata import SQLiteMetadataStore
+
 
 def test_decision_gate_blocks_on_blocked_predictive_failure():
     gate = DecisionGate(decision_status="blocked_predictive_failure", failures=[{"code": "CV_PREDICTIVE_FAILURE"}])
@@ -87,8 +90,8 @@ def test_diagnostics_service_cross_validate_persists_failure_and_blocks_optimize
 
 @pytest.mark.anyio
 async def test_cross_validate_mmm_tool_next_actions_on_failure():
+
     from marketing_mcp.mcp.tools.mmm import register_mmm_tools
-    from unittest.mock import AsyncMock
 
     mock_mcp = MagicMock()
     registered_tools = {}

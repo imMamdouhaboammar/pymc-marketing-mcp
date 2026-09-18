@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from marketing_mcp.adapters.pymc_marketing import PyMCMarketingAdapter
 
@@ -18,6 +17,7 @@ def test_cv_failure_attribution_and_naive_skill_score():
         np.array([104.0, 108.0, 105.0, 101.0, 103.0, 109.0, 107.0]),
         np.array([108.0, 112.0, 110.0, 106.0, 108.0, 115.0, 112.0]),
     ]
+    assert len(y_tests) == n_folds
     # Poor model predictions that drift wildly
     test_preds = [
         np.array([70.0, 75.0, 68.0, 65.0, 69.0, 72.0, 70.0]),

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
-from marketing_mcp.intelligence.contracts.profile import ColumnProfile, MissingnessDetail, NumericDistribution
+from marketing_mcp.intelligence.contracts.profile import (
+    ColumnProfile,
+    MissingnessDetail,
+    NumericDistribution,
+)
 from marketing_mcp.intelligence.contracts.semantics import SemanticRole
 from marketing_mcp.intelligence.semantics.channels import infer_channel_column
 from marketing_mcp.storage.metadata import SQLiteMetadataStore

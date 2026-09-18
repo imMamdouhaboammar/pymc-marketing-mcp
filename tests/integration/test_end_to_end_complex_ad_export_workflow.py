@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+
 import numpy as np
 import pandas as pd
-import pytest
 
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings
@@ -100,6 +100,7 @@ def test_end_to_end_3000_row_ad_export_acceptance(tmp_path):
     # --- Step 1: Register Raw Dataset ---
     df_raw = generate_synthetic_3000_row_ad_export()
     total_raw_spend = round(float(df_raw["spend"].sum()), 2)
+    assert total_raw_spend > 0
     raw_csv = df_raw.to_csv(index=False)
 
     reg_resp = _call(server, "register_dataset", {"content": raw_csv, "filename": "dirty_3000_ads.csv"})

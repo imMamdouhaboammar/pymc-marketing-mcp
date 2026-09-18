@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from uuid import uuid4
+
 import pytest
 
 from marketing_mcp.scientific.decision_gate import (
     evaluate_diagnostic_policy,
-    DecisionPolicyVerdict,
 )
 
 
@@ -59,8 +59,8 @@ def test_baseline_scenarios_match_policy(baseline_config):
 
 
 def test_decision_gate_enforcement_raises_on_block():
-    from marketing_mcp.scientific.decision_gate import enforce_decision_gate
     from marketing_mcp.errors import DomainError
+    from marketing_mcp.scientific.decision_gate import enforce_decision_gate
 
     run_id = uuid4()
     # Severe failure: R-hat 1.20

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+
 import pandas as pd
 import pytest
 

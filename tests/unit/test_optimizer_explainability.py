@@ -1,8 +1,9 @@
-import pytest
 from unittest.mock import MagicMock
-from marketing_mcp.schemas.models import ModelRecord, BudgetOptimizationInput, ChannelConstraint
+
+from marketing_mcp.schemas.models import BudgetOptimizationInput, ChannelConstraint, ModelRecord
 from marketing_mcp.services.decision_service import DecisionService
 from marketing_mcp.storage.metadata import SQLiteMetadataStore
+
 
 def test_optimizer_provides_allocation_rationale_and_warns_on_sub_marginal_channel(tmp_path):
     metadata = SQLiteMetadataStore(tmp_path / "meta.db")

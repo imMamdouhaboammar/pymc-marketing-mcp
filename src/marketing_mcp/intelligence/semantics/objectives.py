@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import pandas as pd
+
 from marketing_mcp.intelligence.contracts.issues import IntelligenceIssue, IssueCode, IssueSeverity
 
 UPPER_FUNNEL = ("aware", "reach", "brand", "view", "traffic", "engagement", "video")
@@ -34,7 +36,7 @@ def analyze_campaign_objectives(df: pd.DataFrame) -> ObjectiveAnalysis:
 
     vals = [str(v).lower() for v in df[obj_col].dropna().unique()]
     has_upper = any(any(u in v for u in UPPER_FUNNEL) for v in vals)
-    has_lower = any(any(l in v for l in LOWER_FUNNEL) for v in vals)
+    has_lower = any(any(low in v for low in LOWER_FUNNEL) for v in vals)
     has_mixed = has_upper and has_lower
 
     # Check for zero revenue under awareness campaigns

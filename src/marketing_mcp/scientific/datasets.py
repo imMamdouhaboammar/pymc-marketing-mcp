@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 
 from marketing_mcp.domain.datasets.validation import validate_mmm_dataset
+from marketing_mcp.intelligence.contracts.issues import IssueSeverity
 from marketing_mcp.intelligence.contracts.semantics import SemanticRole
-from marketing_mcp.intelligence.contracts.suitability import AnalysisType
+from marketing_mcp.intelligence.contracts.suitability import (
+    AnalysisType,
+    SuitabilityVerdict,
+)
 from marketing_mcp.intelligence.engine import MarketingDataIntelligenceEngine
 from marketing_mcp.schemas.models import (
     ColumnSummary,
@@ -14,13 +20,6 @@ from marketing_mcp.schemas.models import (
     DatasetSummary,
     DatasetValidationResult,
     Finding,
-)
-
-
-from marketing_mcp.intelligence.contracts.issues import IssueSeverity
-from marketing_mcp.intelligence.contracts.suitability import (
-    AnalysisType,
-    SuitabilityVerdict,
 )
 
 

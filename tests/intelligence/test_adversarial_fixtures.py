@@ -8,9 +8,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from marketing_mcp.intelligence.contracts.issues import IssueCode, IssueSeverity
+from marketing_mcp.intelligence.contracts.issues import IssueCode
 from marketing_mcp.intelligence.contracts.semantics import SemanticRole
-from marketing_mcp.intelligence.contracts.suitability import AnalysisType, RiskLevel, SuitabilityVerdict
+from marketing_mcp.intelligence.contracts.suitability import (
+    AnalysisType,
+    RiskLevel,
+    SuitabilityVerdict,
+)
 from marketing_mcp.intelligence.engine import MarketingDataIntelligenceEngine
 
 

@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import pandas as pd
+
 from marketing_mcp.intelligence.contracts.evidence import (
     ConfidenceLevel,
     EvidenceSignal,
     HeuristicConfidence,
 )
-from marketing_mcp.intelligence.contracts.profile import ColumnProfile, StructuralProfile
-from marketing_mcp.intelligence.contracts.semantics import InferredColumn, SemanticRole, SemanticType
+from marketing_mcp.intelligence.contracts.profile import StructuralProfile
+from marketing_mcp.intelligence.contracts.semantics import (
+    InferredColumn,
+    SemanticRole,
+    SemanticType,
+)
+
 from .channels import infer_channel_column
 from .targets import infer_target_column
 

@@ -6,9 +6,10 @@ from marketing_mcp.intelligence.contracts.suitability import (
     AnalysisType,
     SuitabilityAssessment,
 )
+
+from .clv import evaluate_clv_suitability
 from .mmm import evaluate_mmm_suitability
 from .panel_mmm import evaluate_panel_mmm_suitability
-from .clv import evaluate_clv_suitability
 
 
 def assess_suitability(

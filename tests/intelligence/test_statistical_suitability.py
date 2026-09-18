@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
+
 from marketing_mcp.intelligence.contracts.issues import IssueCode
 from marketing_mcp.intelligence.contracts.suitability import RiskLevel
 

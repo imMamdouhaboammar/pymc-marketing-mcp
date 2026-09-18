@@ -7,17 +7,14 @@ import sys
 import time
 from pathlib import Path
 
-import pytest
-
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings
 from marketing_mcp.jobs.models import JobRecord, JobStatus
-from marketing_mcp.security.principal import Principal
 
 
 def test_real_subprocess_worker_crash_and_lease_recovery(tmp_path: Path):
     """Subprocess crash recovery test.
-    
+
     Verifies that when an external worker process dies abruptly (SIGKILL),
     its expired lease is reaped and the job does NOT remain 'running' forever.
     """

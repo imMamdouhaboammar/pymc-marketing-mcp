@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 import pandas as pd
 
 from marketing_mcp.intelligence.contracts.contract import (
@@ -18,9 +19,7 @@ from marketing_mcp.intelligence.contracts.issues import (
 from marketing_mcp.intelligence.contracts.semantics import InferredColumn, SemanticRole
 from marketing_mcp.intelligence.contracts.suitability import (
     AnalysisType,
-    RiskLevel,
     SuitabilityAssessment,
-    SuitabilityVerdict,
 )
 from marketing_mcp.intelligence.marketing.lifecycle import analyze_channel_lifecycles
 from marketing_mcp.intelligence.marketing.market_structure import analyze_market_structure

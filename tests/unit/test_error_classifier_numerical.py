@@ -1,9 +1,12 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
+
 from marketing_mcp.error_classifier import classify_exception
-from marketing_mcp.security.request_safety import safe_ingest_path
 from marketing_mcp.errors import DomainError
+from marketing_mcp.security.request_safety import safe_ingest_path
+
 
 def test_classify_numerical_instability_linalg_error():
     exc = np.linalg.LinAlgError("Matrix is singular and positive definite check failed")

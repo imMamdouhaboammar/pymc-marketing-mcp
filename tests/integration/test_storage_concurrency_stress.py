@@ -5,8 +5,6 @@ import time
 import uuid
 from pathlib import Path
 
-import pytest
-
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings
 from marketing_mcp.jobs.models import JobCheckpoint, JobRecord, JobStatus
@@ -15,7 +13,7 @@ from marketing_mcp.security.principal import Principal
 
 def test_real_sqlite_concurrency_stress(tmp_path: Path):
     """Stress test SQLite under concurrent multi-threaded read/write load.
-    
+
     Verifies that WAL mode + busy_timeout=30000 eliminates 'database is locked' errors
     and guarantees complete data consistency across concurrent writers.
     """
@@ -57,7 +55,7 @@ def test_real_sqlite_concurrency_stress(tmp_path: Path):
             try:
                 if op_type == 0:
                     # Dataset registration
-                    csv_data = f"date,revenue,spend\n2026-01-01,100,50\n2026-01-02,200,60\n".encode()
+                    csv_data = "date,revenue,spend\n2026-01-01,100,50\n2026-01-02,200,60\n".encode()
                     app.datasets.register_bytes(
                         csv_data,
                         filename=f"ds_{thread_id}_{i}.csv",

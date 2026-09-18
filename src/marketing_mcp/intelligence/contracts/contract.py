@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
+
 from pydantic import BaseModel, Field
 
-from .evidence import HeuristicConfidence
 from .issues import IntelligenceIssue
 from .profile import StructuralProfile
 from .semantics import InferredColumn

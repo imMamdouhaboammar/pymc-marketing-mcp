@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
+
 import pytest
 
+from marketing_mcp.security.principal import Principal
 from marketing_mcp.storage.metadata import SQLiteMetadataStore
 from marketing_mcp.storage.migrations import MigrationRunner
-from marketing_mcp.security.principal import Principal
 
 
 @pytest.fixture
@@ -100,8 +101,8 @@ def test_metadata_store_insight_crud_and_tenant_isolation(tmp_path):
 
 def test_insight_service_record_and_query(tmp_path):
     """Assert InsightService handles model conversion, tagging, and validation."""
+    from marketing_mcp.schemas.models import QueryInsightsInput, RecordInsightInput
     from marketing_mcp.services.insight_service import InsightService
-    from marketing_mcp.schemas.models import RecordInsightInput, QueryInsightsInput
 
     store = SQLiteMetadataStore(tmp_path / "meta_svc.db")
     service = InsightService(store)

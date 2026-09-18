@@ -1,11 +1,13 @@
-import os
 from pathlib import Path
+
 import pytest
+
 from marketing_mcp.config import Settings
+from marketing_mcp.jobs.models import JobRecord, JobStatus
+from marketing_mcp.jobs.service import JobService
 from marketing_mcp.persistence import SQLitePersistenceBackend
 from marketing_mcp.security.principal import Principal
-from marketing_mcp.jobs.service import JobService
-from marketing_mcp.jobs.models import JobRecord, JobStatus
+
 
 def test_settings_resolves_absolute_paths(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -69,8 +71,8 @@ def test_tenant_scoping_none_and_default_reconciliation(tmp_path):
     backend.close()
 
 def test_authorize_resource_tenant_reconciliation():
-    from marketing_mcp.security.ownership import authorize_resource
     from marketing_mcp.errors import DomainError
+    from marketing_mcp.security.ownership import authorize_resource
 
     rec_default = {"owner": "user1", "tenant_id": "default"}
     rec_none = {"owner": "user1", "tenant_id": None}

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
-from marketing_mcp.intelligence.contracts.evidence import ConfidenceLevel
-from marketing_mcp.intelligence.contracts.semantics import SemanticRole
+
 from marketing_mcp.intelligence.contracts.suitability import AnalysisType, SuitabilityVerdict
 
 

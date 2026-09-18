@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
+
 from marketing_mcp.intelligence.contracts.evidence import ConfidenceLevel, HeuristicConfidence
-from marketing_mcp.intelligence.contracts.profile import StructuralProfile, TemporalProfile
+from marketing_mcp.intelligence.contracts.profile import TemporalProfile
 from marketing_mcp.intelligence.contracts.semantics import InferredColumn, SemanticRole
 from marketing_mcp.intelligence.contracts.suitability import (
     AnalysisType,

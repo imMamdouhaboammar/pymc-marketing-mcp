@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from marketing_mcp.intelligence.contracts.semantics import InferredColumn, SemanticRole, SemanticType
+from marketing_mcp.intelligence.contracts.semantics import (
+    InferredColumn,
+    SemanticRole,
+    SemanticType,
+)
 from marketing_mcp.intelligence.contracts.suitability import (
     AnalysisType,
     SuitabilityAssessment,

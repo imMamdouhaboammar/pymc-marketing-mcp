@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import pandas as pd
+
 from marketing_mcp.intelligence.contracts.evidence import (
     ConfidenceLevel,
     EvidenceSignal,
     HeuristicConfidence,
 )
 from marketing_mcp.intelligence.contracts.profile import ColumnProfile
-from marketing_mcp.intelligence.contracts.semantics import InferredColumn, SemanticRole, SemanticType
+from marketing_mcp.intelligence.contracts.semantics import (
+    InferredColumn,
+    SemanticRole,
+    SemanticType,
+)
 
 TARGET_KEYWORDS = ("revenue", "sales", "orders", "conversions", "turnover", "gmv", "gsv", "nsv", "target")
 ATTRIBUTED_KEYWORDS = ("attributed", "platform_", "meta_", "google_", "ga4_", "reported_", "pixel_")

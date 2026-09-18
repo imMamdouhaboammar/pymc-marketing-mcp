@@ -11,8 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from marketing_mcp.errors import DomainError
-from marketing_mcp.jobs.models import JobCheckpoint, JobRecord, JobStatus
-from marketing_mcp.jobs.state import validate_transition
+from marketing_mcp.jobs.models import JobRecord, JobStatus
 
 
 class PostgresStorageAdapter:
@@ -188,7 +187,7 @@ class PostgresStorageAdapter:
             if not row:
                 return None
 
-            job_id, fence_token, attempts = row[0], row[1], row[2]
+            job_id, fence_token, _attempts = row[0], row[1], row[2]
             new_fence = fence_token + 1
 
             cur.execute(
