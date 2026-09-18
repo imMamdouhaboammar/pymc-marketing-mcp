@@ -391,6 +391,18 @@ ERROR_CATALOG: dict[str, ErrorDefinition] = {
         user_actionable=True,
         suggested_action="Review model configuration and dataset distributions",
     ),
+    "DATASET_TOO_SHORT": ErrorDefinition(
+        code="DATASET_TOO_SHORT",
+        category=ErrorCategory.STATISTICAL,
+        severity=ErrorSeverity.ERROR,
+        retryable=False,
+        http_status=422,
+        user_actionable=True,
+        suggested_action=(
+            "Provide more observations or resolve missing values so at least "
+            "15 complete adjacent VARX transitions remain"
+        ),
+    ),
     "LONG_TERM_MULTIPLIER_UNDEFINED": ErrorDefinition(
         code="LONG_TERM_MULTIPLIER_UNDEFINED",
         category=ErrorCategory.STATISTICAL,

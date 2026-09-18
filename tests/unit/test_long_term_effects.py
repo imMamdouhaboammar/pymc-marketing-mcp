@@ -187,7 +187,10 @@ class TestDeterministicVARLongTermEngine:
 
         assert exc_info.value.code == "INPUT_INVALID"
 
-    def test_missing_endogenous_value_does_not_bridge_non_adjacent_periods(self, engine):
+    @pytest.mark.parametrize("missing_column", ["target", "media"])
+    def test_missing_selected_value_does_not_bridge_non_adjacent_periods(
+        self, engine, missing_column
+    ):
         rng = np.random.default_rng(2)
         n = 40
         media = rng.normal(0.0, 1.0, n)
@@ -196,7 +199,7 @@ class TestDeterministicVARLongTermEngine:
             target[t] = 0.8 * target[t - 1] + 1.2 * media[t]
 
         dirty = pd.DataFrame({"media": media, "target": target})
-        dirty.loc[30, "target"] = np.nan
+        dirty.loc[30, missing_column] = np.nan
 
         rollup = engine.fit_var(
             df=dirty,

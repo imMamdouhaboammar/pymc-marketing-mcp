@@ -56,6 +56,7 @@ class TestErrorTaxonomyAndCatalog:
     @pytest.mark.parametrize(
         "code",
         [
+            "DATASET_TOO_SHORT",
             "LONG_TERM_MULTIPLIER_UNDEFINED",
             "LONG_TERM_UNCERTAINTY_REQUIRED",
             "LONG_TERM_GATE_REJECTED",
