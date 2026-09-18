@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import time
+
 import numpy as np
 import pandas as pd
 
 from marketing_mcp.intelligence.engine import MarketingDataIntelligenceEngine
-from marketing_mcp.intelligence.structural.profiler import profile_structure
 from marketing_mcp.intelligence.semantics.roles import infer_all_column_roles
+from marketing_mcp.intelligence.structural.profiler import profile_structure
 
 
 def generate_benchmark_dataset(rows: int, seed: int = 42) -> pd.DataFrame:
@@ -32,12 +33,12 @@ def run_benchmark(sizes: list[int] = [10_000, 100_000]) -> list[dict]:
     engine = MarketingDataIntelligenceEngine()
     results = []
 
-    print(f"=== Marketing Data Intelligence Engine Performance Benchmark ===")
+    print("=== Marketing Data Intelligence Engine Performance Benchmark ===")
     for rows in sizes:
         print(f"\n[Benchmarking {rows:,} rows x 10 columns]...")
         t0 = time.perf_counter()
         df = generate_benchmark_dataset(rows)
-        gen_time = time.perf_counter() - t0
+        _ = time.perf_counter() - t0
 
         mem_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
 
@@ -48,7 +49,7 @@ def run_benchmark(sizes: list[int] = [10_000, 100_000]) -> list[dict]:
 
         # 2. Semantic inference alone
         t_sem_start = time.perf_counter()
-        roles = infer_all_column_roles(df, structural)
+        _ = infer_all_column_roles(df, structural)
         t_sem = time.perf_counter() - t_sem_start
 
         # 3. Full end-to-end intelligence engine

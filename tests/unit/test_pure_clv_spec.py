@@ -19,10 +19,11 @@ from marketing_mcp.scientific.clv import (
 
 @pytest.fixture
 def golden_purchase_df() -> pd.DataFrame:
-    path = (
-        Path(__file__).resolve().parents[3]
-        / "migration/baselines/golden_datasets/pymc_harsh_clv_valid_fixture.csv"
-    )
+    candidates = [
+        Path(__file__).resolve().parents[2] / "migration/baselines/golden_datasets/pymc_harsh_clv_valid_fixture.csv",
+        Path(__file__).resolve().parents[3] / "migration/baselines/golden_datasets/pymc_harsh_clv_valid_fixture.csv",
+    ]
+    path = next((p for p in candidates if p.exists()), candidates[0])
     if not path.exists():
         pytest.skip(f"Golden dataset not found at {path}")
     return pd.read_csv(path)
@@ -30,10 +31,11 @@ def golden_purchase_df() -> pd.DataFrame:
 
 @pytest.fixture
 def golden_value_df() -> pd.DataFrame:
-    path = (
-        Path(__file__).resolve().parents[3]
-        / "migration/baselines/golden_datasets/pymc_harsh_clv_value_fixture.csv"
-    )
+    candidates = [
+        Path(__file__).resolve().parents[2] / "migration/baselines/golden_datasets/pymc_harsh_clv_value_fixture.csv",
+        Path(__file__).resolve().parents[3] / "migration/baselines/golden_datasets/pymc_harsh_clv_value_fixture.csv",
+    ]
+    path = next((p for p in candidates if p.exists()), candidates[0])
     if not path.exists():
         pytest.skip(f"Golden dataset not found at {path}")
     return pd.read_csv(path)

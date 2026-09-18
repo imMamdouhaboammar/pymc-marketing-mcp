@@ -364,4 +364,96 @@ class SQLiteMetadataStore:
             return cursor.rowcount > 0
 
 
+    def put_experiment(self, payload: dict[str, Any], tenant_id: str | None = None) -> None:
+        exp_id = payload["experiment_id"]
+        t_id = tenant_id or payload.get("tenant_id") or "default"
+        ch = payload.get("channel", "")
+        payload_str = json.dumps(payload)
+
+        with self._lock:
+            # Check immutability
+            existing = self.conn.execute(
+                "SELECT payload FROM experiments WHERE experiment_id = ?",
+                (exp_id,),
+            ).fetchone()
+            if existing is not None:
+                existing_payload = json.loads(existing["payload"])
+                # Disallow altering scientific parameters or channel
+                for field in ("channel", "baseline_spend", "spend_delta", "measured_incremental_response", "standard_error"):
+                    if field in payload and payload[field] != existing_payload.get(field):
+                        raise DomainError(
+                            "IMMUTABLE_EVIDENCE_VIOLATION",
+                            f"Experiment evidence '{exp_id}' is immutable and cannot alter parameter '{field}'",
+                            evidence={"experiment_id": exp_id, "field": field},
+                            next_action="Register a new experiment ID rather than mutating historic evidence",
+                        )
+
+            self.conn.execute(
+                """
+                INSERT INTO experiments (experiment_id, tenant_id, channel, archived, payload)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(experiment_id) DO UPDATE SET
+                    payload = excluded.payload,
+                    archived = excluded.archived
+                """,
+                (exp_id, t_id, ch, int(payload.get("archived", False)), payload_str),
+            )
+            self.conn.commit()
+
+    def get_experiment(self, experiment_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        query = "SELECT payload FROM experiments WHERE experiment_id = ?"
+        params: list[Any] = [experiment_id]
+        if tenant_id is not None:
+            if tenant_id in (None, "default"):
+                query += " AND (tenant_id = 'default' OR tenant_id IS NULL)"
+            else:
+                query += " AND tenant_id = ?"
+                params.append(tenant_id)
+        with self._lock:
+            row = self.conn.execute(query, params).fetchone()
+        if not row:
+            raise DomainError(
+                "EXPERIMENT_NOT_FOUND",
+                f"Experiment '{experiment_id}' was not found in evidence registry",
+                evidence={"experiment_id": experiment_id, "tenant_id": tenant_id},
+                next_action="Register the experiment first via register_experiment",
+            )
+        return json.loads(row["payload"])
+
+    def list_experiments(
+        self,
+        tenant_id: str | None = None,
+        channel: str | None = None,
+        include_archived: bool = False,
+    ) -> list[dict[str, Any]]:
+        query = "SELECT payload FROM experiments WHERE 1=1"
+        params: list[Any] = []
+        if tenant_id is not None:
+            if tenant_id in (None, "default"):
+                query += " AND (tenant_id = 'default' OR tenant_id IS NULL)"
+            else:
+                query += " AND tenant_id = ?"
+                params.append(tenant_id)
+        if channel is not None:
+            query += " AND channel = ?"
+            params.append(channel)
+        if not include_archived:
+            query += " AND archived = 0"
+        query += " ORDER BY rowid DESC"
+
+        with self._lock:
+            rows = self.conn.execute(query, params).fetchall()
+        return [json.loads(r["payload"]) for r in rows]
+
+    def archive_experiment(self, experiment_id: str, tenant_id: str | None = None) -> None:
+        record = self.get_experiment(experiment_id, tenant_id=tenant_id)
+        record["archived"] = True
+        with self._lock:
+            self.conn.execute(
+                "UPDATE experiments SET archived = 1, payload = ? WHERE experiment_id = ?",
+                (json.dumps(record), experiment_id),
+            )
+            self.conn.commit()
+
+
 SQLiteMetadataRepository = SQLiteMetadataStore

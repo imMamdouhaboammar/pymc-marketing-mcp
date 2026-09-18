@@ -90,6 +90,11 @@ class ModelingService:
         owner = principal.subject if principal is not None else "local"
         tenant_id = principal.tenant_id if principal is not None else None
 
+        requested_cfg = input.model_dump(exclude_unset=True)
+        resolved_cfg = input.model_dump()
+        from marketing_mcp.domain.configuration.transparency import build_config_audit
+        audit = build_config_audit(requested_cfg, resolved_cfg, resolved_cfg)
+
         rec = ModelRecord(
             model_id=model_id,
             parent_model_id=None,
@@ -99,6 +104,10 @@ class ModelingService:
             semantic_config_hash=cfg_hash,
             status="running",
             config=config,
+            requested_config=requested_cfg,
+            resolved_config=resolved_cfg,
+            effective_config=resolved_cfg,
+            config_diff=audit,
             package_provenance=versions,
             created_at=now,
             updated_at=now,
@@ -153,8 +162,16 @@ class ModelingService:
             )
         df_base = self.datasets.load(base_record.dataset_id)
 
+        all_tests = list(input.lift_tests)
+        if input.experiment_ids:
+            from marketing_mcp.domain.experiments.registry import ExperimentRegistryService
+            exp_service = ExperimentRegistryService(self.metadata)
+            t_id = principal.tenant_id if principal is not None else getattr(base_record, "tenant_id", None)
+            resolved_tests = exp_service.resolve_for_calibration(input.experiment_ids, tenant_id=t_id)
+            all_tests.extend(resolved_tests)
+
         lift_records = []
-        for test in input.lift_tests:
+        for test in all_tests:
             row: dict[str, Any] = {
                 "channel": test.channel,
                 "x": test.x,
@@ -171,6 +188,9 @@ class ModelingService:
         calibrated_model_id = f"mmm_cal_{uuid.uuid4().hex[:10]}"
         config = dict(base_record.config)
         config["sampler"] = input.sampler.model_dump()
+        if input.experiment_ids:
+            config["calibration_experiment_ids"] = input.experiment_ids
+        config["calibration_lift_tests_count"] = len(all_tests)
         cfg_hash = _config_hash(config)
 
         adapter = self.adapter_factory()

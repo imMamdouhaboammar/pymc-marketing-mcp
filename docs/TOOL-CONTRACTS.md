@@ -34,6 +34,10 @@ Validate MMM roles, temporal/panel structure and blocking data-quality condition
 
 List all registered datasets and available inbox files on the server
 
+### `transform_ad_export`
+
+Transform raw platform ad export CSV bytes into model-ready weekly or daily panel dataset format
+
 ## MMM/model lifecycle tools
 
 ### `fit_mmm`
@@ -218,6 +222,30 @@ Push/stage a model or dataset artifact (up to 1GB) for the AI client sandbox to 
 ### `cleanup_server_storage`
 
 Run server garbage collection to purge expired, delivered, or orphaned artifacts and temp files
+
+## Agent insight tools
+
+### `record_agent_insight`
+
+Record an analytical, operational, or strategic observation about a model, dataset, or run
+
+### `get_agent_insights`
+
+Retrieve previously recorded agent insights, filterable by model, dataset, or category
+
+## Scientific skill guidance tools
+
+### `get_skill_guidance`
+
+Route a task to one scientific workflow skill or fetch one selected skill package
+
+### `list_agentic_skills`
+
+List all registered agentic skills with summaries, maturity, and primary tools
+
+### `get_skill_workflow_map`
+
+Retrieve the dependency graph, prerequisites, and decision gates for all scientific skills
 
 ## MCP resources
 

@@ -7,7 +7,7 @@ and SELECT ... FOR UPDATE SKIP LOCKED for concurrent worker task claiming.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from marketing_mcp.errors import DomainError
@@ -166,7 +166,7 @@ class PostgresStorageAdapter:
     ) -> JobRecord | None:
         """Concurrently claim the next available job using SELECT ... FOR UPDATE SKIP LOCKED."""
         now = datetime.now(UTC)
-        expires_at = (now + datetime.timedelta(seconds=lease_seconds)).isoformat()
+        expires_at = (now + timedelta(seconds=lease_seconds)).isoformat()
         now_str = now.isoformat()
 
         conn = self._get_conn()

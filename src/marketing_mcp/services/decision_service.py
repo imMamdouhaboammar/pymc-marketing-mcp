@@ -154,11 +154,31 @@ class DecisionService:
         )
         return result
 
+    @staticmethod
+    def _channel_spend_map(allocation: dict[str, Any] | None) -> dict[str, float]:
+        """Normalize 1D or multidimensional (cell-based) allocation into channel spend totals."""
+        if not allocation or not isinstance(allocation, dict):
+            return {}
+        if "cells" in allocation and isinstance(allocation["cells"], list):
+            totals: dict[str, float] = {}
+            for cell in allocation["cells"]:
+                if isinstance(cell, dict):
+                    ch = cell.get("channel")
+                    amt = float(cell.get("amount", 0.0))
+                    if ch:
+                        totals[ch] = totals.get(ch, 0.0) + amt
+            return totals
+        return {
+            str(k): float(v)
+            for k, v in allocation.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)
+        }
+
     def _collect_channel_identifiability_warnings(
         self,
         record,
-        recommended_allocation: dict[str, float] | None,
-        baseline_allocation: dict[str, float] | None,
+        recommended_allocation: dict[str, Any] | None,
+        baseline_allocation: dict[str, Any] | None,
     ) -> tuple[list[dict[str, Any]], dict[str, str]]:
         """Check allocated channels against upstream dataset validation findings.
 
@@ -208,8 +228,11 @@ class DecisionService:
                 for c in corr_channels:
                     channel_findings.setdefault(c, []).append(f)
 
-        for ch, rec_spend in recommended_allocation.items():
-            base_spend = (baseline_allocation or {}).get(ch, 0.0)
+        channel_alloc = self._channel_spend_map(recommended_allocation)
+        channel_base = self._channel_spend_map(baseline_allocation)
+
+        for ch, rec_spend in channel_alloc.items():
+            base_spend = channel_base.get(ch, 0.0)
             ch_warns = channel_findings.get(ch, [])
 
             if ch_warns:
@@ -318,8 +341,10 @@ class DecisionService:
 
         rationale: dict[str, Any] = {}
         economic_warnings: list[dict[str, Any]] = []
-        for ch, spend in allocation.items():
-            base_spend = baseline.get(ch, 0.0)
+        channel_alloc = self._channel_spend_map(allocation)
+        channel_base = self._channel_spend_map(baseline)
+        for ch, spend in channel_alloc.items():
+            base_spend = channel_base.get(ch, 0.0)
             spend_change_pct = (
                 round(((spend - base_spend) / base_spend) * 100, 2)
                 if base_spend > 0
@@ -581,7 +606,7 @@ class DecisionService:
         channel_params: dict[str, dict[str, float]] = {ch: {} for ch in channels}
         post = getattr(model, "fit_result", None)
         data_vars = getattr(post, "data_vars", None)
-        if data_vars is not None:
+        if data_vars is not None and post is not None:
             for var in data_vars:
                 if not var.startswith(("adstock_", "saturation_")):
                     continue
@@ -621,6 +646,11 @@ class DecisionService:
         )
 
         constraints_dicts = [c.model_dump() for c in input.channel_constraints]
+        fin_assump = None
+        if getattr(input, "financial", None) is not None:
+            from marketing_mcp.domain.decisions.financial import FinancialAssumptions
+            fin_assump = FinancialAssumptions(**input.financial.model_dump())
+
         flighting_res = optimize_flighting_schedule(
             channel_columns=model.channel_columns,
             total_budget=input.total_budget,
@@ -632,6 +662,7 @@ class DecisionService:
             channel_parameters=channel_params if channel_params else None,
             historical_channel_p95=p95_map,
             response_evaluator=response_evaluator,
+            financial=fin_assump,
         )
 
         total_channel_spend = flighting_res["total_channel_spend"]
@@ -662,6 +693,15 @@ class DecisionService:
         }
         self.metadata.put_scenario(payload)
 
+        prov = self._provenance(input.model_id, record)
+        if fin_assump is not None:
+            prov["financial_assumptions"] = fin_assump.to_provenance()
+        elif getattr(input, "margin_pct", None) is not None:
+            prov["financial_assumptions"] = {"gross_margin_rate": input.margin_pct, "legacy_margin_pct": True}
+        prov["objective_definition"] = {
+            "name": input.objective,
+            "description": "Expected net profit" if input.objective == "maximize_net_profit" else "Expected response",
+        }
         return {
             "scenario_id": scenario_id,
             "model_id": input.model_id,
@@ -690,5 +730,5 @@ class DecisionService:
             },
             "warnings": flighting_res["warnings"],
             "decision_gate": self._gate_payload(record),
-            "provenance": self._provenance(input.model_id, record),
+            "provenance": prov,
         }

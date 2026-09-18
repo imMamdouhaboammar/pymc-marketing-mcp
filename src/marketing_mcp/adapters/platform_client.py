@@ -10,7 +10,10 @@ import time
 from typing import Any
 from uuid import UUID, uuid4
 
-import httpx
+try:
+    import httpx
+except ImportError:
+    httpx = None  # type: ignore
 
 from marketing_mcp.capabilities import get_capability_inventory
 from marketing_mcp.config import Settings
@@ -26,7 +29,7 @@ class PlatformClient:
         self.organization_id = self.settings.organization_id
         self.principal_id = self.settings.principal_id or str(uuid4())
         self.principal_role = self.settings.principal_role or "analyst"
-        self._http_client: httpx.AsyncClient | None = None
+        self._http_client: Any = None
 
         # Pre-cache tool and resource catalogs for <1ms handshake
         t0 = time.perf_counter()
@@ -79,7 +82,9 @@ class PlatformClient:
             "accept": "application/json",
         }
 
-    async def _get_client(self) -> httpx.AsyncClient:
+    async def _get_client(self) -> Any:
+        if httpx is None:
+            raise RuntimeError("httpx is required to use PlatformClient. Install it with: pip install httpx")
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(
                 base_url=self.gateway_url,

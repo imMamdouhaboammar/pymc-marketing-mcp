@@ -13,11 +13,23 @@ def evaluate_identifiability_risk(
     variance_issues: list[IssueCode],
     staggered_issues: list[IssueCode],
     sparse_issues: list[IssueCode],
+    leakage_issues: list[IssueCode] | None = None,
+    break_issues: list[IssueCode] | None = None,
 ) -> IdentifiabilityRisk:
-    """Combines empirical evidence across collinearity, variance, and history into overall risk."""
+    """Combines empirical evidence across collinearity, variance, leakage, and history into overall risk."""
     factors: list[str] = []
     mitigations: list[str] = []
     risk_score = 0
+
+    if leakage_issues and IssueCode.TARGET_LEAKAGE in leakage_issues:
+        factors.append("Candidate controls exhibit high correlation/leakage with target")
+        mitigations.append("Exclude post-treatment controls or verify causal ordering")
+        risk_score += 2
+
+    if break_issues and IssueCode.STRUCTURAL_BREAK in break_issues:
+        factors.append("Structural regime break detected in baseline target response")
+        mitigations.append("Enable time_varying_intercept or segment estimation period")
+        risk_score += 1
 
     if IssueCode.HIGH_CHANNEL_COLLINEARITY in collinearity_issues:
         factors.append("High collinearity between media channels")

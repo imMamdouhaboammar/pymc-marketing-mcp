@@ -172,7 +172,11 @@ def test_fit_mmm_from_spec_with_fake_adapter(tmp_path):
 
 
 def test_statistical_validation_golden_dataset():
-    golden_path = Path(__file__).resolve().parents[3] / "migration/baselines/golden_datasets/pymc_harsh_observed_daily_panel.csv"
+    candidates = [
+        Path(__file__).resolve().parents[2] / "migration/baselines/golden_datasets/pymc_harsh_observed_daily_panel.csv",
+        Path(__file__).resolve().parents[3] / "migration/baselines/golden_datasets/pymc_harsh_observed_daily_panel.csv",
+    ]
+    golden_path = next((p for p in candidates if p.exists()), candidates[0])
     if not golden_path.exists():
         pytest.skip(f"Golden dataset not found at {golden_path}")
 

@@ -22,7 +22,6 @@ def test_optimizer_provides_allocation_rationale_and_warns_on_sub_marginal_chann
         diagnostics={"failures": []},
         validation_state="approved",
         artifact_path="/dummy/path",
-        metrics={},
         created_at="2026-01-01T00:00:00Z",
         updated_at="2026-01-01T00:00:00Z",
     )
@@ -74,3 +73,77 @@ def test_optimizer_provides_allocation_rationale_and_warns_on_sub_marginal_chann
     # 3. An explicit warning for sub-marginal channel allocation must be emitted
     warning_codes = [w.get("code") if isinstance(w, dict) else getattr(w, "code", "") for w in result.get("warnings", [])]
     assert "ECONOMIC_SUB_MARGINAL_ALLOCATION" in warning_codes
+
+
+def test_optimizer_handles_multidimensional_cell_allocation(tmp_path):
+    metadata = SQLiteMetadataStore(tmp_path / "meta.db")
+    modeling = MagicMock()
+
+    model_rec = ModelRecord(
+        model_id="mmm-multi-test-1",
+        model_type="mmm",
+        dataset_id="ds-panel-1",
+        config={
+            "date_column": "date",
+            "target_column": "revenue",
+            "channel_columns": ["google", "linkedin"],
+            "dims": ["geo"],
+        },
+        diagnostics={"failures": []},
+        validation_state="approved",
+        artifact_path="/dummy/path",
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    metadata.put_model(model_rec.model_dump())
+    modeling.status.return_value = model_rec
+
+    mock_model = MagicMock()
+    mock_model.channel_columns = ["google", "linkedin"]
+    modeling.load_model.return_value = (mock_model, model_rec)
+
+    mock_adapter = MagicMock()
+    multi_allocation = {
+        "dimensions": ["geo"],
+        "cells": [
+            {"channel": "google", "dimensions": {"geo": "Riyadh"}, "amount": 25000.0},
+            {"channel": "google", "dimensions": {"geo": "Jeddah"}, "amount": 15000.0},
+            {"channel": "linkedin", "dimensions": {"geo": "Riyadh"}, "amount": 5000.0},
+            {"channel": "linkedin", "dimensions": {"geo": "Jeddah"}, "amount": 5000.0},
+        ],
+    }
+    multi_baseline = {
+        "dimensions": ["geo"],
+        "cells": [
+            {"channel": "google", "dimensions": {"geo": "Riyadh"}, "amount": 20000.0},
+            {"channel": "google", "dimensions": {"geo": "Jeddah"}, "amount": 10000.0},
+            {"channel": "linkedin", "dimensions": {"geo": "Riyadh"}, "amount": 10000.0},
+            {"channel": "linkedin", "dimensions": {"geo": "Jeddah"}, "amount": 10000.0},
+        ],
+    }
+    mock_adapter.optimize_budget.return_value = {
+        "optimizer_success": True,
+        "recommended_allocation": multi_allocation,
+        "baseline_allocation": multi_baseline,
+        "expected_response": 120000.0,
+    }
+    mock_adapter.calculate_iroas.return_value = {
+        "google": {"mean": 2.5, "p_above_1": 0.95},
+        "linkedin": {"mean": 0.63, "p_above_1": 0.08},
+    }
+    modeling.adapter_factory.return_value = mock_adapter
+
+    decision_service = DecisionService(metadata, modeling)
+    opt_input = BudgetOptimizationInput(
+        model_id="mmm-multi-test-1",
+        budget=50000.0,
+        planning_periods=4,
+    )
+
+    result = decision_service.optimize(opt_input)
+    assert result["optimizer_success"] is True
+    assert "allocation_rationale" in result
+    assert result["allocation_rationale"]["google"]["allocated_spend"] == 40000.0
+    assert result["allocation_rationale"]["linkedin"]["allocated_spend"] == 10000.0
+    assert result["recommended_allocation"] == multi_allocation
+

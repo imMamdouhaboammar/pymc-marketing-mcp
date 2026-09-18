@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "policy_version": "1.0.0",
+  "thresholds": {
+    "max_rhat": {
+      "pass": 1.01,
+      "caution": 1.05,
+      "block": 1.05
+    },
+    "divergences": {
+      "pass": 0,
+      "caution": 5,
+      "block": 5
+    },
+    "min_bfmi": {
+      "pass": 0.3,
+      "caution": 0.2,
+      "block": 0.2
+    }
+  },
+  "scenarios": [
+    {
+      "name": "all_green_convergence",
+      "metrics": { "max_rhat": 1.002, "divergences": 0, "min_bfmi": 0.85 },
+      "expected_verdict": "pass",
+      "expected_rhat_ok": true,
+      "expected_divergences_ok": true,
+      "expected_bfmi_ok": true
+    },
+    {
+      "name": "borderline_rhat_caution",
+      "metrics": { "max_rhat": 1.03, "divergences": 0, "min_bfmi": 0.45 },
+      "expected_verdict": "caution",
+      "expected_rhat_ok": true,
+      "expected_divergences_ok": true,
+      "expected_bfmi_ok": true
+    },
+    {
+      "name": "few_divergences_caution",
+      "metrics": { "max_rhat": 1.005, "divergences": 2, "min_bfmi": 0.5 },
+      "expected_verdict": "caution",
+      "expected_rhat_ok": true,
+      "expected_divergences_ok": false,
+      "expected_bfmi_ok": true
+    },
+    {
+      "name": "marginal_bfmi_caution",
+      "metrics": { "max_rhat": 1.005, "divergences": 0, "min_bfmi": 0.25 },
+      "expected_verdict": "caution",
+      "expected_rhat_ok": true,
+      "expected_divergences_ok": true,
+      "expected_bfmi_ok": true
+    },
+    {
+      "name": "severe_rhat_block",
+      "metrics": { "max_rhat": 1.15, "divergences": 0, "min_bfmi": 0.6 },
+      "expected_verdict": "block",
+      "expected_rhat_ok": false,
+      "expected_divergences_ok": true,
+      "expected_bfmi_ok": true
+    },
+    {
+      "name": "severe_divergences_block",
+      "metrics": { "max_rhat": 1.01, "divergences": 25, "min_bfmi": 0.7 },
+      "expected_verdict": "block",
+      "expected_rhat_ok": true,
+      "expected_divergences_ok": false,
+      "expected_bfmi_ok": true
+    },
+    {
+      "name": "low_bfmi_block",
+      "metrics": { "max_rhat": 1.005, "divergences": 0, "min_bfmi": 0.12 },
+      "expected_verdict": "block",
+      "expected_rhat_ok": true,
+      "expected_divergences_ok": true,
+      "expected_bfmi_ok": false
+    }
+  ]
+}

@@ -10,8 +10,9 @@ import argparse
 import json
 import sys
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 
 def precheck_dataset(
@@ -35,7 +36,7 @@ def precheck_dataset(
     # 1. Date checks
     if date_col not in df.columns:
         return {"valid": False, "error": f"Date column '{date_col}' missing"}
-    
+
     df[date_col] = pd.to_datetime(df[date_col])
     unique_dates = df[date_col].nunique()
     if unique_dates < 52:
@@ -48,7 +49,7 @@ def precheck_dataset(
     # 2. Target checks
     if target_col not in df.columns:
         return {"valid": False, "error": f"Target column '{target_col}' missing"}
-    
+
     if (df[target_col] < 0).any():
         findings.append({
             "code": "NEGATIVE_TARGET",

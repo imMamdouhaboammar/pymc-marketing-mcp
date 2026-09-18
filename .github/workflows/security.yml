@@ -51,8 +51,7 @@ jobs:
 
       - name: Audit dependencies with pip-audit
         run: |
-          uv pip install pip-audit
-          uv run pip-audit --desc
+          uv run --with pip-audit pip-audit --desc
 
   sbom-generation:
     name: Generate Software Bill of Materials (SBOM)
@@ -72,8 +71,7 @@ jobs:
 
       - name: Generate CycloneDX SBOM
         run: |
-          uv pip install cyclonedx-bom
-          uv run cyclonedx-py requirements pyproject.toml -o sbom.json
+          uv run --with cyclonedx-bom cyclonedx-py requirements pyproject.toml -o sbom.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
