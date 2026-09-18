@@ -3,7 +3,7 @@
 Fast tests — zero sampling required.
 Requirements tested:
 - Synthetic ground-truth recovery of positive and damped carryover multipliers
-- Joint time-row alignment after numeric coercion and missing-value filtering
+- Lag-before-filter time alignment so missing values cannot create synthetic transitions
 - Diagnostic eigenvalue threshold enforcement
 - Deterministic point estimates blocked from decision-grade rollup
 - Non-stationary explosive models blocked by decision gate
@@ -187,30 +187,47 @@ class TestDeterministicVARLongTermEngine:
 
         assert exc_info.value.code == "INPUT_INVALID"
 
-    def test_missing_values_are_dropped_jointly_before_var_alignment(
-        self, engine, synthetic_var_data
-    ):
-        dirty = synthetic_var_data.copy()
-        dirty.loc[10, "brand_equity"] = np.nan
-        dirty.loc[20, "tv_spend"] = np.nan
+    def test_missing_endogenous_value_does_not_bridge_non_adjacent_periods(self, engine):
+        rng = np.random.default_rng(2)
+        n = 40
+        media = rng.normal(0.0, 1.0, n)
+        target = np.zeros(n)
+        for t in range(1, n):
+            target[t] = 0.8 * target[t - 1] + 1.2 * media[t]
 
-        selected = ["brand_equity", "sales", "tv_spend"]
-        jointly_clean = dirty[selected].apply(pd.to_numeric, errors="coerce").dropna()
+        dirty = pd.DataFrame({"media": media, "target": target})
+        dirty.loc[30, "target"] = np.nan
 
-        actual = engine.fit_var(
+        rollup = engine.fit_var(
             df=dirty,
-            endogenous_columns=["brand_equity", "sales"],
-            exogenous_channels=["tv_spend"],
-        )
-        expected = engine.fit_var(
-            df=jointly_clean,
-            endogenous_columns=["brand_equity", "sales"],
-            exogenous_channels=["tv_spend"],
+            endogenous_columns=["target"],
+            exogenous_channels=["media"],
+            horizon=4,
         )
 
-        assert actual.max_eigenvalue == expected.max_eigenvalue
-        assert actual.channel_multipliers == expected.channel_multipliers
-        assert actual.irfs["tv_spend"].responses == expected.irfs["tv_spend"].responses
+        assert rollup.max_eigenvalue == pytest.approx(0.8, abs=0.01)
+        assert rollup.channel_multipliers["media"] == pytest.approx(
+            sum(0.8**h for h in range(5)),
+            abs=0.05,
+        )
+
+    def test_minimum_sample_check_counts_complete_adjacent_transitions(self, engine):
+        media = np.linspace(0.1, 1.7, 17)
+        target = np.zeros(17)
+        for t in range(1, 17):
+            target[t] = 0.5 * target[t - 1] + media[t]
+
+        dirty = pd.DataFrame({"media": media, "target": target})
+        dirty.loc[8, "target"] = np.nan
+
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=dirty,
+                endogenous_columns=["target"],
+                exogenous_channels=["media"],
+            )
+
+        assert exc_info.value.code == "DATASET_TOO_SHORT"
 
     def test_explosive_fit_reports_actual_finite_horizon_multiplier(self, engine):
         rng = np.random.default_rng(17)

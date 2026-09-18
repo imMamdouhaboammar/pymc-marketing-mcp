@@ -63,7 +63,7 @@ class TestErrorTaxonomyAndCatalog:
     )
     def test_long_term_scientific_errors_are_canonical_and_actionable(self, code):
         defn = get_error_definition(code)
-        assert defn.category in {ErrorCategory.MODELING, ErrorCategory.STATISTICAL}
+        assert defn.category == ErrorCategory.STATISTICAL
         assert defn.http_status == 422
         assert defn.user_actionable is True
         assert defn.suggested_action

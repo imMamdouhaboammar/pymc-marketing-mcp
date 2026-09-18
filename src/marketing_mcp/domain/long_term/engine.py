@@ -60,22 +60,27 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
         numeric = pd.DataFrame(
             {col: pd.to_numeric(df[col], errors="coerce") for col in selected_columns},
             index=df.index,
-        ).dropna()
-        if len(numeric) < 16:
-            raise DomainError(
-                "DATASET_TOO_SHORT",
-                f"Dataset length ({len(numeric)}) is too short for VAR identification "
-                "(minimum 16 jointly observed periods required)",
-            )
+        )
 
         y = numeric[endogenous_columns].to_numpy(dtype=float)
         x = numeric[exogenous_channels].to_numpy(dtype=float)
 
-        # Time series alignment for VAR(1): Y_t against Y_{t-1} and X_t
+        # Form VAR(1) transitions before filtering so rows with missing selected values
+        # cannot create synthetic transitions between non-adjacent observations.
         y_curr = y[1:]  # shape: (T-1, m_endo)
         y_lag = y[:-1]  # shape: (T-1, m_endo)
         x_curr = x[1:]  # shape: (T-1, k_exo)
+        complete_transition = ~np.isnan(np.hstack([y_curr, y_lag, x_curr])).any(axis=1)
+        y_curr = y_curr[complete_transition]
+        y_lag = y_lag[complete_transition]
+        x_curr = x_curr[complete_transition]
         t_obs = len(y_curr)
+        if t_obs < 15:
+            raise DomainError(
+                "DATASET_TOO_SHORT",
+                f"Dataset has {t_obs} complete adjacent transitions; "
+                "minimum 15 are required for VAR identification",
+            )
 
         # Regressors matrix Z = [Y_lag, X_curr, 1]
         ones = np.ones((t_obs, 1))
