@@ -23,6 +23,17 @@ from marketing_mcp.domain.priors.contracts import (
 from marketing_mcp.schemas.models import PriorDistributionConfig
 
 
+def _extract_float(record: dict[str, Any], *keys: str, default: float) -> float:
+    for k in keys:
+        v = record.get(k)
+        if v is not None:
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                pass
+    return default
+
+
 def recommend_priors_for_channels(
     channels: list[str],
     spend_scales: dict[str, float] | None = None,
@@ -66,22 +77,10 @@ def recommend_priors_for_channels(
         if ch_exps:
             # Evidence-backed: experimental lift test available
             latest_exp = ch_exps[-1]
-            lift_est = float(
-                latest_exp.get("measured_incremental_response")
-                if latest_exp.get("measured_incremental_response") is not None
-                else latest_exp.get("delta_y", 1.0)
-            )
-            spend_inc = float(
-                latest_exp.get("spend_delta")
-                if latest_exp.get("spend_delta") is not None
-                else latest_exp.get("delta_x", 1.0)
-            )
-            sigma = float(
-                latest_exp.get("standard_error")
-                if latest_exp.get("standard_error") is not None
-                else latest_exp.get("sigma", 0.5)
-            )
-            quality_score = float(latest_exp.get("evidence_quality_score", 0.85))
+            lift_est = _extract_float(latest_exp, "measured_incremental_response", "delta_y", default=1.0)
+            spend_inc = _extract_float(latest_exp, "spend_delta", "delta_x", default=1.0)
+            sigma = _extract_float(latest_exp, "standard_error", "sigma", default=0.5)
+            quality_score = _extract_float(latest_exp, "evidence_quality_score", default=0.85)
             observed_roas = max(0.01, lift_est / max(1.0, spend_inc))
 
             # Calibrate a HalfNormal or Gamma prior around observed ROAS
