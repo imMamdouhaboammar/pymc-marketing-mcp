@@ -17,10 +17,27 @@ from marketing_mcp.schemas.models import (
 )
 
 
-def inspect_dataset_frame(df: pd.DataFrame, dataset_id: str = "ad_hoc") -> DatasetInspection:
+from marketing_mcp.intelligence.contracts.issues import IssueSeverity
+from marketing_mcp.intelligence.contracts.suitability import (
+    AnalysisType,
+    SuitabilityVerdict,
+)
+
+
+def inspect_dataset_frame(
+    df: pd.DataFrame,
+    dataset_id: str = "ad_hoc",
+    user_overrides: dict[str, Any] | None = None,
+    analysis_type: str = "mmm",
+) -> DatasetInspection:
     """Inspects a pandas DataFrame for candidate targets, channels, frequency, and continuity gaps."""
     engine = MarketingDataIntelligenceEngine()
-    contract = engine.analyze_dataset(df, dataset_id=dataset_id)
+    contract = engine.analyze_dataset(
+        df,
+        dataset_id=dataset_id,
+        user_overrides=user_overrides,
+        analysis_type=analysis_type,
+    )
 
     findings: list[Finding] = []
     for iss in contract.issues:
@@ -113,6 +130,9 @@ def inspect_dataset_frame(df: pd.DataFrame, dataset_id: str = "ad_hoc") -> Datas
         is_long_form=is_long_form,
         detected_dimensions=detected_dims,
         detected_categorical_channels=detected_cat_channels,
+        semantic_contract=contract.model_dump(),
+        transformation_plan=contract.transformation_plan.model_dump() if contract.transformation_plan else None,
+        clarification_requests=[c.model_dump() for c in contract.clarification_requests],
     )
 
 
@@ -124,6 +144,7 @@ def validate_dataset_frame(
     control_columns: list[str] | None = None,
     dims: list[str] | None = None,
     dataset_id: str = "ad_hoc",
+    user_overrides: dict[str, Any] | None = None,
 ) -> DatasetValidationResult:
     """Runs statistical validation on a DataFrame returning findings and modeling readiness verdict."""
     findings = validate_mmm_dataset(
@@ -134,11 +155,66 @@ def validate_dataset_frame(
         control_columns=control_columns or [],
         dims=dims or [],
     )
+
+    # Validate semantics and suitability via MarketingDataIntelligenceEngine
+    engine = MarketingDataIntelligenceEngine()
+    combined_overrides = dict(user_overrides or {})
+    if date_column in df.columns:
+        combined_overrides.setdefault(date_column, {"role": SemanticRole.DATE})
+    if target_column in df.columns:
+        combined_overrides.setdefault(target_column, {"role": SemanticRole.TARGET})
+    for ch in channel_columns:
+        if ch in df.columns:
+            combined_overrides.setdefault(ch, {"role": SemanticRole.MEDIA_CHANNEL})
+    for ctrl in (control_columns or []):
+        if ctrl in df.columns:
+            combined_overrides.setdefault(ctrl, {"role": SemanticRole.CONTROL})
+
+    contract = engine.analyze_dataset(
+        df=df,
+        dataset_id=dataset_id,
+        user_overrides=combined_overrides,
+        dims=dims or [],
+    )
+
+    existing_codes = {f.code for f in findings}
+    for iss in contract.issues:
+        code_str = iss.code.value if hasattr(iss.code, "value") else str(iss.code)
+        if code_str not in existing_codes:
+            sev = "error" if iss.blocking else ("warning" if iss.severity in (IssueSeverity.HIGH, IssueSeverity.WARNING) else "info")
+            findings.append(
+                Finding(
+                    severity=sev,
+                    code=code_str,
+                    message=iss.summary,
+                    evidence=iss.evidence,
+                    suggested_action=iss.recommended_action,
+                )
+            )
+
     valid = not any(f.severity == "error" for f in findings)
+    suitability = contract.suitability.get(AnalysisType.MMM)
+    if suitability and suitability.verdict == SuitabilityVerdict.NOT_SUITABLE:
+        valid = False
+
+    temporal_summary = None
+    if contract.structural and contract.structural.temporal:
+        t = contract.structural.temporal
+        temporal_summary = {
+            "frequency": t.frequency or "unknown",
+            "observed_periods": t.observed_periods,
+            "expected_periods": t.expected_periods,
+            "missing_period_count": len(t.missing_periods),
+        }
+
+    modeling_contract = contract.modeling_contract.model_dump() if contract.modeling_contract else None
+
     return DatasetValidationResult(
         dataset_id=dataset_id,
         findings=findings,
         valid_for_modeling=valid,
+        temporal_summary=temporal_summary,
+        modeling_contract=modeling_contract,
     )
 
 

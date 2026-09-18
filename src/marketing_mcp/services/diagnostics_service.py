@@ -20,7 +20,31 @@ class DiagnosticsService:
         result = diagnose_inferencedata(model.idata)
         result.model_id = model_id
         rec.validation_state = result.decision_status
-        rec.diagnostics = result.model_dump()
+        diagnostics_data = result.model_dump()
+
+        if hasattr(rec, "dataset_id") and rec.dataset_id:
+            try:
+                df = self.modeling.datasets.load(rec.dataset_id)
+                from marketing_mcp.scientific.datasets import inspect_dataset_frame
+                insp = inspect_dataset_frame(df, dataset_id=rec.dataset_id)
+                if insp.semantic_contract:
+                    sem = insp.semantic_contract
+                    diagnostics_data["data_readiness"] = {
+                        "dataset_id": rec.dataset_id,
+                        "data_quality_status": "pass" if not any(f.severity == "error" for f in insp.issues) else "block",
+                        "semantic_ambiguity": len(insp.clarification_requests) > 0,
+                        "identification_risk": sem.get("suitability", {}).get("mmm", {}).get("identifiability_risk", {}),
+                        "market_heterogeneity": any(f.code == "MARKET_HETEROGENEITY" for f in insp.issues),
+                        "temporal_support": {
+                            "frequency": insp.frequency,
+                            "rows": insp.rows,
+                            "missing_periods_count": len(insp.missing_periods),
+                        },
+                    }
+            except Exception:
+                pass
+
+        rec.diagnostics = diagnostics_data
         self.metadata.put_model(rec.model_dump())
         return result
 

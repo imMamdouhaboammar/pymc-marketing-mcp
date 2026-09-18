@@ -44,6 +44,9 @@ class DatasetInspection(BaseModel):
     is_long_form: bool = False
     detected_dimensions: list[str] = Field(default_factory=list)
     detected_categorical_channels: list[str] = Field(default_factory=list)
+    semantic_contract: dict[str, Any] | None = None
+    transformation_plan: dict[str, Any] | None = None
+    clarification_requests: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DatasetValidationResult(BaseModel):
@@ -51,6 +54,7 @@ class DatasetValidationResult(BaseModel):
     findings: list[Finding]
     valid_for_modeling: bool
     temporal_summary: dict[str, Any] | None = None
+    modeling_contract: dict[str, Any] | None = None
 
 
 class ColumnSummary(BaseModel):

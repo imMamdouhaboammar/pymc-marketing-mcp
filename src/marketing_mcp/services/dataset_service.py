@@ -182,65 +182,44 @@ class DatasetService:
         )
         return self._read_bytes(data, f".{record['format']}")
 
-    def inspect(self, dataset_id: str, principal: Any = None) -> DatasetInspection:
+    def inspect(
+        self,
+        dataset_id: str,
+        principal: Any = None,
+        user_overrides: dict[str, Any] | None = None,
+        analysis_type: str = "mmm",
+    ) -> DatasetInspection:
         df = self.load(dataset_id, principal=principal)
         from marketing_mcp.scientific.datasets import inspect_dataset_frame
-        return inspect_dataset_frame(df, dataset_id=dataset_id)
+        return inspect_dataset_frame(
+            df,
+            dataset_id=dataset_id,
+            user_overrides=user_overrides,
+            analysis_type=analysis_type,
+        )
 
     def validate(
-        self, dataset_id, date_column, target_column, channel_columns, control_columns, dims=None, principal: Any = None
+        self,
+        dataset_id: str,
+        date_column: str,
+        target_column: str,
+        channel_columns: list[str],
+        control_columns: list[str] | None = None,
+        dims: list[str] | None = None,
+        principal: Any = None,
+        user_overrides: dict[str, Any] | None = None,
     ) -> DatasetValidationResult:
         df = self.load(dataset_id, principal=principal)
-        findings = validate_mmm_dataset(
-            df,
-            date_column,
-            target_column,
-            channel_columns,
-            control_columns,
+        from marketing_mcp.scientific.datasets import validate_dataset_frame
+        return validate_dataset_frame(
+            df=df,
+            date_column=date_column,
+            target_column=target_column,
+            channel_columns=channel_columns,
+            control_columns=control_columns or [],
             dims=dims or [],
-        )
-        valid = not any(f.severity == "error" for f in findings)
-
-        temporal_summary = None
-        if date_column in df.columns:
-            clean_dates = (
-                pd.to_datetime(df[date_column], errors="coerce").dropna().sort_values().drop_duplicates()
-            )
-            if len(clean_dates) >= 3:
-                deltas = clean_dates.diff().dropna().dt.days
-                med = float(deltas.median())
-                freq = (
-                    "daily"
-                    if med <= 1.5
-                    else "weekly"
-                    if med <= 8
-                    else "monthly"
-                    if med <= 35
-                    else "irregular"
-                )
-                if freq in ("daily", "weekly"):
-                    step = pd.Timedelta(days=round(med)) if freq == "weekly" else pd.Timedelta(days=1)
-                    expected_index = pd.date_range(clean_dates.min(), clean_dates.max(), freq=step)
-                    missing_dates = expected_index.difference(clean_dates)
-                    temporal_summary = {
-                        "frequency": freq,
-                        "observed_periods": len(clean_dates),
-                        "expected_periods": len(expected_index),
-                        "missing_period_count": len(missing_dates),
-                    }
-                else:
-                    temporal_summary = {
-                        "frequency": freq,
-                        "observed_periods": len(clean_dates),
-                        "expected_periods": len(clean_dates),
-                        "missing_period_count": 0,
-                    }
-
-        return DatasetValidationResult(
             dataset_id=dataset_id,
-            findings=findings,
-            valid_for_modeling=valid,
-            temporal_summary=temporal_summary,
+            user_overrides=user_overrides,
         )
 
     def transform_long_form(

@@ -223,7 +223,16 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
         ),
     )
     @mcp_error_boundary(operation="inspect_dataset", component="DatasetService", stage="inspection")
-    async def inspect_dataset(dataset_id: str):
+    async def inspect_dataset(
+        dataset_id: str,
+        user_overrides: Annotated[
+            dict[str, Any] | None,
+            Field(
+                default=None,
+                description="Optional user semantic overrides (e.g. target_column, channels, roles)",
+            ),
+        ] = None,
+    ):
         try:
             principal = resolve_context().principal
             require_scope(principal, scopes_for_tool("inspect_dataset")[0])
@@ -233,17 +242,14 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
             authorize_dataset(principal, dataset, action="read")
 
-            r = app.datasets.inspect(dataset_id, principal=principal)
+            r = app.datasets.inspect(dataset_id, principal=principal, user_overrides=user_overrides)
             evidence: dict[str, Any] = {}
-            try:
-                df = app.datasets.load(dataset_id, principal=principal)
-                from marketing_mcp.intelligence.engine import MarketingDataIntelligenceEngine
-                contract = MarketingDataIntelligenceEngine().analyze_dataset(df, dataset_id=dataset_id)
-                evidence["semantic_contract"] = contract.model_dump()
-                evidence["transformation_plan"] = contract.transformation_plan.model_dump()
-                evidence["clarification_requests"] = [c.model_dump() for c in contract.clarification_requests]
-            except Exception:
-                pass
+            if r.semantic_contract:
+                evidence["semantic_contract"] = r.semantic_contract
+            if r.transformation_plan:
+                evidence["transformation_plan"] = r.transformation_plan
+            if r.clarification_requests:
+                evidence["clarification_requests"] = r.clarification_requests
 
             return env(
                 summary=r.model_dump(),
@@ -269,6 +275,13 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
         channel_columns: list[str],
         control_columns: list[str] | None = None,
         dims: list[str] | None = None,
+        user_overrides: Annotated[
+            dict[str, Any] | None,
+            Field(
+                default=None,
+                description="Optional user overrides for semantic interpretation",
+            ),
+        ] = None,
     ):
         try:
             principal = resolve_context().principal
@@ -287,12 +300,15 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 control_columns or [],
                 dims=dims,
                 principal=principal,
+                user_overrides=user_overrides,
             )
             summary = {"dataset_id": dataset_id, "valid_for_modeling": r.valid_for_modeling}
             evidence: dict[str, Any] = {"findings": [f.model_dump() for f in r.findings]}
             if r.temporal_summary:
                 summary.update(r.temporal_summary)
                 evidence["temporal_summary"] = r.temporal_summary
+            if r.modeling_contract:
+                evidence["modeling_contract"] = r.modeling_contract
 
             return env(
                 summary=summary,
