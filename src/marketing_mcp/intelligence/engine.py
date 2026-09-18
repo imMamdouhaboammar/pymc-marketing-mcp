@@ -27,8 +27,11 @@ from marketing_mcp.intelligence.marketing.tracking_quality import analyze_tracki
 from marketing_mcp.intelligence.semantics.currencies import infer_currencies
 from marketing_mcp.intelligence.semantics.objectives import analyze_campaign_objectives
 from marketing_mcp.intelligence.semantics.roles import infer_all_column_roles
+from marketing_mcp.intelligence.statistical.break_detection import detect_structural_breaks
 from marketing_mcp.intelligence.statistical.collinearity import assess_collinearity
+from marketing_mcp.intelligence.statistical.control_variance import assess_control_variance
 from marketing_mcp.intelligence.statistical.identifiability import evaluate_identifiability_risk
+from marketing_mcp.intelligence.statistical.target_leakage import check_target_leakage
 from marketing_mcp.intelligence.statistical.variance import assess_spend_variance
 from marketing_mcp.intelligence.structural.profiler import profile_structure
 from marketing_mcp.intelligence.suitability.clv import evaluate_clv_suitability
@@ -144,12 +147,33 @@ class MarketingDataIntelligenceEngine:
         if tracking_report.issue:
             issues.append(tracking_report.issue)
 
-        # 8. Statistical suitability: variance & collinearity
+        # 8. Statistical suitability: variance, collinearity, leakage, breaks, controls
         var_report = assess_spend_variance(df, channel_names)
         issues.extend(var_report.issues)
 
         coll_report = assess_collinearity(df, channel_names)
         issues.extend(coll_report.issues)
+
+        control_names = [c.column for c in controls]
+        if target_col:
+            leakage_issues = check_target_leakage(
+                df,
+                target_column=target_col.column,
+                candidate_controls=control_names,
+                candidate_channels=channel_names,
+            )
+            issues.extend(leakage_issues)
+
+            break_issues = detect_structural_breaks(
+                df,
+                date_column=date_col_name,
+                target_column=target_col.column,
+            )
+            issues.extend(break_issues)
+
+        if control_names:
+            control_var_issues = assess_control_variance(df, control_names)
+            issues.extend(control_var_issues)
 
         # 9. Identifiability risk synthesis
         issue_codes = [iss.code for iss in issues]
@@ -159,6 +183,8 @@ class MarketingDataIntelligenceEngine:
             variance_issues=[c for c in issue_codes if c == IssueCode.LOW_VARIATION_CHANNEL],
             staggered_issues=[c for c in issue_codes if c == IssueCode.STAGGERED_CHANNEL_LIFECYCLE],
             sparse_issues=[c for c in issue_codes if c == IssueCode.SPARSE_CHANNEL],
+            leakage_issues=[c for c in issue_codes if c == IssueCode.TARGET_LEAKAGE],
+            break_issues=[c for c in issue_codes if c == IssueCode.STRUCTURAL_BREAK],
         )
 
         # Deduplicate issues by (code, affected_columns)
