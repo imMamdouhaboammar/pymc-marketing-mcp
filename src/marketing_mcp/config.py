@@ -73,6 +73,13 @@ class Settings(BaseModel):
     shared_sql_url: str | None = None
     rate_limit_per_minute: int = 120
 
+    # --- Phase 7: Platform Client & Gateway Bridge ---
+    gateway_url: str = "http://127.0.0.1:8080"
+    organization_id: str | None = None
+    principal_id: str | None = None
+    principal_role: str = "analyst"
+    platform_client_enabled: bool = False
+
     @model_validator(mode="after")
     def _validate_security_posture(self) -> Settings:
         profile = self.security_profile
