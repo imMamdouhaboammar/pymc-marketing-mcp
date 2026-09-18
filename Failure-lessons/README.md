@@ -27,6 +27,11 @@ Every engineering agent and contributor working on this repository must preserve
 13. **Native Extension Builds Must Target the Active Runtime**: Native C-extension crates (PyO3) must explicitly link against the active virtual environment (`PYO3_PYTHON`) and configure platform-specific dynamic lookup (`-undefined dynamic_lookup` on macOS) to avoid unresolved symbol link errors during build and packaging.
 14. **Document Protocol Boundaries Truthfully**: When native acceleration wraps an external runtime SDK (e.g. MCP Python SDK), protocol admission must truthfully reflect boundary transformations (`InteractionRequest` / `BoundaryRequest`) rather than claiming non-existent zero-copy passthroughs.
 15. **Statistical Invariant Tests Must Derive Assertions Dynamically**: Tests verifying optimization invariants (e.g. spend conservation, channel bounds) must compute tolerances and expected values directly from input configurations rather than hardcoding static numbers that silently drift when fixtures change. Every computed variable in a test must have an assertion.
+16. **Submodule Import Decoupling & Virtualenv Parity**: Package `__init__.py` files must not eagerly import optional or network-dependent client adapters that require dependencies beyond the base runtime contract. Monorepo sync must verify dependency parity across all subprojects.
+17. **Issue Closure Discipline on Main Landing**: Every commit or PR implementing issue specifications must close corresponding issues with traceable test evidence (`Closes #X`), preventing phantom open issue accumulation and cognitive debt.
+18. **Release Integrity Enforced in CI, Not SaaS Settings**: Release integrity must be mathematically guaranteed within repository CI workflows (via candidate commit SHA equality and digest verification) rather than relying on external SaaS administrative settings that may be restricted by plan or visibility.
+19. **Explicit Provenance Allowlisting**: Release evidence, telemetry, and audit logs must strictly enforce an explicit allowlist (`_SAFE_ENV_KEYS`) of safe variables. Ambient environment dumps with denylists are strictly prohibited.
+20. **Single-Build Promotion**: Release artifacts (wheel, sdist, containers) must be built once from a verified immutable commit SHA, tested in place, and promoted by cryptographic hash without rebuilding.
 
 ---
 
@@ -49,6 +54,11 @@ Every engineering agent and contributor working on this repository must preserve
 | [37-macos-pyo3-linker-symbol-resolution-and-virtualenv.md](./37-macos-pyo3-linker-symbol-resolution-and-virtualenv.md) | Darwin PyO3 symbol resolution, dynamic lookup, toolchain paths | `LINK-001` |
 | [38-dual-parse-protocol-boundary-and-typed-contracts.md](./38-dual-parse-protocol-boundary-and-typed-contracts.md) | Dual-parsing boundary truth, typed interaction envelopes | `BOUND-001` |
 | [39-statistical-test-assertion-drift-and-budget-conservation.md](./39-statistical-test-assertion-drift-and-budget-conservation.md) | Dynamic budget bounds assertions, linter F841 enforcement | `TEST-002` |
+| [40-multi-virtualenv-submodule-import-collision.md](./40-multi-virtualenv-submodule-import-collision.md) | Submodule import isolation, monorepo virtualenv dependency synchronization | `ENV-001` |
+| [41-phantom-open-issue-accumulation-vs-branch-landing-drift.md](./41-phantom-open-issue-accumulation-vs-branch-landing-drift.md) | Issue triage governance, landing drift prevention, verified issue closure | `GOV-001` |
+| [42-private-repo-branch-protection-api-entitlement-boundary.md](./42-private-repo-branch-protection-api-entitlement-boundary.md) | SaaS entitlement boundary, programmatic CI candidate SHA enforcement | `ENT-001` |
+| [43-release-evidence-environment-allowlist-hygiene.md](./43-release-evidence-environment-allowlist-hygiene.md) | Provenance allowlisting vs dangerous ambient environment denylists | `SEC-ENV-001` |
+| [44-exact-candidate-sha-binding-and-single-build-promotion.md](./44-exact-candidate-sha-binding-and-single-build-promotion.md) | Supply-chain release integrity, single-build digest promotion | `REL-SHA-001` |
 | [lessons-index.md](./lessons-index.md) | Master lookup table mapping lessons, rules, systems, and regression tests | Master Cross-Reference |
 
 ---
