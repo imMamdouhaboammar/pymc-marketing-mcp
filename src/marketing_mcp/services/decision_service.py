@@ -621,6 +621,11 @@ class DecisionService:
         )
 
         constraints_dicts = [c.model_dump() for c in input.channel_constraints]
+        fin_assump = None
+        if getattr(input, "financial", None) is not None:
+            from marketing_mcp.domain.decisions.financial import FinancialAssumptions
+            fin_assump = FinancialAssumptions(**input.financial.model_dump())
+
         flighting_res = optimize_flighting_schedule(
             channel_columns=model.channel_columns,
             total_budget=input.total_budget,
@@ -632,6 +637,7 @@ class DecisionService:
             channel_parameters=channel_params if channel_params else None,
             historical_channel_p95=p95_map,
             response_evaluator=response_evaluator,
+            financial=fin_assump,
         )
 
         total_channel_spend = flighting_res["total_channel_spend"]
@@ -662,6 +668,15 @@ class DecisionService:
         }
         self.metadata.put_scenario(payload)
 
+        prov = self._provenance(input.model_id, record)
+        if fin_assump is not None:
+            prov["financial_assumptions"] = fin_assump.to_provenance()
+        elif getattr(input, "margin_pct", None) is not None:
+            prov["financial_assumptions"] = {"gross_margin_rate": input.margin_pct, "legacy_margin_pct": True}
+        prov["objective_definition"] = {
+            "name": input.objective,
+            "description": "Expected net profit" if input.objective == "maximize_net_profit" else "Expected response",
+        }
         return {
             "scenario_id": scenario_id,
             "model_id": input.model_id,
@@ -690,5 +705,5 @@ class DecisionService:
             },
             "warnings": flighting_res["warnings"],
             "decision_gate": self._gate_payload(record),
-            "provenance": self._provenance(input.model_id, record),
+            "provenance": prov,
         }

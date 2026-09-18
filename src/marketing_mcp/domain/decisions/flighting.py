@@ -314,6 +314,7 @@ def optimize_flighting_schedule(
     channel_parameters: dict[str, dict[str, float]] | None = None,
     historical_channel_p95: dict[str, float] | None = None,
     response_evaluator: Callable[[np.ndarray], float] | None = None,
+    financial: FinancialAssumptions | None = None,
 ) -> dict[str, Any]:
     """Execute dynamic channel-by-week SLSQP flighting optimization.
 
@@ -342,6 +343,12 @@ def optimize_flighting_schedule(
         raise DomainError("INPUT_INVALID", "planning_weeks must be at least 1")
     if total_budget <= 0:
         raise DomainError("INPUT_INVALID", "total_budget must be positive")
+
+    if financial is None:
+        financial = FinancialAssumptions.from_legacy(margin_pct=margin_pct)
+    fin_errors = financial.validate()
+    if fin_errors:
+        raise DomainError("INVALID_FINANCIAL_ASSUMPTIONS", "; ".join(fin_errors))
 
     # Map constraints by channel
     constraint_map: dict[str, dict[str, Any]] = {}
@@ -432,9 +439,11 @@ def optimize_flighting_schedule(
         total_sp = float(np.sum(x))
 
         if objective == "maximize_net_profit":
-            # Maximize: margin_pct * Response - Total Spend
-            # Minimize: -(margin_pct * Response - Total Spend), normalized by total_budget
-            loss = -(margin_pct * resp - total_sp) / total_budget
+            # Maximize: margin_rate * gross_revenue - Total Spend
+            # Minimize: -(margin_rate * gross_revenue - Total Spend), normalized by total_budget
+            margin_rate = financial.effective_margin_rate()
+            gross_rev = resp * financial.revenue_per_outcome
+            loss = -(margin_rate * gross_rev - total_sp) / total_budget
         else:
             # Maximize: Response
             # Minimize: -Response, normalized by baseline_resp
@@ -528,7 +537,7 @@ def optimize_flighting_schedule(
     net_profit_info = compute_net_profit(
         total_response=total_response,
         total_spend=total_spend_actual,
-        margin_pct=margin_pct,
+        financial=financial,
     )
 
     extrap_warnings = check_extrapolation_risk(weekly_schedule, historical_channel_p95)
