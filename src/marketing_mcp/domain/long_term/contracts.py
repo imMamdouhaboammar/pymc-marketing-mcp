@@ -27,7 +27,10 @@ class LongTermRollup(BaseModel):
     endogenous_columns: list[str] = Field(description="Endogenous variables (brand equity, sales, etc.)")
     exogenous_channels: list[str] = Field(description="Exogenous media channels")
     channel_multipliers: dict[str, float] = Field(
-        description="Long-run value multipliers per channel (>= 1.0)"
+        description=(
+            "Finite-horizon cumulative response divided by contemporaneous response per channel; "
+            "may be below 1.0 when later responses offset the initial effect"
+        )
     )
     irfs: dict[str, ImpulseResponseCurve] = Field(
         default_factory=dict, description="Detailed IRF curves keyed by channel name"

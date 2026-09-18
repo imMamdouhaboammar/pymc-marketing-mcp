@@ -1,4 +1,4 @@
-"""Bayesian VAR Long-Term Brand Effects prototype engine (T8 - Experimental)."""
+"""Deterministic ridge VARX long-term brand-effects prototype (T8 - Experimental)."""
 
 from __future__ import annotations
 
@@ -17,10 +17,11 @@ from marketing_mcp.domain.long_term.contracts import (
 from marketing_mcp.errors import DomainError
 
 
-class BayesianVARLongTermEngine(LongTermEffectsEngine):
-    """Bayesian VAR engine for estimating long-term brand equity multipliers.
+class DeterministicVARLongTermEngine(LongTermEffectsEngine):
+    """Deterministic ridge VARX prototype for descriptive long-term effects.
 
-    Marked as EXPERIMENTAL in platform capabilities.
+    This engine produces point estimates only. It does not perform posterior sampling
+    and must not be used as decision-grade Bayesian evidence.
     """
 
     def fit_var(
@@ -44,18 +45,20 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
             if col not in df.columns:
                 raise DomainError("INPUT_INVALID", f"Column '{col}' not found in dataset")
 
-        y_raw = df[endogenous_columns].apply(pd.to_numeric, errors="coerce").dropna().to_numpy(dtype=float)
-        x_raw = df[exogenous_channels].apply(pd.to_numeric, errors="coerce").dropna().to_numpy(dtype=float)
-
-        min_len = min(len(y_raw), len(x_raw))
-        if min_len < 16:
+        selected_columns = endogenous_columns + exogenous_channels
+        numeric = pd.DataFrame(
+            {col: pd.to_numeric(df[col], errors="coerce") for col in selected_columns},
+            index=df.index,
+        ).dropna()
+        if len(numeric) < 16:
             raise DomainError(
                 "DATASET_TOO_SHORT",
-                f"Dataset length ({min_len}) is too short for VAR identification (minimum 16 periods required)",
+                f"Dataset length ({len(numeric)}) is too short for VAR identification "
+                "(minimum 16 jointly observed periods required)",
             )
 
-        y = y_raw[:min_len]
-        x = x_raw[:min_len]
+        y = numeric[endogenous_columns].to_numpy(dtype=float)
+        x = numeric[exogenous_channels].to_numpy(dtype=float)
 
         # Time series alignment for VAR(1): Y_t against Y_{t-1} and X_t
         y_curr = y[1:]  # shape: (T-1, m_endo)
@@ -67,13 +70,13 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
         ones = np.ones((t_obs, 1))
         z = np.hstack([y_lag, x_curr, ones])
 
-        # Ridge / Minnesota shrinkage regularization to ensure well-conditioned inversion
+        # Ridge regularization to ensure a well-conditioned deterministic solve.
         ridge_diag = np.ones(z.shape[1]) * 1e-4
-        # Slightly higher shrinkage on lag cross-terms
+        # Apply stronger shrinkage to all lag coefficients than exogenous/intercept terms.
         ridge_diag[:m_endo] = 1e-2
         reg_matrix = np.diag(ridge_diag)
 
-        # OLS / Bayesian posterior mode coefficients: Beta = (Z'Z + Lambda)^(-1) Z'Y
+        # Ridge-regularized least-squares coefficients: Beta = (Z'Z + Lambda)^(-1) Z'Y
         beta = np.linalg.solve(z.T @ z + reg_matrix, z.T @ y_curr)  # shape: (m_endo + k_exo + 1, m_endo)
 
         # Extract A (transition matrix) and B (exogenous impact matrix)
@@ -106,9 +109,20 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
                 current_impact = a_matrix @ current_impact
                 resp_h.append(float(current_impact[target_idx]))
 
-            initial_val = max(1e-6, abs(resp_h[0]))
+            initial_val = float(resp_h[0])
             cum_val = float(sum(resp_h))
-            mult = max(1.0, round(cum_val / initial_val, 3)) if is_stationary else 1.0
+            if is_stationary and abs(initial_val) < 1e-8:
+                raise DomainError(
+                    "LONG_TERM_MULTIPLIER_UNDEFINED",
+                    f"Channel '{ch}' has near-zero contemporaneous target impact; "
+                    "the cumulative-to-initial multiplier is undefined",
+                    evidence={"channel": ch, "initial_target_impact": initial_val},
+                    next_action=(
+                        "Choose a target/channel with non-zero contemporaneous impact, or use "
+                        "an analysis path that reports raw impulse responses without a ratio multiplier"
+                    ),
+                )
+            mult = round(cum_val / initial_val, 3) if is_stationary else 1.0
 
             channel_multipliers[ch] = mult
             irfs[ch] = ImpulseResponseCurve(
@@ -132,7 +146,9 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
             diagnostic_status=diagnostic_status,
             provenance={
                 "fitted_at": now,
-                "engine": "BayesianVARLongTermEngine",
+                "engine": "DeterministicVARLongTermEngine",
+                "estimation_method": "ridge_regularized_least_squares",
+                "uncertainty_quantified": False,
                 "horizon": horizon,
                 "experimental": True,
             },
@@ -143,7 +159,7 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
         decision_result: dict[str, Any],
         rollup: LongTermRollup,
     ) -> dict[str, Any]:
-        """Attach long-term brand multipliers to an MMM decision result."""
+        """Refuse decision-grade rollup because this estimator has no posterior uncertainty."""
         if rollup.diagnostic_status == "rejected":
             raise DomainError(
                 "LONG_TERM_GATE_REJECTED",
@@ -152,13 +168,19 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
                 next_action="Review endogenous time series stationarity or regularize VAR lag priors",
             )
 
-        enriched = dict(decision_result)
-        prov = enriched.setdefault("provenance", {})
-        prov["long_term_effects"] = {
-            "var_model_id": rollup.model_id,
-            "status": rollup.diagnostic_status,
-            "channel_multipliers": rollup.channel_multipliers,
-            "max_eigenvalue": rollup.max_eigenvalue,
-            "experimental": True,
-        }
-        return enriched
+        raise DomainError(
+            "LONG_TERM_UNCERTAINTY_REQUIRED",
+            "The deterministic VARX prototype does not quantify posterior uncertainty; "
+            "refusing to attach its point estimates to decision-grade provenance",
+            evidence={
+                "model_id": rollup.model_id,
+                "diagnostic_status": rollup.diagnostic_status,
+                "estimation_method": "ridge_regularized_least_squares",
+                "uncertainty_quantified": False,
+                "experimental": True,
+            },
+            next_action=(
+                "Use a Bayesian long-term-effects implementation with posterior sampling, "
+                "uncertainty intervals, and diagnostics before decision rollup"
+            ),
+        )

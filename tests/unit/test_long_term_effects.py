@@ -1,12 +1,13 @@
-"""Unit tests for Bayesian VAR Long-Term Brand Effects prototype (T8).
+"""Unit tests for the deterministic VARX long-term-effects prototype (T8).
 
 Fast tests — zero sampling required.
 Requirements tested:
-- Synthetic ground-truth recovery of positive carryover & multiplier
+- Synthetic ground-truth recovery of positive and damped carryover multipliers
+- Joint time-row alignment after numeric coercion and missing-value filtering
 - Diagnostic eigenvalue threshold enforcement
-- Decision rollup enrichment
+- Deterministic point estimates blocked from decision-grade rollup
 - Non-stationary explosive models blocked by decision gate
-- Tenant isolation
+- Honest estimator provenance
 """
 
 from __future__ import annotations
@@ -15,8 +16,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import marketing_mcp.domain.long_term as long_term
 from marketing_mcp.domain.long_term import (
-    BayesianVARLongTermEngine,
+    DeterministicVARLongTermEngine,
     LongTermEffectsEngine,
     LongTermRollup,
 )
@@ -25,7 +27,7 @@ from marketing_mcp.errors import DomainError
 
 @pytest.fixture
 def engine():
-    return BayesianVARLongTermEngine()
+    return DeterministicVARLongTermEngine()
 
 
 @pytest.fixture
@@ -52,7 +54,12 @@ def synthetic_var_data():
     })
 
 
-class TestBayesianVARLongTermEngine:
+def test_engine_export_name_matches_deterministic_estimator():
+    assert hasattr(long_term, "DeterministicVARLongTermEngine")
+    assert not hasattr(long_term, "BayesianVARLongTermEngine")
+
+
+class TestDeterministicVARLongTermEngine:
     def test_implements_protocol(self, engine):
         assert isinstance(engine, LongTermEffectsEngine)
 
@@ -71,10 +78,12 @@ class TestBayesianVARLongTermEngine:
         assert rollup.max_eigenvalue < 1.0
         assert rollup.diagnostic_status in ("pass", "caution")
 
-        # Upper funnel TV should exhibit a long-run multiplier > 1.0 due to brand persistence
+        # Analytic finite-horizon multiplier for the noise-free DGP is 2 - 0.7**12.
         assert "tv_spend" in rollup.channel_multipliers
         mult = rollup.channel_multipliers["tv_spend"]
-        assert mult >= 1.0
+        assert mult == pytest.approx(2 - 0.7**12, abs=0.25)
+        assert rollup.provenance["estimation_method"] == "ridge_regularized_least_squares"
+        assert rollup.provenance["uncertainty_quantified"] is False
 
         # Detailed IRF exists
         assert "tv_spend" in rollup.irfs
@@ -82,7 +91,47 @@ class TestBayesianVARLongTermEngine:
         assert len(irf.horizons) == 13  # 0 to 12
         assert len(irf.responses) == 13
 
-    def test_decision_gate_enriches_valid_decision(self, engine, synthetic_var_data):
+    def test_multiplier_preserves_damped_negative_carryover_below_one(self, engine):
+        rng = np.random.default_rng(7)
+        n = 120
+        media = rng.normal(0.0, 1.0, n)
+        target = np.zeros(n)
+        for t in range(1, n):
+            target[t] = -0.5 * target[t - 1] + 0.8 * media[t] + rng.normal(0.0, 0.01)
+
+        rollup = engine.fit_var(
+            df=pd.DataFrame({"media": media, "target": target}),
+            endogenous_columns=["target"],
+            exogenous_channels=["media"],
+            horizon=12,
+        )
+
+        # True finite-horizon multiplier is sum((-0.5) ** h, h=0..12) ~= 2/3.
+        assert rollup.channel_multipliers["media"] == pytest.approx(
+            sum((-0.5) ** h for h in range(13)),
+            abs=0.08,
+        )
+
+    def test_near_zero_initial_effect_rejects_undefined_multiplier(self, engine):
+        rng = np.random.default_rng(9)
+        df = pd.DataFrame(
+            {
+                "media": rng.normal(0.0, 1.0, 40),
+                "target": np.zeros(40),
+            }
+        )
+
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=df,
+                endogenous_columns=["target"],
+                exogenous_channels=["media"],
+                horizon=4,
+            )
+
+        assert exc_info.value.code == "LONG_TERM_MULTIPLIER_UNDEFINED"
+
+    def test_deterministic_rollup_cannot_become_decision_evidence(self, engine, synthetic_var_data):
         rollup = engine.fit_var(
             df=synthetic_var_data,
             endogenous_columns=["brand_equity", "sales"],
@@ -94,12 +143,35 @@ class TestBayesianVARLongTermEngine:
             "recommended_allocation": {"tv_spend": 20000.0},
             "provenance": {"base": "mmm"},
         }
-        enriched = engine.rollup_into_decision(base_decision, rollup)
-        prov = enriched["provenance"]
-        assert "long_term_effects" in prov
-        assert prov["long_term_effects"]["status"] == rollup.diagnostic_status
-        assert prov["long_term_effects"]["channel_multipliers"] == rollup.channel_multipliers
-        assert prov["long_term_effects"]["experimental"] is True
+        with pytest.raises(DomainError) as exc_info:
+            engine.rollup_into_decision(base_decision, rollup)
+
+        assert exc_info.value.code == "LONG_TERM_UNCERTAINTY_REQUIRED"
+
+    def test_missing_values_are_dropped_jointly_before_var_alignment(
+        self, engine, synthetic_var_data
+    ):
+        dirty = synthetic_var_data.copy()
+        dirty.loc[10, "brand_equity"] = np.nan
+        dirty.loc[20, "tv_spend"] = np.nan
+
+        selected = ["brand_equity", "sales", "tv_spend"]
+        jointly_clean = dirty[selected].apply(pd.to_numeric, errors="coerce").dropna()
+
+        actual = engine.fit_var(
+            df=dirty,
+            endogenous_columns=["brand_equity", "sales"],
+            exogenous_channels=["tv_spend"],
+        )
+        expected = engine.fit_var(
+            df=jointly_clean,
+            endogenous_columns=["brand_equity", "sales"],
+            exogenous_channels=["tv_spend"],
+        )
+
+        assert actual.max_eigenvalue == expected.max_eigenvalue
+        assert actual.channel_multipliers == expected.channel_multipliers
+        assert actual.irfs["tv_spend"].responses == expected.irfs["tv_spend"].responses
 
     def test_explosive_non_stationary_model_is_blocked_by_gate(self, engine):
         """Synthetic explosive model with eigenvalue >= 1.0 must fail decision gate."""
