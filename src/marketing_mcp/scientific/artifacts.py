@@ -12,9 +12,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID, uuid4
+
 from pydantic import BaseModel, Field
 
+import marketing_mcp
 from marketing_mcp.services.plotting_service import PlottingService
+
+_VERSION = marketing_mcp.__version__
 
 SUPPORTED_ARTIFACT_KINDS = [
     "waterfall_plot",
@@ -52,7 +56,7 @@ class ArtifactManifest(BaseModel):
     storage_uri: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     producer_service: str = "analytics-worker"
-    producer_version: str = "0.1.0"
+    producer_version: str = Field(default_factory=lambda: _VERSION)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -65,7 +69,7 @@ def generate_mmm_artifacts(
     fmt: str = "png",
     kinds: list[str] | None = None,
     producer_service: str = "analytics-worker",
-    producer_version: str = "0.1.0",
+    producer_version: str | None = None,
 ) -> list[ArtifactManifest]:
     """Render canonical MMM visual artifacts (waterfall, adstock, contributions).
 
@@ -78,7 +82,7 @@ def generate_mmm_artifacts(
         fmt: Output format ('png' or 'svg'). Defaults to 'png'.
         kinds: Subset of SUPPORTED_ARTIFACT_KINDS to generate, or None for all.
         producer_service: Name of producing service. Defaults to 'analytics-worker'.
-        producer_version: Version of producing service. Defaults to '0.1.0'.
+        producer_version: Version of producing service. Defaults to package version.
 
     Returns:
         List of generated ArtifactManifest instances.
@@ -128,7 +132,7 @@ def generate_mmm_artifacts(
             sha256=sha256_hash,
             storage_uri=storage_uri,
             producer_service=producer_service,
-            producer_version=producer_version,
+            producer_version=producer_version if producer_version is not None else _VERSION,
             metadata={"format": fmt, "plot_type": plot_type},
         )
         manifests.append(manifest)

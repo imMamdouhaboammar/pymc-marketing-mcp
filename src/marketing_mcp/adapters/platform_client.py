@@ -136,6 +136,71 @@ class PlatformClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def route_dataset_preflight(
+        self,
+        csv_bytes: bytes,
+        date_col: str | None = None,
+        target_col: str | None = None,
+        channel_cols: list[str] | None = None,
+        trace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Run fast CSV preflight sniff before routing to gateway.
+
+        Uses the Rust-accelerated (or pure-Python fallback) CSV sniffer to validate
+        the dataset in-process before waking the gateway and Python workers.
+        Returns the preflight result dict from ``fast_sniff_and_validate_csv``.
+
+        This is the SIMD preflight gate for UP-062. No network call is made if the
+        preflight finds blocking errors — the gateway is only invoked for valid data.
+        """
+        from marketing_mcp.accelerators import fast_sniff_and_validate_csv
+
+        preflight = fast_sniff_and_validate_csv(
+            csv_bytes,
+            date_col=date_col,
+            target_col=target_col,
+            channel_cols=channel_cols,
+        )
+        preflight["trace_id"] = trace_id or f"trace-{uuid4().hex[:12]}"
+        return preflight
+
+    async def register_dataset_via_gateway(
+        self,
+        project_id: str | UUID,
+        dataset_id: str | UUID,
+        name: str,
+        sha256: str,
+        size_bytes: int,
+        row_count: int,
+        column_count: int,
+        columns: list[dict[str, Any]],
+        storage_uri: str,
+        media_type: str = "text/csv",
+        trace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Finalize a dataset registration through the Axum gateway (UP-062).
+
+        Calls ``POST /api/v1/datasets/finalize`` with the immutable version payload
+        after successful preflight validation, completing the upload → finalize flow.
+        """
+        client = await self._get_client()
+        headers = self.build_headers(trace_id=trace_id)
+        payload: dict[str, Any] = {
+            "project_id": str(project_id),
+            "dataset_id": str(dataset_id),
+            "name": name,
+            "sha256": sha256,
+            "size_bytes": size_bytes,
+            "row_count": row_count,
+            "column_count": column_count,
+            "columns": columns,
+            "storage_uri": storage_uri,
+            "media_type": media_type,
+        }
+        resp = await client.post("/api/v1/datasets/finalize", json=payload, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
     async def close(self) -> None:
         """Close underlying HTTP client."""
         if self._http_client is not None and not self._http_client.is_closed:

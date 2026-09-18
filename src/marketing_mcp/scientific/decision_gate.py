@@ -5,14 +5,20 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
-from uuid import UUID, uuid4
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
+import marketing_mcp as _mcp_pkg
 from marketing_mcp.errors import DomainError
+
+_VERSION = _mcp_pkg.__version__
 
 try:
     from packages.contracts.python.models import (
         DiagnosticMetrics as PlatformDiagnosticMetrics,
+    )
+    from packages.contracts.python.models import (
         DiagnosticReport as PlatformDiagnosticReport,
     )
 except ImportError:
@@ -38,7 +44,7 @@ class LocalDiagnosticMetrics(BaseModel):
 class LocalDiagnosticReport(BaseModel):
     schema_version: str = "1.0"
     run_id: UUID
-    policy_version: str = "1.0.0"
+    policy_version: str = Field(default_factory=lambda: _VERSION)
     decision_status: Literal["pass", "caution", "block"]
     diagnostics: LocalDiagnosticMetrics
     reasons: list[str] = Field(default_factory=list)
@@ -121,7 +127,7 @@ def evaluate_diagnostic_policy(
     max_rhat: float,
     divergences: int,
     min_bfmi: float,
-    policy_version: str = "1.0.0",
+    policy_version: str | None = None,
 ) -> Any:
     """Evaluate MCMC convergence metrics against canonical server decision gate policy."""
     parsed_id = UUID(str(run_id)) if not isinstance(run_id, UUID) else run_id
@@ -146,7 +152,7 @@ def evaluate_diagnostic_policy(
     return report_cls(
         schema_version="1.0",
         run_id=parsed_id,
-        policy_version=policy_version,
+        policy_version=policy_version if policy_version is not None else _VERSION,
         decision_status=verdict.value,
         diagnostics=metrics,
         reasons=reasons,
