@@ -103,6 +103,26 @@ class TestDeterministicVARLongTermEngine:
         assert exc_info.value.code == "INPUT_INVALID"
         assert "target_column" in str(exc_info.value)
 
+    def test_legacy_positional_horizon_and_tenant_remain_compatible(self, engine):
+        rng = np.random.default_rng(123)
+        n = 40
+        media = rng.normal(0.0, 1.0, n)
+        target = np.zeros(n)
+        for t in range(1, n):
+            target[t] = 0.5 * target[t - 1] + 0.8 * media[t]
+
+        rollup = engine.fit_var(
+            pd.DataFrame({"media": media, "target": target}),
+            ["target"],
+            ["media"],
+            4,
+            "legacy-tenant",
+        )
+
+        assert rollup.tenant_id == "legacy-tenant"
+        assert rollup.provenance["horizon"] == 4
+        assert rollup.irfs["media"].horizons == [0, 1, 2, 3, 4]
+
     def test_explicit_target_is_invariant_to_endogenous_column_order(self, engine, synthetic_var_data):
         first = engine.fit_var(
             df=synthetic_var_data,

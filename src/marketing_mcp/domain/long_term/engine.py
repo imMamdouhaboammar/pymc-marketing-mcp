@@ -29,9 +29,10 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
         df: pd.DataFrame,
         endogenous_columns: list[str],
         exogenous_channels: list[str],
-        target_column: str | None = None,
         horizon: int = 12,
         tenant_id: str = "default",
+        *,
+        target_column: str | None = None,
     ) -> LongTermRollup:
         """Fit stationary VARX(1) model and compute impulse response rollups."""
         m_endo = len(endogenous_columns)

@@ -55,9 +55,10 @@ class LongTermEffectsEngine(Protocol):
         df: Any,
         endogenous_columns: list[str],
         exogenous_channels: list[str],
-        target_column: str | None = None,
         horizon: int = 12,
         tenant_id: str = "default",
+        *,
+        target_column: str | None = None,
     ) -> LongTermRollup:
         """Fit vector autoregression and compute impulse response rollups."""
         ...
