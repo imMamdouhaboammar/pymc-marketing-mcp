@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from marketing_mcp import __version__
 from marketing_mcp.domain.priors.contracts import (
     PriorAlternative,
     PriorRecommendation,
@@ -186,5 +187,5 @@ def recommend_priors_for_channels(
         dataset_id=dataset_id,
         recommendations=recommendations,
         unsupported_channels=unsupported_channels,
-        provenance={"generator": "PriorRecommendationEngine", "version": "1.0.0"},
+        provenance={"generator": "PriorRecommendationEngine", "version": __version__},
     )
