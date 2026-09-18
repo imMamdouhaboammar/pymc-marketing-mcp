@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from marketing_mcp.scientific.clv import (
+    CLVFitResult,
+    build_clv_purchase_from_spec,
+    build_clv_value_from_spec,
+    fit_clv_purchase_from_spec,
+    fit_clv_value_from_spec,
+)
 from marketing_mcp.scientific.datasets import (
     inspect_dataset_frame,
     summarize_dataset_frame,
@@ -21,13 +28,18 @@ from marketing_mcp.scientific.mmm import (
 )
 
 __all__ = [
+    "CLVFitResult",
     "DecisionPolicyVerdict",
     "MMMFitResult",
+    "build_clv_purchase_from_spec",
+    "build_clv_value_from_spec",
     "build_mmm_from_spec",
     "enforce_decision_gate",
     "evaluate_diagnostic_policy",
     "extract_mcmc_diagnostics",
     "extract_parameter_estimates",
+    "fit_clv_purchase_from_spec",
+    "fit_clv_value_from_spec",
     "fit_mmm_from_spec",
     "inspect_dataset_frame",
     "summarize_dataset_frame",
