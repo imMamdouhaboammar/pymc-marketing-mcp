@@ -249,3 +249,4 @@ class TestDeterministicVARLongTermEngine:
         with pytest.raises(DomainError) as exc_info:
             engine.rollup_into_decision(decision, explosive_rollup)
         assert exc_info.value.code == "LONG_TERM_GATE_REJECTED"
+        assert "prior" not in exc_info.value.next_action.lower()

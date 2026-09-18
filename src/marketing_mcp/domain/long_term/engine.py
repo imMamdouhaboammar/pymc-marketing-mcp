@@ -176,7 +176,10 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
                 "LONG_TERM_GATE_REJECTED",
                 f"Long-term VAR model has non-stationary explosive dynamics (max eigenvalue {rollup.max_eigenvalue} >= 1.0); refusing to roll up",
                 evidence={"max_eigenvalue": rollup.max_eigenvalue},
-                next_action="Review endogenous time series stationarity or regularize VAR lag priors",
+                next_action=(
+                    "Review endogenous time-series stationarity, lag specification, or deterministic "
+                    "ridge regularization before interpreting the response"
+                ),
             )
 
         raise DomainError(
