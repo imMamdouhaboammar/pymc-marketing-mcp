@@ -115,3 +115,23 @@ class TestPriorRecommendationEngine:
         for alt in rec.alternative_priors:
             assert alt.reason != ""
             assert len(alt.kwargs) > 0
+
+    def test_experiment_record_schema_parity(self):
+        channels = ["meta_spend"]
+        experiments = [
+            {
+                "experiment_id": "exp_canonical",
+                "channel": "meta_spend",
+                "spend_delta": 5000.0,
+                "measured_incremental_response": 12500.0,
+                "standard_error": 0.25,
+                "evidence_quality_score": 0.90,
+            }
+        ]
+        report = recommend_priors_for_channels(channels=channels, experiments=experiments)
+        rec = report.recommendations["meta_spend"][0]
+        assert rec.evidence_type == "experimental_lift"
+        assert rec.confidence == 0.90
+        assert "experiment:exp_canonical" in rec.evidence_source
+        assert rec.recommended_distribution.kwargs["sigma"] > 0
+

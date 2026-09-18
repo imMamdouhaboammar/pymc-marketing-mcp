@@ -66,9 +66,22 @@ def recommend_priors_for_channels(
         if ch_exps:
             # Evidence-backed: experimental lift test available
             latest_exp = ch_exps[-1]
-            lift_est = float(latest_exp.get("delta_y", 1.0))
-            spend_inc = float(latest_exp.get("delta_x", 1.0))
-            sigma = float(latest_exp.get("sigma", 0.5))
+            lift_est = float(
+                latest_exp.get("measured_incremental_response")
+                if latest_exp.get("measured_incremental_response") is not None
+                else latest_exp.get("delta_y", 1.0)
+            )
+            spend_inc = float(
+                latest_exp.get("spend_delta")
+                if latest_exp.get("spend_delta") is not None
+                else latest_exp.get("delta_x", 1.0)
+            )
+            sigma = float(
+                latest_exp.get("standard_error")
+                if latest_exp.get("standard_error") is not None
+                else latest_exp.get("sigma", 0.5)
+            )
+            quality_score = float(latest_exp.get("evidence_quality_score", 0.85))
             observed_roas = max(0.01, lift_est / max(1.0, spend_inc))
 
             # Calibrate a HalfNormal or Gamma prior around observed ROAS
@@ -82,7 +95,7 @@ def recommend_priors_for_channels(
                 ),
                 evidence_source=f"experiment:{latest_exp.get('experiment_id', 'lift_test')}",
                 evidence_type="experimental_lift",
-                confidence=0.85,
+                confidence=quality_score,
                 reason=(
                     f"Calibrated from measured experimental incrementality: "
                     f"observed iROAS ~ {observed_roas:.2f} (SE: {sigma:.2f})."
