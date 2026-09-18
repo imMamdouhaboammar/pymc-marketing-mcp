@@ -51,13 +51,53 @@ Throughout this hardening mission, the most severe bugs in the platform were gua
 * **Why It Was Deceptive**: The actual code used standard library hashing and standard buffered IPC channels; no SIMD intrinsics or unbuffered streaming existed in the runtime path.
 * **Lesson**: Architectural claims must be verified via actual runtime assertions, hardware telemetry, and automated throughput benchmarks before documentation is committed.
 
+### Anti-Pattern 7: Ambient Process Environment Capture (Denylist Security Illusion)
+* **What Happened**: Release evidence collectors captured `os.environ` snapshots and attempted to scrub secrets using a denylist regex.
+* **Why It Was Deceptive**: Any newly introduced secret or token whose name was not already in the denylist leaked into public release markdown and JSON manifests.
+* **Lesson**: Security and release provenance must always enforce an explicit, immutable allowlist (`_SAFE_ENV_KEYS`). Never capture ambient process environment with a denylist.
+
+### Anti-Pattern 8: Disconnected Issue Tracker State (Phantom Backlog Accumulation)
+* **What Happened**: 13 issues were fully resolved on `main` across multiple hardening waves, but their GitHub tickets remained open for two weeks because merge commits did not use `Fixes #X` syntax.
+* **Why It Was Deceptive**: Querying `gh issue list` made an advanced, verified 90%+ production-ready codebase look like it had 14 open critical production blockers.
+* **Lesson**: The code merge lifecycle must be synchronized with the issue tracking lifecycle; release verification must audit and close resolved issues with exact commit and test proof.
+
+### Anti-Pattern 9: Multi-Stage Build Mutation (Rebuilding After Smoke Testing)
+* **What Happened**: Conventional release workflows checkout a tag, run tests, and then run a separate `build` command that could incorporate uncommitted changes or rebuild wheels from a dirty state.
+* **Why It Was Deceptive**: It broke the guarantee that published artifacts match the exact commit that passed tests.
+* **Lesson**: Build release artifacts once from an immutable candidate commit SHA, smoke-test those exact file bytes, and publish only the verified hashes without rebuilding.
+
 ---
 
-## 3. Reusable Adversarial Test Fixtures
+## 5. Repository Verification Suites
 
-To ensure permanent regression prevention, the repository now employs six standardized adversarial fixture classes:
-
-### 1. Known-Effect MMM Fixtures
+| Test Suite | Purpose | Tests |
+|---|---|---|
+| `tests/unit/test_hard_test_remediation.py` | Targeted regression tests for P0/P1 remediation findings | 13 passed |
+| `tests/unit/test_flighting_domain.py` | Budget flighting domain invariants, simplex scaling, multi-start | 21 passed |
+| `tests/statistical/test_flighting_optimization.py` | End-to-end NUTS MCMC statistical flighting verification | 2 passed |
+| `tests/unit/test_adversarial_torture_suite.py` | Aggressive adversarial edge-case torture suite | 22 passed |
+| `tests/unit/test_job_state_machine.py` | Asynchronous job state transitions and cancellation fencing | 12 passed |
+| `tests/unit/test_error_normalization.py` | Error code taxonomy and user-actionable envelope parity | 8 passed |
+| `tests/unit/test_action_runtime_policy.py` | Tool registry AST alignment and next_actions validation | 7 passed |
+| `tests/benchmarks/benchmark_engine.py` | Multi-scenario native vs Python engine throughput benchmark | 7 scenarios |
+| `tests/unit/test_request_safety.py` | Safety middleware rate limiting and configurable threshold verification | 5 passed |
+| `tests/unit/test_native_parity.py` | Parity verification between native Rust and Python fallback engines | 8 passed |
+| `tests/unit/test_release_evidence.py` | Gate-specific fail-closed release evidence & environment allowlist | 27 passed |
+| `tests/unit/test_lift_calibration_contract.py` | LiftTestMeasurement schema contract and immutable parent state | 1 passed |
+| `tests/unit/test_optimizer_failure_contract.py` | Budget optimizer robustness across reload and fail-closed errors | 6 passed |
+| `tests/integration/test_standalone_worker.py` | Standalone worker execution surviving submitting process exit | 1 passed |
+| `tests/unit/test_process_worker.py` | Worker atomic claim, lease heartbeat renewal, and fencing | 8 passed |
+| `tests/integration/test_production_oauth_http.py` | Asymmetric JWKS OAuth verification in live HTTP MCP session | 1 passed |
+| `tests/unit/test_oauth_production_wiring.py` | Production remote JWKS verifier composition and claim mapping | 4 passed |
+| `tests/unit/test_oauth_verifier.py` | Asymmetric vs symmetric algorithm rejection and token scopes | 11 passed |
+| `tests/integration/test_sql_repository_contracts.py` | Production PostgreSQL shared repository vs SQLite fail-closed | 3 passed |
+| `tests/integration/test_shared_runtime.py` | Multi-instance shared metadata, datasets, and models | 2 passed |
+| `tests/integration/test_artifact_store_contracts.py` | Immutable blob storage, tenant ownership, and SHA-256 checks | 2 passed |
+| `tests/unit/test_model_artifact_storage.py` | Shared artifact upload and safe temporary local materialization | 1 passed |
+| `tests/unit/test_statistical_shards.py` | Disjoint statistical shard partitioning and aggregate validation | 7 passed |
+| `tests/unit/test_profile_workflow_policy.py` | Profile cards workflow isolation off product branch | 1 passed |
+| `tests/unit/test_upstream_compatibility.py` | Supported PyMC-Marketing major version bounded to <2 | 2 passed |
+| `tests/release/test_candidate_provenance.py` | Candidate commit SHA binding, single-build digest promotion | 3 passed |
 * **Design**: Synthetic datasets generated with known ground-truth saturation parameters where Channel A has $3\times$ higher marginal response ($\alpha_A = 3.0$) than Channel B ($\alpha_B = 1.0$).
 * **Assertion**: The optimizer must allocate strictly more budget to Channel A than Channel B:
   ```python
