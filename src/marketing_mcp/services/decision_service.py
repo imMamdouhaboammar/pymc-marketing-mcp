@@ -154,11 +154,31 @@ class DecisionService:
         )
         return result
 
+    @staticmethod
+    def _channel_spend_map(allocation: dict[str, Any] | None) -> dict[str, float]:
+        """Normalize 1D or multidimensional (cell-based) allocation into channel spend totals."""
+        if not allocation or not isinstance(allocation, dict):
+            return {}
+        if "cells" in allocation and isinstance(allocation["cells"], list):
+            totals: dict[str, float] = {}
+            for cell in allocation["cells"]:
+                if isinstance(cell, dict):
+                    ch = cell.get("channel")
+                    amt = float(cell.get("amount", 0.0))
+                    if ch:
+                        totals[ch] = totals.get(ch, 0.0) + amt
+            return totals
+        return {
+            str(k): float(v)
+            for k, v in allocation.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)
+        }
+
     def _collect_channel_identifiability_warnings(
         self,
         record,
-        recommended_allocation: dict[str, float] | None,
-        baseline_allocation: dict[str, float] | None,
+        recommended_allocation: dict[str, Any] | None,
+        baseline_allocation: dict[str, Any] | None,
     ) -> tuple[list[dict[str, Any]], dict[str, str]]:
         """Check allocated channels against upstream dataset validation findings.
 
@@ -208,8 +228,11 @@ class DecisionService:
                 for c in corr_channels:
                     channel_findings.setdefault(c, []).append(f)
 
-        for ch, rec_spend in recommended_allocation.items():
-            base_spend = (baseline_allocation or {}).get(ch, 0.0)
+        channel_alloc = self._channel_spend_map(recommended_allocation)
+        channel_base = self._channel_spend_map(baseline_allocation)
+
+        for ch, rec_spend in channel_alloc.items():
+            base_spend = channel_base.get(ch, 0.0)
             ch_warns = channel_findings.get(ch, [])
 
             if ch_warns:
@@ -318,8 +341,10 @@ class DecisionService:
 
         rationale: dict[str, Any] = {}
         economic_warnings: list[dict[str, Any]] = []
-        for ch, spend in allocation.items():
-            base_spend = baseline.get(ch, 0.0)
+        channel_alloc = self._channel_spend_map(allocation)
+        channel_base = self._channel_spend_map(baseline)
+        for ch, spend in channel_alloc.items():
+            base_spend = channel_base.get(ch, 0.0)
             spend_change_pct = (
                 round(((spend - base_spend) / base_spend) * 100, 2)
                 if base_spend > 0
@@ -581,7 +606,7 @@ class DecisionService:
         channel_params: dict[str, dict[str, float]] = {ch: {} for ch in channels}
         post = getattr(model, "fit_result", None)
         data_vars = getattr(post, "data_vars", None)
-        if data_vars is not None:
+        if data_vars is not None and post is not None:
             for var in data_vars:
                 if not var.startswith(("adstock_", "saturation_")):
                     continue
