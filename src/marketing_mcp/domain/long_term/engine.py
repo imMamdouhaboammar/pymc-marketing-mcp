@@ -39,6 +39,17 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
             raise DomainError("INPUT_INVALID", "At least one endogenous variable is required")
         if k_exo < 1:
             raise DomainError("INPUT_INVALID", "At least one exogenous media channel is required")
+        if len(set(endogenous_columns)) != m_endo:
+            raise DomainError("INPUT_INVALID", "Endogenous columns must be unique")
+        if len(set(exogenous_channels)) != k_exo:
+            raise DomainError("INPUT_INVALID", "Exogenous channels must be unique")
+        overlap = sorted(set(endogenous_columns) & set(exogenous_channels))
+        if overlap:
+            raise DomainError(
+                "INPUT_INVALID",
+                "Endogenous and exogenous columns must be disjoint",
+                evidence={"overlapping_columns": overlap},
+            )
 
         # Extract numeric matrices
         for col in endogenous_columns + exogenous_channels:

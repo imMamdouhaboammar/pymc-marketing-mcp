@@ -148,6 +148,30 @@ class TestDeterministicVARLongTermEngine:
 
         assert exc_info.value.code == "LONG_TERM_UNCERTAINTY_REQUIRED"
 
+    @pytest.mark.parametrize(
+        ("endogenous_columns", "exogenous_channels"),
+        [
+            (["brand_equity", "brand_equity"], ["tv_spend"]),
+            (["brand_equity", "sales"], ["tv_spend", "tv_spend"]),
+            (["brand_equity", "sales"], ["sales"]),
+        ],
+    )
+    def test_rejects_duplicate_or_overlapping_varx_roles(
+        self,
+        engine,
+        synthetic_var_data,
+        endogenous_columns,
+        exogenous_channels,
+    ):
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=synthetic_var_data,
+                endogenous_columns=endogenous_columns,
+                exogenous_channels=exogenous_channels,
+            )
+
+        assert exc_info.value.code == "INPUT_INVALID"
+
     def test_missing_values_are_dropped_jointly_before_var_alignment(
         self, engine, synthetic_var_data
     ):

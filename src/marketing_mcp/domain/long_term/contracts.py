@@ -20,7 +20,7 @@ class ImpulseResponseCurve(BaseModel):
 
 
 class LongTermRollup(BaseModel):
-    """Long-term effects rollup for attachment to MMM decision provenance."""
+    """Long-term effects rollup; decision attachment depends on engine-specific evidence gates."""
 
     model_id: str = Field(description="Identifier of the VAR long-term model")
     tenant_id: str = Field(default="default", description="Tenant/organization identifier")
@@ -63,5 +63,5 @@ class LongTermEffectsEngine(Protocol):
         decision_result: dict[str, Any],
         rollup: LongTermRollup,
     ) -> dict[str, Any]:
-        """Attach long-term brand equity multipliers to an MMM decision result."""
+        """Attach only decision-grade rollups; implementations must fail closed otherwise."""
         ...
