@@ -55,36 +55,54 @@ def _evaluate_metric_verdicts(
     verdicts: list[DecisionPolicyVerdict] = []
 
     # 1. Evaluate Max R-hat
-    rhat_ok = max_rhat <= 1.05
-    if max_rhat > 1.05:
+    if max_rhat is None:
+        rhat_ok = False
+        verdicts.append(DecisionPolicyVerdict.BLOCK)
+        reasons.append("Max R-hat could not be computed (missing metric)")
+    elif max_rhat > 1.05:
+        rhat_ok = False
         verdicts.append(DecisionPolicyVerdict.BLOCK)
         reasons.append(f"Max R-hat ({max_rhat:.4f}) exceeds blocking threshold 1.05")
     elif max_rhat > 1.01:
+        rhat_ok = True
         verdicts.append(DecisionPolicyVerdict.CAUTION)
         reasons.append(f"Max R-hat ({max_rhat:.4f}) is elevated above 1.01")
     else:
+        rhat_ok = True
         verdicts.append(DecisionPolicyVerdict.PASS)
 
     # 2. Evaluate Divergences
-    divergences_ok = divergences == 0
-    if divergences > 5:
+    if divergences is None:
+        divergences_ok = False
+        verdicts.append(DecisionPolicyVerdict.BLOCK)
+        reasons.append("Divergences count could not be computed (missing metric)")
+    elif divergences > 5:
+        divergences_ok = False
         verdicts.append(DecisionPolicyVerdict.BLOCK)
         reasons.append(f"Divergences count ({divergences}) exceeds blocking threshold 5")
     elif divergences > 0:
+        divergences_ok = False
         verdicts.append(DecisionPolicyVerdict.CAUTION)
         reasons.append(f"Observed {divergences} divergent transition(s)")
     else:
+        divergences_ok = True
         verdicts.append(DecisionPolicyVerdict.PASS)
 
     # 3. Evaluate Min BFMI
-    bfmi_ok = min_bfmi >= 0.2
-    if min_bfmi < 0.2:
+    if min_bfmi is None:
+        bfmi_ok = False
+        verdicts.append(DecisionPolicyVerdict.CAUTION)
+        reasons.append("Min BFMI could not be computed (insufficient chain length)")
+    elif min_bfmi < 0.2:
+        bfmi_ok = False
         verdicts.append(DecisionPolicyVerdict.BLOCK)
         reasons.append(f"Min BFMI ({min_bfmi:.4f}) is below blocking threshold 0.20")
     elif min_bfmi < 0.3:
+        bfmi_ok = True
         verdicts.append(DecisionPolicyVerdict.CAUTION)
         reasons.append(f"Min BFMI ({min_bfmi:.4f}) is marginal (below 0.30)")
     else:
+        bfmi_ok = True
         verdicts.append(DecisionPolicyVerdict.PASS)
 
     # Aggregate overall verdict
@@ -117,9 +135,9 @@ def evaluate_diagnostic_policy(
     report_cls = PlatformDiagnosticReport or LocalDiagnosticReport
 
     metrics = metrics_cls(
-        max_rhat=max_rhat,
-        divergences=divergences,
-        min_bfmi=min_bfmi,
+        max_rhat=float(max_rhat) if max_rhat is not None else 1.0,
+        divergences=int(divergences) if divergences is not None else 0,
+        min_bfmi=float(min_bfmi) if min_bfmi is not None else 0.0,
         rhat_ok=rhat_ok,
         divergences_ok=div_ok,
         bfmi_ok=bfmi_ok,

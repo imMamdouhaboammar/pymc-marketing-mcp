@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-09-18T05:17:17.848271+00:00",
+  "all_passed": false,
+  "results": [
+    {
+      "dataset": "pymc_harsh_observed_daily_panel.csv",
+      "analysis_kind": "mmm",
+      "diagnostics": {
+        "max_rhat": 1.2851,
+        "divergences": 0,
+        "min_bfmi": null
+      },
+      "verdict": "block",
+      "parameters_count": 3,
+      "parameters": {
+        "meta": 0.3426,
+        "google": 0.1994,
+        "tiktok": 0.0694
+      },
+      "status": "FAIL"
+    },
+    {
+      "dataset": "pymc_harsh_clv_valid_fixture.csv",
+      "analysis_kind": "clv_purchase",
+      "parameters_count": 4,
+      "parameters": {
+        "a": 4.8929,
+        "b": 14.353,
+        "alpha": 5.1849,
+        "r": 0.9904
+      },
+      "status": "PASS"
+    },
+    {
+      "dataset": "pymc_harsh_clv_value_fixture.csv",
+      "analysis_kind": "clv_value",
+      "parameters_count": 3,
+      "parameters": {
+        "p": 2.2989,
+        "q": 1.4052,
+        "v": 22.7687
+      },
+      "status": "PASS"
+    }
+  ]
+}
