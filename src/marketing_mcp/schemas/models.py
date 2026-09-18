@@ -495,6 +495,55 @@ class GetPosteriorPlotsInput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Canonical Financial Contract (Wave 1 / T1)
+# ---------------------------------------------------------------------------
+
+
+class FinancialAssumptionsInput(BaseModel):
+    """Typed financial contract for all decision tools.
+
+    Replaces scattered ``margin_pct`` / ``discount_rate`` fields.
+    ``margin_pct`` remains supported on individual tools as a legacy adapter
+    via ``FinancialAssumptions.from_legacy()``.
+    """
+
+    kpi_unit: Literal["revenue", "conversions", "leads", "custom"] = Field(
+        default="revenue", description="What the model target represents"
+    )
+    revenue_per_outcome: float = Field(
+        default=1.0, ge=0, description="Scaling factor converting model output to monetary revenue"
+    )
+    gross_margin_rate: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Gross margin as a fraction of revenue (replaces margin_pct)",
+    )
+    contribution_margin_rate: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Contribution margin rate; falls back to gross_margin_rate when absent",
+    )
+    variable_cost_per_unit: float | None = Field(default=None, ge=0, description="Variable cost per outcome unit")
+    acquisition_cost: float | None = Field(default=None, ge=0, description="Cost to acquire one customer/lead")
+    customer_lifetime_value_ref: float | None = Field(default=None, ge=0, description="Reference CLV for LTV-aware objectives")
+    discount_rate: float = Field(default=0.0, ge=0.0, le=1.0, description="Periodic discount rate for NPV/CLV")
+    discount_convention: Literal["periodic", "annual"] = Field(default="periodic")
+    planning_horizon: int | None = Field(default=None, ge=1, description="Planning periods for NPV; None uses model default")
+
+
+class ObjectiveDefinition(BaseModel):
+    """Objective definition attached to every decision result for provenance."""
+
+    name: str = Field(description="Objective name, e.g. expected_response or expected_net_profit")
+    description: str = Field(default="", description="Human-readable objective description")
+    financial_assumptions: FinancialAssumptionsInput | None = Field(
+        default=None, description="Financial assumptions used to evaluate this objective"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Phase 4 — Dynamic Flighting Schemas
 # ---------------------------------------------------------------------------
 
@@ -527,7 +576,11 @@ class FlightingOptimizationInput(BaseModel):
         default=1.0,
         ge=0.0,
         le=1.0,
-        description="Revenue margin fraction for net-profit objective (revenue × margin − spend)",
+        description="Legacy revenue margin fraction (use financial.gross_margin_rate for new work)",
+    )
+    financial: FinancialAssumptionsInput | None = Field(
+        default=None,
+        description="Canonical financial contract. When supplied, takes precedence over margin_pct.",
     )
     channel_constraints: list[WeeklyFlightingConstraint] = Field(
         default_factory=list,

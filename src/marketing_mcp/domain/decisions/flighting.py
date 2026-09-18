@@ -14,6 +14,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 from marketing_mcp.adapters.mmm_config import ADSTOCK_MAP, SATURATION_MAP
+from marketing_mcp.domain.decisions.financial import FinancialAssumptions
 from marketing_mcp.errors import DomainError
 
 FlightingObjective = Literal["maximize_response", "maximize_net_profit", "target_roas"]
@@ -62,22 +63,38 @@ def apply_spend_pattern(
 def compute_net_profit(
     total_response: float,
     total_spend: float,
-    margin_pct: float,
+    margin_pct: float | None = None,
+    *,
+    financial: FinancialAssumptions | None = None,
 ) -> dict[str, float]:
-    """Compute net profit from a response estimate and media spend."""
-    gross_revenue = float(total_response)
-    margin_revenue = gross_revenue * float(margin_pct)
+    """Compute net profit from a response estimate and media spend.
+
+    Accepts either the legacy ``margin_pct`` float or the canonical
+    ``FinancialAssumptions`` contract.  Existing callers passing only
+    ``margin_pct`` are unaffected.
+    """
+    if financial is None:
+        # ponytail: legacy path — behaviour preserved exactly
+        financial = FinancialAssumptions.from_legacy(margin_pct=margin_pct if margin_pct is not None else 1.0)
+    errors = financial.validate()
+    if errors:
+        raise DomainError("INVALID_FINANCIAL_ASSUMPTIONS", "; ".join(errors))
+
+    gross_revenue = float(total_response) * financial.revenue_per_outcome
+    margin = financial.effective_margin_rate()
+    margin_revenue = gross_revenue * margin
     net_profit = margin_revenue - float(total_spend)
     roas = gross_revenue / max(1e-6, float(total_spend))
 
     return {
         "gross_revenue": round(gross_revenue, 2),
         "total_spend": round(float(total_spend), 2),
-        "margin_pct": float(margin_pct),
+        "margin_pct": round(margin, 6),  # kept for backward compat — reports effective rate
         "margin_revenue": round(margin_revenue, 2),
         "net_profit": round(net_profit, 2),
         "roas": round(roas, 4),
         "is_profitable": net_profit > 0,
+        "financial_provenance": financial.to_provenance(),
     }
 
 
