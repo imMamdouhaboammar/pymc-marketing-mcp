@@ -13,6 +13,7 @@ It does not define probabilistic priors, run PyMC sampling, create `InferenceDat
 The engine:
 
 - coerces the selected columns, forms adjacent VARX lag pairs in original row order, then filters incomplete transitions so rows with missing selected values cannot be bridged;
+- requires an explicit `target_column` whenever more than one endogenous variable is modeled, so response semantics never depend on column ordering;
 - estimates one VARX(1) coefficient matrix with ridge-regularized least squares;
 - marks explosive dynamics as rejected for downstream decision rollup when the maximum transition-matrix eigenvalue is at least 1;
 - computes deterministic exogenous impulse-response curves;

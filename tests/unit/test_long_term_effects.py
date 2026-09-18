@@ -68,6 +68,7 @@ class TestDeterministicVARLongTermEngine:
             df=synthetic_var_data,
             endogenous_columns=["brand_equity", "sales"],
             exogenous_channels=["tv_spend"],
+            target_column="sales",
             horizon=12,
             tenant_id="tenant_brand",
         )
@@ -90,6 +91,39 @@ class TestDeterministicVARLongTermEngine:
         irf = rollup.irfs["tv_spend"]
         assert len(irf.horizons) == 13  # 0 to 12
         assert len(irf.responses) == 13
+
+    def test_multivariate_fit_requires_explicit_target_column(self, engine, synthetic_var_data):
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=synthetic_var_data,
+                endogenous_columns=["brand_equity", "sales"],
+                exogenous_channels=["tv_spend"],
+            )
+
+        assert exc_info.value.code == "INPUT_INVALID"
+        assert "target_column" in str(exc_info.value)
+
+    def test_explicit_target_is_invariant_to_endogenous_column_order(self, engine, synthetic_var_data):
+        first = engine.fit_var(
+            df=synthetic_var_data,
+            endogenous_columns=["brand_equity", "sales"],
+            exogenous_channels=["tv_spend"],
+            target_column="sales",
+            horizon=6,
+        )
+        reordered = engine.fit_var(
+            df=synthetic_var_data,
+            endogenous_columns=["sales", "brand_equity"],
+            exogenous_channels=["tv_spend"],
+            target_column="sales",
+            horizon=6,
+        )
+
+        assert first.irfs["tv_spend"].target == "sales"
+        assert reordered.irfs["tv_spend"].target == "sales"
+        assert first.channel_multipliers["tv_spend"] == pytest.approx(
+            reordered.channel_multipliers["tv_spend"], abs=1e-3
+        )
 
     def test_multiplier_preserves_damped_negative_carryover_below_one(self, engine):
         rng = np.random.default_rng(7)
@@ -151,6 +185,7 @@ class TestDeterministicVARLongTermEngine:
             df=synthetic_var_data,
             endogenous_columns=["brand_equity", "sales"],
             exogenous_channels=["tv_spend"],
+            target_column="sales",
         )
 
         base_decision = {

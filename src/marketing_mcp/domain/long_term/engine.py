@@ -29,6 +29,7 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
         df: pd.DataFrame,
         endogenous_columns: list[str],
         exogenous_channels: list[str],
+        target_column: str | None = None,
         horizon: int = 12,
         tenant_id: str = "default",
     ) -> LongTermRollup:
@@ -49,6 +50,24 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
                 "INPUT_INVALID",
                 "Endogenous and exogenous columns must be disjoint",
                 evidence={"overlapping_columns": overlap},
+            )
+
+        if target_column is None:
+            if m_endo != 1:
+                raise DomainError(
+                    "INPUT_INVALID",
+                    "target_column is required when multiple endogenous variables are provided",
+                    evidence={"endogenous_columns": endogenous_columns},
+                )
+            target_column = endogenous_columns[0]
+        elif target_column not in endogenous_columns:
+            raise DomainError(
+                "INPUT_INVALID",
+                "target_column must be one of the endogenous_columns",
+                evidence={
+                    "target_column": target_column,
+                    "endogenous_columns": endogenous_columns,
+                },
             )
 
         # Extract numeric matrices
@@ -108,8 +127,8 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
         diagnostic_status = "pass" if max_eigenval < 0.95 else ("caution" if is_stationary else "rejected")
 
         # Compute Impulse Response Functions (IRFs) over horizon H
-        target_idx = m_endo - 1  # Assume last endogenous column is primary business KPI (revenue)
-        target_name = endogenous_columns[target_idx]
+        target_idx = endogenous_columns.index(target_column)
+        target_name = target_column
 
         irfs: dict[str, ImpulseResponseCurve] = {}
         channel_multipliers: dict[str, float] = {}
@@ -166,6 +185,7 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
                 "estimation_method": "ridge_regularized_least_squares",
                 "uncertainty_quantified": False,
                 "horizon": horizon,
+                "target_column": target_name,
                 "experimental": True,
             },
         )
