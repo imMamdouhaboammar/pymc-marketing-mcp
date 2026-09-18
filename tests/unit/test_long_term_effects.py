@@ -212,6 +212,27 @@ class TestDeterministicVARLongTermEngine:
         assert actual.channel_multipliers == expected.channel_multipliers
         assert actual.irfs["tv_spend"].responses == expected.irfs["tv_spend"].responses
 
+    def test_explosive_fit_reports_actual_finite_horizon_multiplier(self, engine):
+        rng = np.random.default_rng(17)
+        n = 50
+        media = rng.normal(0.0, 1.0, n)
+        target = np.zeros(n)
+        for t in range(1, n):
+            target[t] = 1.08 * target[t - 1] + 0.8 * media[t]
+
+        rollup = engine.fit_var(
+            df=pd.DataFrame({"media": media, "target": target}),
+            endogenous_columns=["target"],
+            exogenous_channels=["media"],
+            horizon=4,
+        )
+
+        assert rollup.is_stationary is False
+        assert rollup.diagnostic_status == "rejected"
+        assert rollup.channel_multipliers["media"] == pytest.approx(
+            sum(1.08**h for h in range(5)), abs=0.02
+        )
+
     def test_explosive_non_stationary_model_is_blocked_by_gate(self, engine):
         """Synthetic explosive model with eigenvalue >= 1.0 must fail decision gate."""
         explosive_rollup = LongTermRollup(

@@ -133,7 +133,7 @@ class DeterministicVARLongTermEngine(LongTermEffectsEngine):
                         "an analysis path that reports raw impulse responses without a ratio multiplier"
                     ),
                 )
-            mult = round(cum_val / initial_val, 3) if is_stationary else 1.0
+            mult = round(cum_val / initial_val, 3)
 
             channel_multipliers[ch] = mult
             irfs[ch] = ImpulseResponseCurve(
