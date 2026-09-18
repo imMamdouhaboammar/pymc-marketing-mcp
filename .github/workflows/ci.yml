@@ -119,7 +119,7 @@ jobs:
       - name: Install wheel in fresh environment
         run: |
           uv venv /tmp/smoke-venv
-          /tmp/smoke-venv/bin/pip install dist/*.whl
+          uv pip install --python /tmp/smoke-venv/bin/python dist/*.whl
           /tmp/smoke-venv/bin/marketing-mcp --help
           /tmp/smoke-venv/bin/marketing-mcp-demo --help
           /tmp/smoke-venv/bin/marketing-mcp-auth --help

@@ -15,10 +15,11 @@ from marketing_mcp.scientific.decision_gate import (
 
 @pytest.fixture
 def baseline_config() -> dict:
-    baseline_path = (
-        Path(__file__).resolve().parents[3]
-        / "migration/baselines/diagnostic_gates.json"
-    )
+    candidates = [
+        Path(__file__).resolve().parents[2] / "migration/baselines/diagnostic_gates.json",
+        Path(__file__).resolve().parents[3] / "migration/baselines/diagnostic_gates.json",
+    ]
+    baseline_path = next((p for p in candidates if p.exists()), candidates[0])
     with open(baseline_path, "r", encoding="utf-8") as f:
         return json.load(f)
 

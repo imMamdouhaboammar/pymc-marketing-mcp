@@ -22,6 +22,8 @@ def mcp_app(tmp_path):
 
 
 def test_rust_acceleration_active():
+    if not is_rust_accelerated():
+        pytest.skip("Native Rust accelerator not compiled/available")
     info = get_engine_info()
     assert is_rust_accelerated() is True
     assert info["rust_accelerated"] is True
@@ -29,6 +31,8 @@ def test_rust_acceleration_active():
 
 
 def test_e2e_mcp_dataset_registration_with_rust(mcp_app):
+    if not is_rust_accelerated():
+        pytest.skip("Native Rust accelerator not compiled/available")
     assert create_server(mcp_app) is not None
 
     # Ingest a sample CSV via direct content payload

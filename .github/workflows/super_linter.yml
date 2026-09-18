@@ -34,6 +34,3 @@ jobs:
           VALIDATE_DOCKERFILE_HADOLINT: true
           VALIDATE_JSON: true
           VALIDATE_BASH: true
-          VALIDATE_PYTHON_BLACK: false
-          VALIDATE_PYTHON_FLAKE8: false
-          VALIDATE_PYTHON_ISORT: false
