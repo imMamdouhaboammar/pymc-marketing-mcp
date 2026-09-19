@@ -71,3 +71,8 @@ Resolved
 ## Signed and non-finite authoritative inputs
 
 Period-level reconciliation must validate the authoritative series before computing relative error. For response/count-like domains whose modeled contributions are constrained non-negative, reject negative, NaN, and infinite authoritative values instead of letting signed denominators or non-finite arithmetic participate in tolerance checks. A conservation check is not meaningful when the comparison domain itself violates its contract.
+
+
+## Evidence completeness
+
+Reconciliation must fail closed when there is no authoritative series, when authoritative values are non-finite, or when modeled response mass falls outside the periods covered by the authoritative evidence. A zero discrepancy over an empty or truncated comparison window is not evidence of conservation. Track and surface unmapped or uncovered response mass explicitly instead of silently dropping it.
