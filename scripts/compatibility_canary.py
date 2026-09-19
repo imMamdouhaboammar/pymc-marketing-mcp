@@ -47,12 +47,18 @@ def verify_upstream_imports() -> dict[str, str]:
 
     from marketing_mcp.mcp.server import create_server
 
-    assert pymc_marketing.clv is not None
-    assert pymc_marketing.mmm is not None
-    assert geometric_adstock is not None
-    assert logistic_saturation is not None
-    assert create_server is not None
-    assert MCPServer is not None
+    if pymc_marketing.clv is None:
+        raise AssertionError
+    if pymc_marketing.mmm is None:
+        raise AssertionError
+    if geometric_adstock is None:
+        raise AssertionError
+    if logistic_saturation is None:
+        raise AssertionError
+    if create_server is None:
+        raise AssertionError
+    if MCPServer is None:
+        raise AssertionError
 
     return versions
 
