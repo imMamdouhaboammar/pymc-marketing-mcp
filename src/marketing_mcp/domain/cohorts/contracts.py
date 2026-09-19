@@ -147,6 +147,24 @@ class MediaResponseCohortRecord(BaseModel):
 
     @model_validator(mode="after")
     def _synchronize_responses(self) -> "MediaResponseCohortRecord":
+        scalar_values = {
+            "spend": self.spend,
+            "immediate_response": self.immediate_response,
+            "cumulative_response": self.cumulative_response,
+        }
+        for name, value in scalar_values.items():
+            if not math.isfinite(value):
+                raise ValueError(f"{name} must be finite")
+
+        sequence_values = {
+            "period_responses": self.period_responses,
+            "carryover_responses": self.carryover_responses,
+            "adstock_decay_weights": self.adstock_decay_weights,
+        }
+        for name, values in sequence_values.items():
+            if any(not math.isfinite(value) for value in values):
+                raise ValueError(f"{name} cannot contain non-finite values")
+
         if any(x < 0 for x in self.period_responses):
             raise ValueError("period_responses cannot contain negative values")
         if self.immediate_response < 0:
@@ -155,6 +173,8 @@ class MediaResponseCohortRecord(BaseModel):
             raise ValueError("carryover_responses cannot contain negative values")
         if any(w < 0 for w in self.adstock_decay_weights):
             raise ValueError("adstock_decay_weights cannot contain negative values")
+        if self.adstock_decay_weights and sum(self.adstock_decay_weights) <= 0:
+            raise ValueError("adstock_decay_weights must sum to > 0 when provided")
 
         has_period = bool(self.period_responses)
         has_immediate_or_carry = (self.immediate_response > 0.0) or bool(self.carryover_responses)
@@ -268,6 +288,10 @@ class MediaResponseCohortLedger(BaseModel):
         """
         if not math.isfinite(tolerance) or tolerance < 0:
             raise ValueError("tolerance must be a finite non-negative number")
+        if not calendar_responses:
+            raise ValueError(
+                "calendar_responses must contain at least one authoritative period"
+            )
 
         normalized_calendar: dict[str, float] = {}
         for period, raw_value in calendar_responses.items():
@@ -294,19 +318,54 @@ class MediaResponseCohortLedger(BaseModel):
             for c in self.cohorts:
                 all_periods.add(c.source_period)
             period_order = sorted(all_periods)
+        elif not period_order:
+            raise ValueError("period_order cannot be empty when provided")
+
+        if len(set(period_order)) != len(period_order):
+            raise ValueError("period_order cannot contain duplicate periods")
+
+        missing_authoritative_periods = [
+            period for period in calendar_responses if period not in period_order
+        ]
+        if missing_authoritative_periods:
+            raise ValueError(
+                "period_order is missing authoritative period(s): "
+                + ", ".join(missing_authoritative_periods)
+            )
 
         period_idx = {p: i for i, p in enumerate(period_order)}
         calendar_cohort_totals: dict[str, float] = {p: 0.0 for p in period_order}
+        unmapped_response_total = 0.0
+        unmapped_cohort_ids: set[str] = set()
 
-        for c in self.cohorts:
-            if c.source_period not in period_idx:
+        for cohort in self.cohorts:
+            if cohort.source_period not in period_idx:
+                unmapped_response_total += cohort.cumulative_response
+                if cohort.cumulative_response > 0:
+                    unmapped_cohort_ids.add(cohort.cohort_id)
                 continue
-            src_i = period_idx[c.source_period]
-            for lag, resp in enumerate(c.period_responses):
+
+            src_i = period_idx[cohort.source_period]
+            for lag, response in enumerate(cohort.period_responses):
                 cal_i = src_i + lag
-                if cal_i < len(period_order):
-                    cal_p = period_order[cal_i]
-                    calendar_cohort_totals[cal_p] += resp
+                if cal_i >= len(period_order):
+                    unmapped_response_total += response
+                    if response > 0:
+                        unmapped_cohort_ids.add(cohort.cohort_id)
+                    continue
+
+                calendar_period = period_order[cal_i]
+                calendar_cohort_totals[calendar_period] += response
+
+        uncovered_periods = [
+            period
+            for period, value in calendar_cohort_totals.items()
+            if period not in calendar_responses and value > 0
+        ]
+        uncovered_response_total = sum(
+            calendar_cohort_totals[period] for period in uncovered_periods
+        )
+        unmapped_response_total += uncovered_response_total
 
         total_cohort_sum = sum(calendar_cohort_totals.get(p, 0.0) for p in calendar_responses)
         total_authoritative_sum = sum(calendar_responses.values()) if calendar_responses else 0.0
@@ -344,7 +403,11 @@ class MediaResponseCohortLedger(BaseModel):
             if not p_ok:
                 discrepant_periods.append(p)
 
-        is_reconciled = grand_reconciled and (len(discrepant_periods) == 0)
+        is_reconciled = (
+            grand_reconciled
+            and len(discrepant_periods) == 0
+            and unmapped_response_total == 0.0
+        )
 
         return {
             "total_cohort_calendar_sum": round(total_cohort_sum, 2),
@@ -354,6 +417,9 @@ class MediaResponseCohortLedger(BaseModel):
             "is_reconciled": is_reconciled,
             "discrepant_periods": discrepant_periods,
             "period_details": period_details,
+            "unmapped_response_total": round(unmapped_response_total, 2),
+            "unmapped_cohort_ids": sorted(unmapped_cohort_ids),
+            "uncovered_periods": uncovered_periods,
             "cohort_count": len(self.cohorts),
             "calendar_periods_evaluated": len(calendar_responses),
         }
