@@ -24,7 +24,7 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 59 capabilities (28 experimental, 29 stable, 2 deprecated).
+**Totals:** 64 capabilities (28 experimental, 34 stable, 2 deprecated).
 
 
 ## Tools
@@ -63,7 +63,12 @@ approved the model.
 | `poll_job_progress` | jobs | experimental | not enforced | `jobs.poll_job` | Non-blocking heartbeat poll waiting up to timeout_seconds for progress to avoid AI client timeout collapses. | none |
 | `recover_execution_state` | jobs | experimental | not enforced | `jobs.recover_job_state` | Recover execution state and intermediate checkpoints after an unexpected disconnect or restart. | none |
 | `resume_job` | jobs | experimental | not enforced | `jobs.resume_job` | Resume an interrupted or failed job from its last valid checkpoint without repeating completed work. | none |
+| `submit_budget_optimization_job` | jobs | stable | not enforced | `jobs.submit_job` | Submit an asynchronous budget optimization job under channel constraints without blocking. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence`<br>`tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery` |
+| `submit_cross_validate_mmm_job` | jobs | stable | not enforced | `jobs.submit_job` | Submit an asynchronous cross-validation job for MMM out-of-sample evaluation. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence`<br>`tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery` |
 | `submit_fit_mmm_job` | jobs | stable | not enforced | `jobs.submit_job` | Submit an asynchronous MMM fitting job to run in the background without blocking. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence` |
+| `submit_flighting_optimization_job` | jobs | stable | not enforced | `jobs.submit_job` | Submit an asynchronous flighting optimization job across time periods and channels without blocking. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence`<br>`tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery` |
+| `submit_prior_sensitivity_job` | jobs | stable | not enforced | `jobs.submit_job` | Submit an asynchronous prior sensitivity evaluation job comparing prior and posterior distributions. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence`<br>`tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery` |
+| `submit_transform_ad_export_job` | jobs | stable | not enforced | `jobs.submit_job` | Submit an asynchronous ad export transformation job to pivot and reconcile spend in the background. | `tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence`<br>`tests/unit/test_heavy_jobs_resilience.py::test_submit_transform_ad_export_job_idempotency_and_recovery` |
 | `archive_model` | modeling | experimental | not enforced | `models.archive_model` | Mark a stored model as archived while preserving its artifact and lineage. | none |
 | `calibrate_mmm` | modeling | stable | not enforced | `models.calibrate` | Refit a model with experimental lift-test measurements added to the likelihood. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_lift_test_calibration_and_lineage` |
 | `compare_models` | modeling | stable | not enforced | `models.compare_models` | Compare stored models on configuration, diagnostics, and iROAS ordering. | `tests/statistical/test_real_pymc_sampling.py::test_real_pymc_lift_test_calibration_and_lineage` |

@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
 
 from marketing_mcp.app import Application
 from marketing_mcp.config import Settings
-from marketing_mcp.jobs.models import JobStatus
 from marketing_mcp.mcp.server import create_server
 from marketing_mcp.security.principal import Principal
 

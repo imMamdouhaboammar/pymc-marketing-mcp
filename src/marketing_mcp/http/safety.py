@@ -83,17 +83,20 @@ class RequestSafetyMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 pass
 
-        # 2. Rate limiting check (keyed by principal, tenant, credential, or client IP)
+        # 2. Rate limiting check (keyed by authenticated principal, auth token hash, or client IP)
         rate_key: str
-        if hasattr(request.state, "principal") and request.state.principal:
+        if hasattr(request.state, "auth") and request.state.auth and getattr(request.state.auth, "authenticated", False):
+            auth = request.state.auth
+            tenant = getattr(auth, "tenant_id", None)
+            client = getattr(auth, "client_id", "unknown")
+            rate_key = f"tenant:{tenant}:{client}" if tenant else f"auth:{client}"
+        elif hasattr(request.state, "principal") and request.state.principal:
             p = request.state.principal
             rate_key = (
                 f"tenant:{p.tenant_id}:{p.subject}"
                 if getattr(p, "tenant_id", None)
                 else f"user:{getattr(p, 'subject', 'unknown')}"
             )
-        elif request.headers.get("x-tenant-id"):
-            rate_key = f"tenant:{request.headers.get('x-tenant-id')}"
         elif request.headers.get("authorization"):
             import hashlib
 

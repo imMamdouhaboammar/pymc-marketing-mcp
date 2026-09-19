@@ -13,7 +13,7 @@ from marketing_mcp.jobs.executor import EnqueueOnlyJobExecutor
 from marketing_mcp.jobs.models import JobRecord, JobStatus
 from marketing_mcp.jobs.process_worker import ProcessJobWorker
 from marketing_mcp.jobs.repository import SQLiteJobRepository
-from marketing_mcp.jobs.worker_cli import build_fit_mmm_handler
+from marketing_mcp.jobs.worker_cli import build_default_handlers, build_fit_mmm_handler
 from marketing_mcp.persistence import SQLitePersistenceBackend
 from marketing_mcp.storage.migrations import MigrationRunner
 
@@ -241,3 +241,85 @@ def test_production_profile_composes_enqueue_only_api(tmp_path) -> None:
         assert isinstance(app.jobs.executor, EnqueueOnlyJobExecutor)
     finally:
         persistence.close()
+
+
+def test_build_default_handlers_covers_all_async_jobs() -> None:
+    app = MagicMock()
+    handlers = build_default_handlers(app)
+    expected_job_types = {
+        "fit_mmm",
+        "transform_ad_export",
+        "budget_optimize",
+        "flighting_optimize",
+        "cross_validate_mmm",
+        "prior_sensitivity",
+    }
+    assert set(handlers.keys()) == expected_job_types
+
+    # Test budget_optimize handler
+    app.decisions.optimize.return_value = {"optimal_spend": {"tv": 1000.0}}
+    budget_job = JobRecord(
+        job_id="job-b1",
+        job_type="budget_optimize",
+        status=JobStatus.RUNNING,
+        owner="analyst",
+        tenant_id="tenant-1",
+        payload={
+            "model_id": "model-1",
+            "budget": 5000.0,
+            "constraints": {"tv": {"min": 100.0, "max": 2000.0}},
+        },
+    )
+    b_res = handlers["budget_optimize"](budget_job)
+    assert b_res == {"optimal_spend": {"tv": 1000.0}}
+    assert app.decisions.optimize.call_args[0][0].model_id == "model-1"
+
+    # Test flighting_optimize handler
+    app.decisions.optimize_flighting.return_value = {"flighting": []}
+    flight_job = JobRecord(
+        job_id="job-f1",
+        job_type="flighting_optimize",
+        status=JobStatus.RUNNING,
+        owner="analyst",
+        tenant_id="tenant-1",
+        payload={
+            "model_id": "model-1",
+            "total_budget": 10000.0,
+        },
+    )
+    f_res = handlers["flighting_optimize"](flight_job)
+    assert f_res == {"flighting": []}
+    assert app.decisions.optimize_flighting.call_args[0][0].model_id == "model-1"
+
+    # Test cross_validate_mmm handler
+    app.diagnostics.cross_validate.return_value = {"folds": []}
+    cv_job = JobRecord(
+        job_id="job-cv1",
+        job_type="cross_validate_mmm",
+        status=JobStatus.RUNNING,
+        owner="analyst",
+        tenant_id="tenant-1",
+        payload={
+            "model_id": "model-1",
+        },
+    )
+    cv_res = handlers["cross_validate_mmm"](cv_job)
+    assert cv_res == {"folds": []}
+    assert app.diagnostics.cross_validate.call_args[0][0].model_id == "model-1"
+
+    # Test prior_sensitivity handler
+    app.diagnostics.prior_sensitivity.return_value = {"sensitivity": {}}
+    ps_job = JobRecord(
+        job_id="job-ps1",
+        job_type="prior_sensitivity",
+        status=JobStatus.RUNNING,
+        owner="analyst",
+        tenant_id="tenant-1",
+        payload={
+            "model_id": "model-1",
+        },
+    )
+    ps_res = handlers["prior_sensitivity"](ps_job)
+    assert ps_res == {"sensitivity": {}}
+    assert app.diagnostics.prior_sensitivity.call_args[0][0].model_id == "model-1"
+

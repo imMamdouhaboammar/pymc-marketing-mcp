@@ -26,11 +26,33 @@ class TestSettingsRateLimit:
             settings = Settings.from_env()
             assert settings.rate_limit_per_minute == 120
 
+    def test_settings_from_env_rejects_non_positive_rate_limit(self):
+        from marketing_mcp.errors import DomainError
+
+        with patch.dict(os.environ, {"MARKETING_MCP_RATE_LIMIT_PER_MINUTE": "0"}):
+            with pytest.raises(DomainError):
+                Settings.from_env()
+
+        with patch.dict(os.environ, {"MARKETING_MCP_RATE_LIMIT_PER_MINUTE": "-10"}):
+            with pytest.raises(DomainError):
+                Settings.from_env()
+
 
 class TestRequestSafetyMiddlewareKeying:
     @pytest.fixture
     def app_with_safety(self):
+        from starlette.middleware.base import BaseHTTPMiddleware
+
         app = Starlette()
+
+        class MockAuthMiddleware(BaseHTTPMiddleware):
+            async def dispatch(self, request, call_next):
+                t_id = request.headers.get("x-mock-tenant")
+                if t_id:
+                    request.state.auth = type(
+                        "Auth", (), {"authenticated": True, "tenant_id": t_id, "client_id": "test_client"}
+                    )()
+                return await call_next(request)
 
         async def endpoint(request: Request):
             return PlainTextResponse("ok")
@@ -41,27 +63,28 @@ class TestRequestSafetyMiddlewareKeying:
             requests_per_minute=2,
             rate_limiter=InMemoryRateLimiter(),
         )
+        app.add_middleware(MockAuthMiddleware)
         return app
 
     def test_tenants_have_isolated_rate_limits(self, app_with_safety):
         client = TestClient(app_with_safety)
 
         # Tenant A sends 2 requests (reaches limit of 2)
-        res1 = client.get("/api", headers={"X-Tenant-ID": "tenant_a"})
+        res1 = client.get("/api", headers={"X-Mock-Tenant": "tenant_a"})
         assert res1.status_code == 200
-        res2 = client.get("/api", headers={"X-Tenant-ID": "tenant_a"})
+        res2 = client.get("/api", headers={"X-Mock-Tenant": "tenant_a"})
         assert res2.status_code == 200
 
         # Tenant A's 3rd request should be 429
-        res3 = client.get("/api", headers={"X-Tenant-ID": "tenant_a"})
+        res3 = client.get("/api", headers={"X-Mock-Tenant": "tenant_a"})
         assert res3.status_code == 429
 
         # Tenant B from the SAME client host should NOT be blocked by Tenant A's limit
-        res_b1 = client.get("/api", headers={"X-Tenant-ID": "tenant_b"})
+        res_b1 = client.get("/api", headers={"X-Mock-Tenant": "tenant_b"})
         assert res_b1.status_code == 200
-        res_b2 = client.get("/api", headers={"X-Tenant-ID": "tenant_b"})
+        res_b2 = client.get("/api", headers={"X-Mock-Tenant": "tenant_b"})
         assert res_b2.status_code == 200
-        res_b3 = client.get("/api", headers={"X-Tenant-ID": "tenant_b"})
+        res_b3 = client.get("/api", headers={"X-Mock-Tenant": "tenant_b"})
         assert res_b3.status_code == 429
 
     def test_bearer_tokens_have_isolated_rate_limits(self, app_with_safety):

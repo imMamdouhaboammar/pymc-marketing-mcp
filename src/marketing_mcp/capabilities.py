@@ -419,6 +419,61 @@ _INVENTORY: tuple[Capability, ...] = (
         ),
     ),
     _tool(
+        "submit_transform_ad_export_job",
+        "jobs",
+        "Submit an asynchronous ad export transformation job to pivot and reconcile spend in the background.",
+        delegates_to="jobs.submit_job",
+        status="stable",
+        evidence_test_ids=(
+            "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
+            "tests/unit/test_heavy_jobs_resilience.py::test_submit_transform_ad_export_job_idempotency_and_recovery",
+        ),
+    ),
+    _tool(
+        "submit_budget_optimization_job",
+        "jobs",
+        "Submit an asynchronous budget optimization job under channel constraints without blocking.",
+        delegates_to="jobs.submit_job",
+        status="stable",
+        evidence_test_ids=(
+            "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
+            "tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery",
+        ),
+    ),
+    _tool(
+        "submit_flighting_optimization_job",
+        "jobs",
+        "Submit an asynchronous flighting optimization job across time periods and channels without blocking.",
+        delegates_to="jobs.submit_job",
+        status="stable",
+        evidence_test_ids=(
+            "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
+            "tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery",
+        ),
+    ),
+    _tool(
+        "submit_cross_validate_mmm_job",
+        "jobs",
+        "Submit an asynchronous cross-validation job for MMM out-of-sample evaluation.",
+        delegates_to="jobs.submit_job",
+        status="stable",
+        evidence_test_ids=(
+            "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
+            "tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery",
+        ),
+    ),
+    _tool(
+        "submit_prior_sensitivity_job",
+        "jobs",
+        "Submit an asynchronous prior sensitivity evaluation job comparing prior and posterior distributions.",
+        delegates_to="jobs.submit_job",
+        status="stable",
+        evidence_test_ids=(
+            "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
+            "tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery",
+        ),
+    ),
+    _tool(
         "get_job_status",
         "jobs",
         "Retrieve the execution status, results, or error details of an asynchronous job.",

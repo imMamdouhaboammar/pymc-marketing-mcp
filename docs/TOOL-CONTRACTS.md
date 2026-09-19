@@ -187,6 +187,26 @@ Submit an MMM fitting job and return a persisted job record without waiting for 
 
 Current implementation note: the job repository is SQLite and execution uses the in-process async executor/thread delegation. This is **not yet production worker isolation** and is not MCP Tasks extension support
 
+### `submit_transform_ad_export_job`
+
+Submit an asynchronous ad export transformation job to pivot and reconcile spend in the background
+
+### `submit_budget_optimization_job`
+
+Submit an asynchronous budget optimization job under channel constraints without blocking
+
+### `submit_flighting_optimization_job`
+
+Submit an asynchronous flighting optimization job across time periods and channels without blocking
+
+### `submit_cross_validate_mmm_job`
+
+Submit an asynchronous cross-validation job for MMM out-of-sample evaluation
+
+### `submit_prior_sensitivity_job`
+
+Submit an asynchronous prior sensitivity evaluation job comparing prior and posterior distributions
+
 ### `get_job_status`
 
 Return the persisted job state/result/error for an authorized job

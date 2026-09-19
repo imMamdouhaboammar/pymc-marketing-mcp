@@ -145,7 +145,7 @@ class JobService:
         latest_cp = checkpoints[-1] if checkpoints else None
 
         can_resume = job.status in (JobStatus.FAILED, JobStatus.CANCELLED) and bool(checkpoints)
-        has_usable_result = job.status == JobStatus.SUCCEEDED or (
+        has_usable_result = job.status == JobStatus.SUCCEEDED or bool(
             latest_cp
             and latest_cp.stage
             in (

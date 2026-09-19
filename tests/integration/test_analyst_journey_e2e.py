@@ -17,8 +17,8 @@ Drives the complete user journey:
 
 from __future__ import annotations
 
-import asyncio
 import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -84,7 +84,6 @@ async def test_full_analyst_journey_e2e(app_env):
                 })
 
     df_raw = pd.DataFrame(records)
-    csv_bytes = df_raw.to_csv(index=False).encode("utf-8")
 
     # -------------------------------------------------------------------------
     # 1. Register raw export

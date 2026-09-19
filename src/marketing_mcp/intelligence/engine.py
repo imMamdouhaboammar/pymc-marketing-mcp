@@ -54,7 +54,12 @@ class MarketingDataIntelligenceEngine:
         """Runs comprehensive structural, semantic, statistical, and suitability profiling."""
         from marketing_mcp.schemas.overrides import normalize_user_overrides
         user_overrides = normalize_user_overrides(user_overrides)
-        dims = dims or []
+        override_dims = [
+            col
+            for col, spec in user_overrides.items()
+            if isinstance(spec, dict) and spec.get("role") == SemanticRole.DIMENSION
+        ]
+        dims = list(dict.fromkeys([*(dims or []), *override_dims]))
 
         # 1. Structural profiling
         date_override = next((col for col, ov in user_overrides.items() if isinstance(ov, dict) and ov.get("role") == SemanticRole.DATE), None)

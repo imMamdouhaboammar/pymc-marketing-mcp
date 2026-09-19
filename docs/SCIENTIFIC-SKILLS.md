@@ -96,7 +96,12 @@ The installed MCP SDK v2 supports cache hints. The server applies private five-m
 | `resume_job` | tool | experimental | no | primary: pymc-job-resilience | none |
 | `select_best_model` | tool | experimental | no | primary: pymc-model-validation | none |
 | `simulate_budget` | tool | stable | yes | primary: pymc-budget-optimization | none |
+| `submit_budget_optimization_job` | tool | stable | no | primary: pymc-job-resilience | none |
+| `submit_cross_validate_mmm_job` | tool | stable | no | primary: pymc-job-resilience | none |
 | `submit_fit_mmm_job` | tool | stable | no | primary: pymc-job-resilience | none |
+| `submit_flighting_optimization_job` | tool | stable | no | primary: pymc-job-resilience | none |
+| `submit_prior_sensitivity_job` | tool | stable | no | primary: pymc-job-resilience | none |
+| `submit_transform_ad_export_job` | tool | stable | no | primary: pymc-job-resilience | none |
 | `transform_ad_export` | tool | stable | no | primary: pymc-dataset-readiness | none |
 | `validate_dataset` | tool | stable | no | primary: pymc-dataset-readiness | none |
 

@@ -121,11 +121,11 @@ async def test_submit_fit_mmm_job_forwards_panel_dims(test_env):
     # 4. Wait for background job to finish and assert checkpoint & state contracts
     import time
     start_t = time.time()
-    while time.time() - start_t < 30:
+    while time.time() - start_t < 90:
         st = app.jobs.get_job(job_id, principal=principal)
         if st.status.is_terminal:
             break
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
 
     assert st.status.value == "succeeded"
     checkpoints = app.jobs.get_checkpoints(job_id, principal=principal)

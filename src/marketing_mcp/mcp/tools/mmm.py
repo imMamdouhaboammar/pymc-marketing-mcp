@@ -48,7 +48,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             authorize_dataset(principal, dataset, action="read")
 
             loop = asyncio.get_running_loop()
-            r = await loop.run_in_executor(None, app.models.fit, config, principal)
+            r = await loop.run_in_executor(None, lambda: app.models.fit(config, principal))
             return env(
                 summary=r.model_dump(),
                 provenance=r.config.get("provenance", {}),
@@ -129,7 +129,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             authorize_model(principal, model_rec, action="read")
 
             loop = asyncio.get_running_loop()
-            r = await loop.run_in_executor(None, app.diagnostics.cross_validate, input)
+            r = await loop.run_in_executor(None, lambda: app.diagnostics.cross_validate(input))
             decision = r.get("decision_provenance", {}).get("decision") or r.get("decision_impact")
             if decision == "blocked_predictive_failure" or r.get("failures"):
                 next_acts = ["diagnose_mmm", "validate_dataset", "evaluate_prior_sensitivity"]
@@ -161,7 +161,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             authorize_model(principal, model_rec, action="read")
 
             loop = asyncio.get_running_loop()
-            r = await loop.run_in_executor(None, app.diagnostics.prior_sensitivity, input)
+            r = await loop.run_in_executor(None, lambda: app.diagnostics.prior_sensitivity(input))
             return env(
                 summary=r,
                 warnings=r.get("findings", []),

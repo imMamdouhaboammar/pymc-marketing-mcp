@@ -16,6 +16,11 @@
   ],
   "primary_tools": [
     "submit_fit_mmm_job",
+    "submit_transform_ad_export_job",
+    "submit_budget_optimization_job",
+    "submit_flighting_optimization_job",
+    "submit_cross_validate_mmm_job",
+    "submit_prior_sensitivity_job",
     "get_job_status",
     "poll_job_progress",
     "recover_execution_state",
