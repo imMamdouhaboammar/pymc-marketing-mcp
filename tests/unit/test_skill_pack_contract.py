@@ -693,3 +693,62 @@ def test_tool_trace_evaluator_resume_authorization_contract():
     )
     res_recovery_then_workflow = evaluate_tool_trace(t_recovery_then_workflow)
     assert res_recovery_then_workflow.valid is True, res_recovery_then_workflow.reasons
+
+    # 20. Recovery by the submitted idempotency key is valid when it resolves to the same job
+    t_recovery_by_idempotency_key = ToolTrace(
+        id="recovery-by-idempotency-key",
+        expected_valid=True,
+        steps=[
+            {
+                "tool": "submit_fit_mmm_job",
+                "arguments": {"idempotency_key": "fit-campaign-1"},
+                "result": {"job_id": "job-fit-1"},
+            },
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": {"job_id_or_key": "fit-campaign-1"},
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "resume_job", "arguments": {"job_id": "job-fit-1"}},
+        ],
+    )
+    res_recovery_by_idempotency_key = evaluate_tool_trace(t_recovery_by_idempotency_key)
+    assert res_recovery_by_idempotency_key.valid is True, (
+        res_recovery_by_idempotency_key.reasons
+    )
+
+    # 21. An unrelated recovery key must not authorize recovery for the submitted job
+    t_wrong_recovery_key = ToolTrace(
+        id="recovery-by-wrong-idempotency-key",
+        expected_valid=False,
+        steps=[
+            {
+                "tool": "submit_fit_mmm_job",
+                "arguments": {"idempotency_key": "fit-campaign-1"},
+                "result": {"job_id": "job-fit-1"},
+            },
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": {"job_id_or_key": "different-key"},
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "resume_job", "arguments": {"job_id": "job-fit-1"}},
+        ],
+    )
+    res_wrong_recovery_key = evaluate_tool_trace(t_wrong_recovery_key)
+    assert res_wrong_recovery_key.valid is False
+    assert any("recovery argument mismatch" in r for r in res_wrong_recovery_key.reasons)
