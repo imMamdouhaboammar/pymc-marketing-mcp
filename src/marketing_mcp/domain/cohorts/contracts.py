@@ -16,11 +16,50 @@ Key invariants:
 from __future__ import annotations
 
 import math
+import re
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 PeriodType = Literal["daily", "weekly", "monthly"]
+
+
+def _period_ordinal(period: str, period_type: PeriodType) -> int:
+    """Parse a supported period label into a monotonic unit ordinal."""
+    if not isinstance(period, str) or not period:
+        raise ValueError("period labels must be non-empty strings")
+
+    try:
+        if period_type == "daily":
+            return date.fromisoformat(period).toordinal()
+        if period_type == "weekly":
+            match = re.fullmatch(r"(\d{4})-W(\d{2})", period)
+            if not match:
+                raise ValueError
+            year, week = (int(part) for part in match.groups())
+            return date.fromisocalendar(year, week, 1).toordinal() // 7
+        if period_type == "monthly":
+            match = re.fullmatch(r"(\d{4})-(\d{2})", period)
+            if not match:
+                raise ValueError
+            year, month = (int(part) for part in match.groups())
+            if not 1 <= month <= 12:
+                raise ValueError
+            return year * 12 + (month - 1)
+    except ValueError as exc:
+        raise ValueError(
+            f"invalid {period_type} period label '{period}'; expected "
+            + (
+                "YYYY-MM-DD"
+                if period_type == "daily"
+                else "YYYY-Www"
+                if period_type == "weekly"
+                else "YYYY-MM"
+            )
+        ) from exc
+
+    raise ValueError(f"unsupported period_type '{period_type}'")
 
 
 class CustomerCohortRecord(BaseModel):
@@ -179,6 +218,11 @@ class MediaResponseCohortRecord(BaseModel):
         has_period = bool(self.period_responses)
         has_immediate_or_carry = (self.immediate_response > 0.0) or bool(self.carryover_responses)
 
+        if not has_period and not has_immediate_or_carry and self.cumulative_response > 0:
+            raise ValueError(
+                "cumulative_response cannot be positive without a period response decomposition"
+            )
+
         if has_period and has_immediate_or_carry:
             if abs(self.period_responses[0] - self.immediate_response) > 1e-4:
                 raise ValueError(
@@ -317,12 +361,24 @@ class MediaResponseCohortLedger(BaseModel):
             all_periods = set(calendar_responses.keys())
             for c in self.cohorts:
                 all_periods.add(c.source_period)
-            period_order = sorted(all_periods)
+            period_order = sorted(
+                all_periods,
+                key=lambda period: _period_ordinal(period, self.period_type),
+            )
         elif not period_order:
             raise ValueError("period_order cannot be empty when provided")
 
         if len(set(period_order)) != len(period_order):
             raise ValueError("period_order cannot contain duplicate periods")
+
+        period_ordinals = [
+            _period_ordinal(period, self.period_type) for period in period_order
+        ]
+        for previous, current in zip(period_ordinals, period_ordinals[1:]):
+            if current != previous + 1:
+                raise ValueError(
+                    f"period_order must be chronological and contiguous for {self.period_type} periods"
+                )
 
         missing_authoritative_periods = [
             period for period in calendar_responses if period not in period_order
