@@ -67,3 +67,7 @@ Applies to all time-series and allocation reconciliation in marketing mix modeli
 
 ### Status
 Resolved
+
+## Signed and non-finite authoritative inputs
+
+Period-level reconciliation must validate the authoritative series before computing relative error. For response/count-like domains whose modeled contributions are constrained non-negative, reject negative, NaN, and infinite authoritative values instead of letting signed denominators or non-finite arithmetic participate in tolerance checks. A conservation check is not meaningful when the comparison domain itself violates its contract.
