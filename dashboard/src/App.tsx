@@ -19,9 +19,9 @@ const DashboardContent: React.FC = () => {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col justify-between">
         <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
-        <main className="flex-1 flex items-center justify-center">
+        <section aria-label="Authentication" className="flex-1 flex items-center justify-center">
           <AuthModal />
-        </main>
+        </section>
         <footer className="border-t border-zinc-900 py-4 text-center text-xs text-zinc-600 font-mono">
           PyMC Marketing MCP Server • v0.4.0
         </footer>
@@ -52,6 +52,7 @@ const DashboardContent: React.FC = () => {
               href="https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/health"
               target="_blank"
               rel="noreferrer"
+              aria-label="/health endpoint (opens in a new tab)"
               className="flex items-center space-x-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-mono rounded-md transition-colors"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -63,6 +64,7 @@ const DashboardContent: React.FC = () => {
               href="https://pymc-marketing-mcp-uk3vf3u3eq-uc.a.run.app/mcp"
               target="_blank"
               rel="noreferrer"
+              aria-label="/mcp endpoint (opens in a new tab)"
               className="flex items-center space-x-1.5 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-mono rounded-md transition-colors"
             >
               <span>/mcp</span>
