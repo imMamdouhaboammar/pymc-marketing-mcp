@@ -631,3 +631,52 @@ def test_reconciliation_accepts_contiguous_period_sequences(period_type, calenda
 
     reconciliation = ledger.reconcile_to_calendar_response(calendar_responses)
     assert reconciliation["is_reconciled"] is True
+
+
+@pytest.mark.parametrize(
+    "bad_daily_period",
+    [
+        "2025-W01-1",
+        "20250101",
+        "2025-1-01",
+        "2025-01-1",
+    ],
+)
+def test_reconciliation_rejects_noncanonical_daily_period_labels(bad_daily_period):
+    ledger = MediaResponseCohortLedger(
+        ledger_id="ledger-daily-format",
+        period_type="daily",
+        cohorts=[
+            MediaResponseCohortRecord(
+                cohort_id="cohort-daily-format",
+                source_period=bad_daily_period,
+                channel="tv",
+                spend=100.0,
+                period_responses=[100.0],
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="invalid daily period label"):
+        ledger.reconcile_to_calendar_response({bad_daily_period: 100.0})
+
+
+def test_reconciliation_accepts_canonical_daily_period_labels():
+    ledger = MediaResponseCohortLedger(
+        ledger_id="ledger-daily-format-valid",
+        period_type="daily",
+        cohorts=[
+            MediaResponseCohortRecord(
+                cohort_id="cohort-daily-format-valid",
+                source_period="2025-01-01",
+                channel="tv",
+                spend=100.0,
+                period_responses=[50.0, 50.0],
+            )
+        ],
+    )
+
+    reconciliation = ledger.reconcile_to_calendar_response(
+        {"2025-01-01": 50.0, "2025-01-02": 50.0}
+    )
+    assert reconciliation["is_reconciled"] is True
