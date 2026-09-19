@@ -129,7 +129,7 @@ Documents in this directory must be updated when:
 
 ---
 
-## Historical Post-Mortem Archive (Lessons 01–61)
+## Historical Post-Mortem Archive (Lessons 01–64)
 
 Detailed case studies from earlier container deployment, hardening, and multi-repo sessions remain indexed in [lessons-index.md](./lessons-index.md) and archived below:
 
@@ -194,3 +194,6 @@ Detailed case studies from earlier container deployment, hardening, and multi-re
 * [59: Frontend Accessibility & WCAG 2.1 AA Compliance in Analytical Dashboards](./59-frontend-accessibility-wcag-compliance-in-analytical-dashboards.md)
 * [60: Programmatic Branch Protection & Exact CI Status Check Binding](./60-programmatic-branch-protection-ci-status-check-binding.md)
 * [61: MCMC Posterior Sampler Step-Size Calibration Across CPU Architectures](./61-mcmc-posterior-sampler-step-size-calibration-across-cpu-architectures.md)
+* [62: Period-by-Period Reconciliation vs Grand Total Conservation Drift](./62-period-by-period-reconciliation-vs-grand-total-conservation.md)
+* [63: Fallback Response Fabrication in Cohort Accounting](./63-fallback-response-fabrication-in-cohort-accounting.md)
+* [64: Unvalidated Financial Assumptions in Decision Builders](./64-unvalidated-financial-assumptions-in-decision-builders.md)

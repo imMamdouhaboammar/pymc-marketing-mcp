@@ -20,6 +20,7 @@ from marketing_mcp.domain.cohorts.contracts import (
     ResponseCohortLedger,
 )
 from marketing_mcp.domain.decisions.financial import FinancialAssumptions
+from marketing_mcp.errors import DomainError
 
 
 def build_cohort_ledger(
@@ -160,23 +161,65 @@ def build_media_response_cohort_ledger(
     financial:
         Optional FinancialAssumptions for cohort valuation (gross revenue, net profit, ROAS, NPV).
     """
+    if financial is not None:
+        fin_errors = financial.validate()
+        if fin_errors:
+            raise DomainError(
+                "INPUT_INVALID",
+                f"Invalid financial assumptions: {'; '.join(fin_errors)}",
+            )
+
     lid = ledger_id or f"media_ledger_{uuid.uuid4().hex[:10]}"
     cohorts: list[MediaResponseCohortRecord] = []
+    seen_cohorts: set[tuple[str, str]] = set()
 
     for item in spend_records:
         src = str(item["source_period"])
         ch = str(item["channel"])
+        key = (src, ch)
+        if key in seen_cohorts:
+            raise DomainError(
+                "INPUT_INVALID",
+                f"Duplicate spend record for period '{src}' and channel '{ch}'",
+            )
+        seen_cohorts.add(key)
+
         spend = float(item.get("spend", 0.0))
+        if spend < 0:
+            raise DomainError(
+                "INPUT_INVALID",
+                f"Spend for channel '{ch}' in period '{src}' must be non-negative, got {spend}",
+            )
 
         if "total_response" in item:
             tot_resp = float(item["total_response"])
         elif channel_response_rates and ch in channel_response_rates:
             tot_resp = spend * float(channel_response_rates[ch])
         else:
-            tot_resp = spend
+            raise DomainError(
+                "INPUT_INVALID",
+                f"Missing total_response or channel_response_rate for channel '{ch}' in period '{src}'",
+            )
 
-        raw_weights = adstock_weights.get(ch, [1.0])
-        total_w = sum(raw_weights) or 1.0
+        if tot_resp < 0:
+            raise DomainError(
+                "INPUT_INVALID",
+                f"total_response for channel '{ch}' in period '{src}' must be non-negative, got {tot_resp}",
+            )
+
+        if ch not in adstock_weights:
+            raise DomainError(
+                "INPUT_INVALID",
+                f"Missing adstock weights for channel '{ch}' in period '{src}'",
+            )
+
+        raw_weights = adstock_weights[ch]
+        if not raw_weights or any(w < 0 for w in raw_weights) or sum(raw_weights) <= 0:
+            raise DomainError(
+                "INPUT_INVALID",
+                f"Adstock weights for channel '{ch}' must be non-empty, non-negative, and sum to > 0, got {raw_weights}",
+            )
+        total_w = sum(raw_weights)
         norm_weights = [float(w) / total_w for w in raw_weights]
 
         immediate = round(tot_resp * norm_weights[0], 4)

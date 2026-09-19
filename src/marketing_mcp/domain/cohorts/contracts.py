@@ -146,20 +146,48 @@ class MediaResponseCohortRecord(BaseModel):
 
     @model_validator(mode="after")
     def _synchronize_responses(self) -> "MediaResponseCohortRecord":
-        if (
-            self.period_responses
-            and self.immediate_response == 0.0
-            and not self.carryover_responses
-        ):
+        if any(x < 0 for x in self.period_responses):
+            raise ValueError("period_responses cannot contain negative values")
+        if self.immediate_response < 0:
+            raise ValueError("immediate_response cannot be negative")
+        if any(x < 0 for x in self.carryover_responses):
+            raise ValueError("carryover_responses cannot contain negative values")
+        if any(w < 0 for w in self.adstock_decay_weights):
+            raise ValueError("adstock_decay_weights cannot contain negative values")
+
+        has_period = bool(self.period_responses)
+        has_immediate_or_carry = (self.immediate_response > 0.0) or bool(self.carryover_responses)
+
+        if has_period and has_immediate_or_carry:
+            if abs(self.period_responses[0] - self.immediate_response) > 1e-4:
+                raise ValueError(
+                    f"Conflicting immediate response: period_responses[0]={self.period_responses[0]} "
+                    f"does not match immediate_response={self.immediate_response}"
+                )
+            if self.carryover_responses:
+                if len(self.carryover_responses) != len(self.period_responses) - 1:
+                    raise ValueError(
+                        f"Carryover responses length {len(self.carryover_responses)} does not match "
+                        f"period_responses carryover length {len(self.period_responses) - 1}"
+                    )
+                for idx, (p_val, c_val) in enumerate(
+                    zip(self.period_responses[1:], self.carryover_responses)
+                ):
+                    if abs(p_val - c_val) > 1e-4:
+                        raise ValueError(
+                            f"Conflicting carryover response at lag {idx + 1}: {p_val} vs {c_val}"
+                        )
+            else:
+                self.carryover_responses = [float(x) for x in self.period_responses[1:]]
+            self.cumulative_response = float(sum(self.period_responses))
+        elif has_period and not has_immediate_or_carry:
             self.immediate_response = float(self.period_responses[0])
             self.carryover_responses = [float(x) for x in self.period_responses[1:]]
             self.cumulative_response = float(sum(self.period_responses))
-        elif not self.period_responses and (
-            self.immediate_response > 0.0 or self.carryover_responses
-        ):
+        elif not has_period and has_immediate_or_carry:
             self.period_responses = [self.immediate_response, *self.carryover_responses]
             self.cumulative_response = float(sum(self.period_responses))
-        elif self.period_responses:
+        elif has_period:
             self.cumulative_response = float(sum(self.period_responses))
         return self
 
@@ -231,7 +259,7 @@ class MediaResponseCohortLedger(BaseModel):
         """Reconcile source-period carryovers against authoritative calendar-period response.
 
         For each calendar evaluation period T, sums contributions from all source cohorts
-        t where t + lag == T.
+        t where t + lag == T. Enforces period-by-period comparison to detect timing shifts.
         """
         if period_order is None:
             all_periods = set(calendar_responses.keys())
@@ -256,8 +284,39 @@ class MediaResponseCohortLedger(BaseModel):
         total_authoritative_sum = sum(calendar_responses.values()) if calendar_responses else 0.0
 
         diff = abs(total_cohort_sum - total_authoritative_sum)
-        rel_diff = diff / max(1e-6, total_authoritative_sum) if total_authoritative_sum > 0 else 0.0
-        is_reconciled = rel_diff <= tolerance
+        rel_diff = (
+            diff / max(1e-6, total_authoritative_sum)
+            if total_authoritative_sum > 0
+            else (0.0 if diff == 0.0 else 1.0)
+        )
+        grand_reconciled = (
+            (diff == 0.0) if total_authoritative_sum == 0.0 else (rel_diff <= tolerance)
+        )
+
+        discrepant_periods: list[str] = []
+        period_details: dict[str, dict[str, float | bool]] = {}
+
+        for p, auth_val in calendar_responses.items():
+            cohort_val = calendar_cohort_totals.get(p, 0.0)
+            p_diff = abs(cohort_val - auth_val)
+            if auth_val == 0.0:
+                p_rel = 0.0 if p_diff == 0.0 else 1.0
+                p_ok = (p_diff == 0.0)
+            else:
+                p_rel = p_diff / auth_val
+                p_ok = (p_rel <= tolerance)
+
+            period_details[p] = {
+                "cohort_val": round(cohort_val, 2),
+                "authoritative_val": round(auth_val, 2),
+                "absolute_diff": round(p_diff, 2),
+                "relative_diff_pct": round(p_rel * 100, 2),
+                "is_reconciled": p_ok,
+            }
+            if not p_ok:
+                discrepant_periods.append(p)
+
+        is_reconciled = grand_reconciled and (len(discrepant_periods) == 0)
 
         return {
             "total_cohort_calendar_sum": round(total_cohort_sum, 2),
@@ -265,6 +324,8 @@ class MediaResponseCohortLedger(BaseModel):
             "absolute_discrepancy": round(diff, 2),
             "relative_discrepancy_pct": round(rel_diff * 100, 2),
             "is_reconciled": is_reconciled,
+            "discrepant_periods": discrepant_periods,
+            "period_details": period_details,
             "cohort_count": len(self.cohorts),
             "calendar_periods_evaluated": len(calendar_responses),
         }

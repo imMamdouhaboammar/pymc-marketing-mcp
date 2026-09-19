@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from marketing_mcp.domain.cohorts import (
     CohortRecord,
@@ -31,6 +32,7 @@ from marketing_mcp.domain.cohorts import (
     extract_cohorts_from_transactions,
 )
 from marketing_mcp.domain.decisions.financial import FinancialAssumptions
+from marketing_mcp.errors import DomainError
 
 
 class TestCustomerAcquisitionCohortLedger:
@@ -259,3 +261,127 @@ class TestMediaResponseCohortLedger:
         assert val["net_profit"] == pytest.approx(5000.0)
         assert val["roas"] == pytest.approx(2.50)
         assert val["discounted_npv"] == pytest.approx(4318.18, rel=1e-2)
+
+    def test_reject_missing_response_and_rate(self):
+        spend_records = [{"source_period": "2025-W01", "channel": "tv", "spend": 5000.0}]
+        adstock_weights = {"tv": [0.5, 0.5]}
+        with pytest.raises(DomainError) as exc_info:
+            build_media_response_cohort_ledger(spend_records, adstock_weights)
+        assert exc_info.value.code == "INPUT_INVALID"
+        assert "Missing total_response or channel_response_rate" in str(exc_info.value)
+
+    def test_reject_channel_not_in_adstock_weights(self):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "meta", "spend": 5000.0, "total_response": 200.0}
+        ]
+        adstock_weights = {"tv": [0.5, 0.5]}  # missing "meta"
+        with pytest.raises(DomainError) as exc_info:
+            build_media_response_cohort_ledger(spend_records, adstock_weights)
+        assert exc_info.value.code == "INPUT_INVALID"
+        assert "Missing adstock weights for channel 'meta'" in str(exc_info.value)
+
+    def test_reject_invalid_adstock_weights(self):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "tv", "spend": 1000.0, "total_response": 100.0}
+        ]
+        # Empty weights
+        with pytest.raises(DomainError) as exc_info:
+            build_media_response_cohort_ledger(spend_records, {"tv": []})
+        assert exc_info.value.code == "INPUT_INVALID"
+
+        # Negative weights
+        with pytest.raises(DomainError) as exc_info:
+            build_media_response_cohort_ledger(spend_records, {"tv": [0.8, -0.2]})
+        assert exc_info.value.code == "INPUT_INVALID"
+
+        # Zero sum weights
+        with pytest.raises(DomainError) as exc_info:
+            build_media_response_cohort_ledger(spend_records, {"tv": [0.0, 0.0]})
+        assert exc_info.value.code == "INPUT_INVALID"
+
+    def test_reject_duplicate_cohort_records(self):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "tv", "spend": 1000.0, "total_response": 100.0},
+            {"source_period": "2025-W01", "channel": "tv", "spend": 2000.0, "total_response": 200.0},
+        ]
+        adstock_weights = {"tv": [0.6, 0.4]}
+        with pytest.raises(DomainError) as exc_info:
+            build_media_response_cohort_ledger(spend_records, adstock_weights)
+        assert exc_info.value.code == "INPUT_INVALID"
+        assert "Duplicate spend record" in str(exc_info.value)
+
+    def test_reject_invalid_financial_assumptions(self):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "tv", "spend": 1000.0, "total_response": 100.0}
+        ]
+        adstock_weights = {"tv": [0.5, 0.5]}
+        # Invalid gross margin rate > 1.0
+        fa = FinancialAssumptions(gross_margin_rate=1.5)
+        with pytest.raises(DomainError) as exc_info:
+            build_media_response_cohort_ledger(spend_records, adstock_weights, financial=fa)
+        assert exc_info.value.code == "INPUT_INVALID"
+        assert "Invalid financial assumptions" in str(exc_info.value)
+
+    def test_record_validation_rejects_negative_responses(self):
+        with pytest.raises(ValidationError):
+            MediaResponseCohortRecord(
+                cohort_id="c1",
+                source_period="2025-W01",
+                channel="tv",
+                spend=100.0,
+                period_responses=[100.0, -20.0],
+            )
+
+    def test_record_validation_rejects_conflicting_representations(self):
+        with pytest.raises(ValidationError):
+            MediaResponseCohortRecord(
+                cohort_id="c1",
+                source_period="2025-W01",
+                channel="tv",
+                spend=100.0,
+                immediate_response=50.0,
+                carryover_responses=[50.0],
+                period_responses=[100.0, 50.0],  # 100 != 50
+            )
+
+    def test_period_by_period_reconciliation_catches_timing_shift(self):
+        # Two weeks of spend where grand total matches (3000 vs 3000)
+        # but timing differs period by period
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "meta", "spend": 1000.0, "total_response": 1000.0},
+            {"source_period": "2025-W02", "channel": "meta", "spend": 2000.0, "total_response": 2000.0},
+        ]
+        adstock_weights = {"meta": [0.6, 0.3, 0.1]}
+        ledger = build_media_response_cohort_ledger(spend_records, adstock_weights)
+
+        # Expected cohort totals:
+        # W01: 600, W02: 1500, W03: 700, W04: 200 (Total: 3000)
+        # Shifted authoritative series:
+        # W01: 800 (+200), W02: 1300 (-200), W03: 700, W04: 200 (Total: 3000)
+        shifted_calendar = {
+            "2025-W01": 800.0,
+            "2025-W02": 1300.0,
+            "2025-W03": 700.0,
+            "2025-W04": 200.0,
+        }
+        recon = ledger.reconcile_to_calendar_response(shifted_calendar, tolerance=0.01)
+        # Grand total discrepancy is 0, but period-by-period fails!
+        assert recon["absolute_discrepancy"] == pytest.approx(0.0)
+        assert recon["is_reconciled"] is False
+        assert "2025-W01" in recon["discrepant_periods"]
+        assert "2025-W02" in recon["discrepant_periods"]
+
+    def test_reconciliation_fails_when_authoritative_response_is_zero(self):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "tv", "spend": 1000.0, "total_response": 100.0}
+        ]
+        adstock_weights = {"tv": [1.0]}
+        ledger = build_media_response_cohort_ledger(spend_records, adstock_weights)
+
+        # Authoritative response says zero, but cohorts produced 100
+        zero_calendar = {"2025-W01": 0.0}
+        recon = ledger.reconcile_to_calendar_response(zero_calendar, tolerance=0.05)
+        assert recon["is_reconciled"] is False
+        assert recon["total_authoritative_sum"] == 0.0
+        assert recon["total_cohort_calendar_sum"] == pytest.approx(100.0)
+        assert "2025-W01" in recon["discrepant_periods"]
