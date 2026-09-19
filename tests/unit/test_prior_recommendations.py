@@ -189,3 +189,74 @@ class TestPriorRecommendationEngine:
         assert brand_rec.evidence_grade == "domain_spend_scale"
         assert brand_rec.is_empirically_calibrated is False
 
+    def test_missing_se_falls_to_policy_default_not_fabricated_precision(self):
+        """P1 fix: When an experiment has no SE/sigma, confidence must be a documented policy tier,
+        not the fabricated 0.95 that 1/(1+0) would produce."""
+        channels = ["meta_spend"]
+        experiments = [
+            {
+                "experiment_id": "exp_no_se",
+                "channel": "meta_spend",
+                "delta_x": 10000.0,
+                "delta_y": 25000.0,  # Positive lift
+                # Deliberately omit 'sigma' and 'standard_error'
+            }
+        ]
+        report = recommend_priors_for_channels(channels=channels, experiments=experiments)
+        rec = report.recommendations["meta_spend"][0]
+        # Must NOT be 0.95 (fabricated from missing SE via 1/(1+0))
+        assert rec.confidence != 0.95, "Missing SE must not produce fabricated 0.95 confidence"
+        # Must document that provenance is a policy default, not empirical precision
+        assert rec.provenance_type == "policy_default"
+        assert rec.confidence <= 0.50, "Missing SE should produce conservative policy-default confidence"
+        assert rec.is_empirically_calibrated is True  # lift is positive, experiment present
+        assert rec.incrementality_status == "positive_lift"
+
+    def test_caller_quality_score_stored_verbatim(self):
+        """P3 fix: Caller-supplied evidence_quality_score must be stored without modification."""
+        precise_score = 0.8761234567890  # More than 6 decimal places
+        channels = ["meta_spend"]
+        experiments = [
+            {
+                "experiment_id": "exp_verbatim",
+                "channel": "meta_spend",
+                "delta_x": 5000.0,
+                "delta_y": 12000.0,
+                "sigma": 0.20,
+                "evidence_quality_score": precise_score,
+            }
+        ]
+        report = recommend_priors_for_channels(channels=channels, experiments=experiments)
+        rec = report.recommendations["meta_spend"][0]
+        assert rec.provenance_type == "caller_quality_score"
+        # Must be verbatim — not rounded to 6dp
+        assert rec.confidence == precise_score, (
+            f"Expected verbatim {precise_score}, got {rec.confidence}"
+        )
+
+    def test_model_validator_rejects_calibrated_without_positive_lift(self):
+        """P2 fix: model_validator must prevent is_empirically_calibrated=True
+        with incrementality_status other than 'positive_lift'."""
+        import pytest
+
+        from marketing_mcp.domain.priors.contracts import (
+            PriorRecommendation,
+        )
+        from marketing_mcp.schemas.models import PriorDistributionConfig
+
+        with pytest.raises(Exception, match="incrementality_status"):
+            PriorRecommendation(
+                channel="meta_spend",
+                parameter_name="channel_beta",
+                recommended_distribution=PriorDistributionConfig(
+                    dist="HalfNormal", kwargs={"sigma": 1.0}
+                ),
+                evidence_source="experiment:test",
+                evidence_type="experimental_lift",
+                evidence_grade="empirical_experiment",
+                confidence=0.85,
+                provenance_type="caller_quality_score",
+                is_empirically_calibrated=True,
+                incrementality_status="not_applicable",  # Invalid: must be positive_lift
+                reason="Test",
+            )

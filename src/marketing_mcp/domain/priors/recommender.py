@@ -120,7 +120,6 @@ def recommend_priors_for_channels(
                 latest_exp, "measured_incremental_response", "delta_y", default=0.0
             )
             spend_inc = _extract_float(latest_exp, "spend_delta", "delta_x", default=0.0)
-            sigma = _extract_float(latest_exp, "standard_error", "sigma", default=0.0)
             exp_id = latest_exp.get("experiment_id", "lift_test")
 
             # ── Non-positive lift: never clamp to a positive-ROAS prior ──────────
@@ -173,14 +172,25 @@ def recommend_priors_for_channels(
                 caller_quality_score = _extract_float_or_none(
                     latest_exp, "evidence_quality_score"
                 )
+                # SE is optional; only use precision-derivation when SE is actually present
+                sigma_or_none = _extract_float_or_none(latest_exp, "standard_error", "sigma")
 
                 if caller_quality_score is not None:
+                    # Verbatim caller score — never modify/round (P3 fix: honor provenance contract)
                     confidence = caller_quality_score
                     provenance_type: ProvenanceType = "caller_quality_score"
-                else:
-                    # Derive from SE when no quality_score provided
-                    confidence = _precision_confidence(sigma)
+                elif sigma_or_none is not None:
+                    # SE present: derive precision score 1/(1+SE)
+                    confidence = _precision_confidence(sigma_or_none)
                     provenance_type = "empirical_precision"
+                else:
+                    # SE absent and no caller score: documented policy-default tier
+                    # ponytail: 0.30 is a conservative policy tier for experiment-present-but-SE-missing;
+                    # upgrade to empirical_precision when SE is captured in the experiment record.
+                    confidence = 0.30
+                    provenance_type = "policy_default"
+
+                sigma = sigma_or_none if sigma_or_none is not None else 0.0
 
                 observed_roas = lift_est / spend_inc
 
@@ -194,7 +204,9 @@ def recommend_priors_for_channels(
                     evidence_source=f"experiment:{exp_id}",
                     evidence_type="experimental_lift",
                     evidence_grade="empirical_experiment",
-                    confidence=round(confidence, 6),
+                    # P3 fix: caller_quality_score must be stored verbatim to honor provenance contract.
+                    # Only precision-derived and policy-default values are rounded (they are computed floats).
+                    confidence=confidence if provenance_type == "caller_quality_score" else round(confidence, 6),
                     provenance_type=provenance_type,
                     is_empirically_calibrated=True,
                     incrementality_status="positive_lift",

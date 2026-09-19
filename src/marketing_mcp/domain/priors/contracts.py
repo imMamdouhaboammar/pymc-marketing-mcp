@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from marketing_mcp.schemas.models import ChannelPriorConfig, PriorDistributionConfig
 
@@ -106,6 +106,22 @@ class PriorRecommendation(BaseModel):
         default_factory=list,
         description="Sensitivity verification steps required if this prior is adopted",
     )
+
+    @model_validator(mode="after")
+    def _check_calibration_incrementality_consistency(self) -> "PriorRecommendation":
+        """Invariant: is_empirically_calibrated=True requires incrementality_status='positive_lift'.
+
+        Without this guard, directly constructed or deserialized recommendations
+        could claim empirical calibration while omitting or contradicting the
+        incrementality evidence that calibration depends on.
+        """
+        if self.is_empirically_calibrated and self.incrementality_status != "positive_lift":
+            raise ValueError(
+                f"is_empirically_calibrated=True requires incrementality_status='positive_lift', "
+                f"got incrementality_status='{self.incrementality_status}'. "
+                "A recommendation cannot be empirically calibrated without positive-lift evidence."
+            )
+        return self
 
     def to_channel_prior_config(self) -> ChannelPriorConfig:
         """Convert recommendation into a typed ChannelPriorConfig for FitMMMInput."""
