@@ -752,3 +752,135 @@ def test_tool_trace_evaluator_resume_authorization_contract():
     res_wrong_recovery_key = evaluate_tool_trace(t_wrong_recovery_key)
     assert res_wrong_recovery_key.valid is False
     assert any("recovery argument mismatch" in r for r in res_wrong_recovery_key.reasons)
+
+
+def test_tool_trace_evaluator_preserves_idempotency_key_and_rejects_malformed_arguments():
+    from marketing_mcp.skillpack.evals import evaluate_tool_trace
+    from marketing_mcp.skillpack.registry import ToolTrace
+
+    exact_key_trace = ToolTrace(
+        id="recovery-preserves-idempotency-key-whitespace",
+        expected_valid=True,
+        steps=[
+            {
+                "tool": "submit_fit_mmm_job",
+                "arguments": {"idempotency_key": " fit-campaign-1 "},
+                "result": {"job_id": "job-fit-1"},
+            },
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": {"job_id_or_key": " fit-campaign-1 "},
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "resume_job", "arguments": {"job_id": "job-fit-1"}},
+        ],
+    )
+    exact_key_result = evaluate_tool_trace(exact_key_trace)
+    assert exact_key_result.valid is True, exact_key_result.reasons
+
+    normalized_key_trace = ToolTrace(
+        id="recovery-must-not-normalize-idempotency-key",
+        expected_valid=False,
+        steps=[
+            {
+                "tool": "submit_fit_mmm_job",
+                "arguments": {"idempotency_key": " fit-campaign-1 "},
+                "result": {"job_id": "job-fit-1"},
+            },
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": {"job_id_or_key": "fit-campaign-1"},
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "resume_job", "arguments": {"job_id": "job-fit-1"}},
+        ],
+    )
+    normalized_key_result = evaluate_tool_trace(normalized_key_trace)
+    assert normalized_key_result.valid is False
+    assert any(
+        "recovery argument mismatch" in reason for reason in normalized_key_result.reasons
+    )
+
+    malformed_recovery_args = ToolTrace(
+        id="malformed-recovery-arguments",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": ["job-fit-1"],
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+        ],
+    )
+    malformed_recovery_result = evaluate_tool_trace(malformed_recovery_args)
+    assert malformed_recovery_result.valid is False
+    assert any(
+        "arguments must be a mapping" in reason
+        for reason in malformed_recovery_result.reasons
+    )
+
+    unhashable_recovery_identifier = ToolTrace(
+        id="unhashable-recovery-identifier",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": {"job_id_or_key": ["job-fit-1"]},
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+        ],
+    )
+    unhashable_result = evaluate_tool_trace(unhashable_recovery_identifier)
+    assert unhashable_result.valid is False
+    assert any(
+        "requires a non-empty string 'job_id_or_key'" in reason
+        for reason in unhashable_result.reasons
+    )
+
+    malformed_submit_args = ToolTrace(
+        id="malformed-submit-arguments",
+        expected_valid=False,
+        steps=[
+            {
+                "tool": "submit_fit_mmm_job",
+                "arguments": ["not", "a", "mapping"],
+                "result": {"job_id": "job-fit-1"},
+            }
+        ],
+    )
+    malformed_submit_result = evaluate_tool_trace(malformed_submit_args)
+    assert malformed_submit_result.valid is False
+    assert any(
+        "submit_fit_mmm_job arguments must be a mapping" in reason
+        for reason in malformed_submit_result.reasons
+    )
