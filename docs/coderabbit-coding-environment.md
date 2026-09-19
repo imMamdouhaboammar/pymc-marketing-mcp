@@ -55,6 +55,6 @@ This repository is the PyMC Marketing MCP Server (`pymc-marketing-mcp`).
 
 2. Invariants:
    - Preserve compatibility with the declared Python range `>=3.12,<3.14`, with Python 3.12 as the CI baseline.
-   - Use the repository decision-gate implementation as the source of truth: block when `max_rhat > 1.05`, `divergences > 5`, or `min_bfmi < 0.20`; intermediate bands are caution.
+   - Use `src/marketing_mcp/domain/diagnostics/engine.py` and `docs/DECISION-INTEGRITY.md` as the production decision-gate source of truth: reject on any divergences (`> 0`), `max_rhat > 1.05`, minimum bulk ESS `< 50`, or 94% posterior-predictive coverage `< 0.50` when available; preserve documented caution bands without upgrading them to hard failures.
    - Preserve tenant/ownership boundaries for tenant-aware MCP and persistence paths; verify intentional local/stdio behavior before flagging it.
 ```
