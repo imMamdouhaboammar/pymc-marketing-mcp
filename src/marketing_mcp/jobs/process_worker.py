@@ -124,13 +124,28 @@ class ProcessJobWorker:
         stop, lease_lost, cancel_event, heartbeat = self._start_heartbeat(job)
         try:
             import inspect
+
             sig = inspect.signature(handler)
             params = list(sig.parameters.values())
-            has_cancel_kw = "cancel_event" in sig.parameters
-            has_two_pos = len([
-                p for p in params
-                if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-            ]) >= 2
+            cancel_param = sig.parameters.get("cancel_event")
+            has_cancel_kw = cancel_param is not None and cancel_param.kind in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+            has_two_pos = (
+                len(
+                    [
+                        p
+                        for p in params
+                        if p.kind
+                        in (
+                            inspect.Parameter.POSITIONAL_ONLY,
+                            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                        )
+                    ]
+                )
+                >= 2
+            )
             has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params)
 
             if has_cancel_kw:
@@ -167,7 +182,10 @@ class ProcessJobWorker:
             return True
         try:
             current = self.repository.get_job(job.job_id)
-            if current.status in (JobStatus.CANCELLING, JobStatus.CANCELLED) or cancel_event.is_set():
+            if (
+                current.status in (JobStatus.CANCELLING, JobStatus.CANCELLED)
+                or cancel_event.is_set()
+            ):
                 self._finish(job, JobStatus.CANCELLED)
             else:
                 self._finish(job, JobStatus.SUCCEEDED, result=result)

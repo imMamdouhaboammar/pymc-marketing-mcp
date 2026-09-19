@@ -80,6 +80,8 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
             "status": "failed",
             "can_resume": true,
             "has_usable_result": false,
@@ -87,7 +89,11 @@
           }
         },
         {
-          "tool": "resume_job"
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm"
+          }
         }
       ]
     },
@@ -108,6 +114,8 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-transform-1",
+            "job_type": "transform_ad_export",
             "status": "failed",
             "can_resume": true,
             "has_usable_result": false,
@@ -115,7 +123,11 @@
           }
         },
         {
-          "tool": "resume_job"
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-transform-1",
+            "job_type": "transform_ad_export"
+          }
         }
       ]
     },
@@ -136,6 +148,8 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-budget-1",
+            "job_type": "budget_optimize",
             "status": "failed",
             "can_resume": true,
             "has_usable_result": false,
@@ -143,7 +157,11 @@
           }
         },
         {
-          "tool": "resume_job"
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-budget-1",
+            "job_type": "budget_optimize"
+          }
         }
       ]
     },
@@ -164,6 +182,8 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-flighting-1",
+            "job_type": "flighting_optimize",
             "status": "failed",
             "can_resume": true,
             "has_usable_result": false,
@@ -171,7 +191,11 @@
           }
         },
         {
-          "tool": "resume_job"
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-flighting-1",
+            "job_type": "flighting_optimize"
+          }
         }
       ]
     },
@@ -192,6 +216,8 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-cv-1",
+            "job_type": "cross_validate_mmm",
             "status": "failed",
             "can_resume": true,
             "has_usable_result": false,
@@ -199,7 +225,11 @@
           }
         },
         {
-          "tool": "resume_job"
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-cv-1",
+            "job_type": "cross_validate_mmm"
+          }
         }
       ]
     },
@@ -220,6 +250,8 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-prior-1",
+            "job_type": "prior_sensitivity",
             "status": "failed",
             "can_resume": true,
             "has_usable_result": false,
@@ -227,7 +259,11 @@
           }
         },
         {
-          "tool": "resume_job"
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-prior-1",
+            "job_type": "prior_sensitivity"
+          }
         }
       ]
     },
@@ -453,6 +489,107 @@
         },
         {
           "tool": "submit_fit_mmm_job"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-mismatched-job-id",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-different-2",
+            "job_type": "fit_mmm"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-mismatched-job-type",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1",
+            "job_type": "budget_optimize"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resubmit-budget-opt-before-recovery",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_budget_optimization_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "submit_budget_optimization_job"
+        }
+      ]
+    },
+    {
+      "id": "valid-resubmit-budget-opt-after-terminal-unrecoverable-state",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_budget_optimization_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-budget-1",
+            "job_type": "budget_optimize",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_budget_optimization_job"
+          }
+        },
+        {
+          "tool": "submit_budget_optimization_job"
         }
       ]
     }

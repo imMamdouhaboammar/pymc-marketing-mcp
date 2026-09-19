@@ -440,3 +440,35 @@ def test_worker_handler_type_error_executed_exactly_once(tmp_path) -> None:
     assert "internal calculation invalid type error" in str(final_job.error)
 
 
+def test_worker_handler_positional_only_cancel_event(tmp_path) -> None:
+    """Verify that a handler with positional-only cancel_event receives cancel_event positionally."""
+    db_path = tmp_path / "pos_only_worker.db"
+    repo = _repo(db_path)
+    repo.create_job(
+        JobRecord(
+            job_id="job-pos-only",
+            job_type="test_pos_only",
+            status=JobStatus.QUEUED,
+            payload={},
+        )
+    )
+
+    received_event = None
+
+    def pos_only_handler(job, cancel_event, /):
+        nonlocal received_event
+        received_event = cancel_event
+        return {"success": True}
+
+    worker = ProcessJobWorker(
+        repo,
+        handlers={"test_pos_only": pos_only_handler},
+        worker_id="worker-pos-only",
+    )
+
+    did_work = worker.execute_next_job()
+    assert did_work is True
+    assert received_event is not None
+    final_job = repo.get_job("job-pos-only")
+    assert final_job.status == JobStatus.SUCCEEDED
+    assert final_job.result == {"success": True}

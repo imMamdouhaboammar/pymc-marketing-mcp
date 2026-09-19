@@ -204,7 +204,9 @@ def test_tool_trace_evaluator_edge_cases():
     )
     eval_res2 = evaluate_tool_trace(async_reset_trace)
     assert eval_res2.valid is False
-    assert any("optimize_budget called before an approved diagnostic gate" in r for r in eval_res2.reasons)
+    assert any(
+        "optimize_budget called before an approved diagnostic gate" in r for r in eval_res2.reasons
+    )
 
     # 3. Consecutive polling without declared max_consecutive_polls must be bounded by default
     unbounded_default_poll_trace = ToolTrace(
@@ -312,3 +314,104 @@ def test_tool_trace_evaluator_resume_authorization_contract():
     assert res5.valid is False
     assert any("without authoritative recovery" in r for r in res5.reasons)
 
+    # 6. Resume with mismatched job_id or job_type is rejected
+    t6 = ToolTrace(
+        id="resume-mismatched-identity",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job"},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {
+                "tool": "resume_job",
+                "arguments": {"job_id": "job-different-2", "job_type": "fit_mmm"},
+            },
+        ],
+    )
+    res6 = evaluate_tool_trace(t6)
+    assert res6.valid is False
+    assert any("but recovery authorized job 'job-fit-1'" in r for r in res6.reasons)
+
+    # 7. Resume with matching job_id and job_type is valid
+    t7 = ToolTrace(
+        id="resume-matching-identity",
+        expected_valid=True,
+        steps=[
+            {"tool": "submit_fit_mmm_job"},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "resume_job", "arguments": {"job_id": "job-fit-1", "job_type": "fit_mmm"}},
+        ],
+    )
+    res7 = evaluate_tool_trace(t7)
+    assert res7.valid is True
+
+    # 8. All six async submit tools are blocked post-disconnect without terminal recovery
+    for submit_tool in (
+        "submit_fit_mmm_job",
+        "submit_transform_ad_export_job",
+        "submit_budget_optimization_job",
+        "submit_flighting_optimization_job",
+        "submit_cross_validate_mmm_job",
+        "submit_prior_sensitivity_job",
+    ):
+        t8 = ToolTrace(
+            id=f"blocked-resubmit-{submit_tool}",
+            expected_valid=False,
+            steps=[
+                {"tool": submit_tool},
+                {"event": "disconnect"},
+                {"tool": submit_tool},
+            ],
+        )
+        res8 = evaluate_tool_trace(t8)
+        assert res8.valid is False, (
+            f"Expected {submit_tool} to be blocked post-disconnect without recovery"
+        )
+        assert any(
+            "resubmitted after disconnect without authoritative terminal" in r for r in res8.reasons
+        )
+
+    # 9. All six async submit tools are permitted post-disconnect with terminal unrecoverable recovery
+    for submit_tool in (
+        "submit_transform_ad_export_job",
+        "submit_budget_optimization_job",
+        "submit_flighting_optimization_job",
+        "submit_cross_validate_mmm_job",
+        "submit_prior_sensitivity_job",
+    ):
+        t9 = ToolTrace(
+            id=f"allowed-resubmit-{submit_tool}",
+            expected_valid=True,
+            steps=[
+                {"tool": submit_tool},
+                {"event": "disconnect"},
+                {
+                    "tool": "recover_execution_state",
+                    "result": {"status": "failed", "can_resume": False, "has_usable_result": False},
+                },
+                {"tool": submit_tool},
+            ],
+        )
+        res9 = evaluate_tool_trace(t9)
+        assert res9.valid is True, (
+            f"Expected {submit_tool} to be permitted after terminal recovery, got {res9.reasons}"
+        )
