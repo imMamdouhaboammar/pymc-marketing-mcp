@@ -295,7 +295,7 @@ def test_tool_trace_evaluator_resume_authorization_contract():
         id="resume-authorized",
         expected_valid=True,
         steps=[
-            {"tool": "submit_fit_mmm_job"},
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
             {"event": "disconnect"},
             {
                 "tool": "recover_execution_state",
@@ -318,7 +318,7 @@ def test_tool_trace_evaluator_resume_authorization_contract():
         id="resume-consumed-authorization",
         expected_valid=False,
         steps=[
-            {"tool": "submit_fit_mmm_job"},
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
             {"event": "disconnect"},
             {
                 "tool": "recover_execution_state",
@@ -343,7 +343,7 @@ def test_tool_trace_evaluator_resume_authorization_contract():
         id="resume-mismatched-identity",
         expected_valid=False,
         steps=[
-            {"tool": "submit_fit_mmm_job"},
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
             {"event": "disconnect"},
             {
                 "tool": "recover_execution_state",
@@ -370,7 +370,7 @@ def test_tool_trace_evaluator_resume_authorization_contract():
         id="resume-matching-identity",
         expected_valid=True,
         steps=[
-            {"tool": "submit_fit_mmm_job"},
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
             {"event": "disconnect"},
             {
                 "tool": "recover_execution_state",
@@ -427,7 +427,7 @@ def test_tool_trace_evaluator_resume_authorization_contract():
             id=f"allowed-resubmit-{submit_tool}",
             expected_valid=True,
             steps=[
-                {"tool": submit_tool},
+                {"tool": submit_tool, "result": {"job_id": f"job-{job_type}-1"}},
                 {"event": "disconnect"},
                 {
                     "tool": "recover_execution_state",
@@ -452,7 +452,7 @@ def test_tool_trace_evaluator_resume_authorization_contract():
         id="cross-family-resubmit-budget-to-prior",
         expected_valid=False,
         steps=[
-            {"tool": "submit_budget_optimization_job"},
+            {"tool": "submit_budget_optimization_job", "result": {"job_id": "job-budget-1"}},
             {"event": "disconnect"},
             {
                 "tool": "recover_execution_state",
@@ -476,7 +476,7 @@ def test_tool_trace_evaluator_resume_authorization_contract():
         id="resume-unsupported-arg",
         expected_valid=False,
         steps=[
-            {"tool": "submit_fit_mmm_job"},
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
             {"event": "disconnect"},
             {
                 "tool": "recover_execution_state",
@@ -503,7 +503,7 @@ def test_tool_trace_evaluator_resume_authorization_contract():
         id="resume-mismatched-originating-type",
         expected_valid=False,
         steps=[
-            {"tool": "submit_fit_mmm_job"},
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
             {"event": "disconnect"},
             {
                 "tool": "recover_execution_state",
@@ -524,3 +524,172 @@ def test_tool_trace_evaluator_resume_authorization_contract():
     res_mismatched_type = evaluate_tool_trace(t_mismatched_type)
     assert res_mismatched_type.valid is False
     assert any("does not match originating submission" in r for r in res_mismatched_type.reasons)
+
+    # 13. Same-family but different recovered job ID before resume_job is rejected
+    t_diff_rec_resume = ToolTrace(
+        id="resume-different-recovered-job-id",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {
+                    "job_id": "job-fit-diff-2",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "resume_job", "arguments": {"job_id": "job-fit-diff-2"}},
+        ],
+    )
+    res_diff_rec_resume = evaluate_tool_trace(t_diff_rec_resume)
+    assert res_diff_rec_resume.valid is False
+    assert any("recovery resource mismatch" in r for r in res_diff_rec_resume.reasons)
+
+    # 14. Same-family but different recovered job ID before resubmission is rejected
+    t_diff_rec_resubmit = ToolTrace(
+        id="resubmit-different-recovered-job-id",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {
+                    "job_id": "job-fit-diff-2",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": False,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "submit_fit_mmm_job"},
+        ],
+    )
+    res_diff_rec_resubmit = evaluate_tool_trace(t_diff_rec_resubmit)
+    assert res_diff_rec_resubmit.valid is False
+    assert any("recovery resource mismatch" in r for r in res_diff_rec_resubmit.reasons)
+
+    # 15. Terminal-unrecoverable recovery with no job_id is rejected
+    t_no_job_id = ToolTrace(
+        id="resubmit-missing-recovered-job-id",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": False,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "submit_fit_mmm_job"},
+        ],
+    )
+    res_no_job_id = evaluate_tool_trace(t_no_job_id)
+    assert res_no_job_id.valid is False
+    assert any("missing or invalid 'job_id'" in r for r in res_no_job_id.reasons)
+
+    # 16. Interrupted fit A -> recovery unknown job_type => no authorization, rejected
+    t_unknown_type = ToolTrace(
+        id="resubmit-unknown-recovered-job-type",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "unknown_future_job",
+                    "status": "failed",
+                    "can_resume": False,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "submit_fit_mmm_job"},
+        ],
+    )
+    res_unknown_type = evaluate_tool_trace(t_unknown_type)
+    assert res_unknown_type.valid is False
+    assert any("missing or unknown 'job_type'" in r for r in res_unknown_type.reasons)
+
+    # 17. Interrupted fit A -> matching recovery -> resume A => valid
+    t_matching_resume = ToolTrace(
+        id="matching-recovery-resume",
+        expected_valid=True,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-A"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": {"job_id_or_key": "job-fit-A"},
+                "result": {
+                    "job_id": "job-fit-A",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "resume_job", "arguments": {"job_id": "job-fit-A"}},
+        ],
+    )
+    res_matching_resume = evaluate_tool_trace(t_matching_resume)
+    assert res_matching_resume.valid is True
+
+    # 18. Matching recovery -> valid same-family resubmit => valid
+    t_matching_resubmit = ToolTrace(
+        id="matching-recovery-resubmit",
+        expected_valid=True,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-A"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": {"job_id_or_key": "job-fit-A"},
+                "result": {
+                    "job_id": "job-fit-A",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": False,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-A-retry"}},
+        ],
+    )
+    res_matching_resubmit = evaluate_tool_trace(t_matching_resubmit)
+    assert res_matching_resubmit.valid is True
+
+    # 19. Successful recovery cycle (resume) -> later unrelated async workflow => valid
+    t_recovery_then_workflow = ToolTrace(
+        id="recovery-cycle-then-unrelated-async-workflow",
+        expected_valid=True,
+        steps=[
+            {"tool": "submit_fit_mmm_job", "result": {"job_id": "job-fit-1"}},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "arguments": {"job_id_or_key": "job-fit-1"},
+                "result": {
+                    "job_id": "job-fit-1",
+                    "job_type": "fit_mmm",
+                    "status": "failed",
+                    "can_resume": True,
+                    "has_usable_result": False,
+                },
+            },
+            {"tool": "resume_job", "arguments": {"job_id": "job-fit-1"}},
+            {"tool": "diagnose_mmm", "result": {"decision_status": "approved"}},
+            {"tool": "submit_cross_validate_mmm_job", "result": {"job_id": "job-cv-1"}},
+        ],
+    )
+    res_recovery_then_workflow = evaluate_tool_trace(t_recovery_then_workflow)
+    assert res_recovery_then_workflow.valid is True, res_recovery_then_workflow.reasons
