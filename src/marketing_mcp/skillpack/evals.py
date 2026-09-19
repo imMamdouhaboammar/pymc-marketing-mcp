@@ -236,7 +236,7 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
                     reasons.append(
                         f"cross-family resubmission blocked: '{tool}' invoked at step {index} but "
                         f"recovery authorized resubmission for '{authorized_resubmit_tool}' "
-                        f"(recovered job_type='{authorized_resubmit_job_type}')"
+                        f"(recovered job_type='{authorized_resubmit_job_type}', job_id='{authorized_resubmit_job_id}')"
                     )
 
                 # Authorization consumed immediately upon resubmission attempt
