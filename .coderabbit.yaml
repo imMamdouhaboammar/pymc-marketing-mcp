@@ -1,8 +1,9 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit Configuration for PyMC Marketing MCP Server
 # Repository: https://github.com/imMamdouhaboammar/pymc-marketing-mcp
 # Schema & Reference: https://docs.coderabbit.ai/reference/configuration
 
-version: "2"
+version: 2
 language: "en-US"
 
 reviews:
@@ -28,7 +29,6 @@ reviews:
     - "!metadata.db"
     - "!**/*.csv"
     - "!profile-summary-card-output/**"
-    - "!migration/baselines/mcp_tools_snapshot.json"
 
   # Path-based instructions for the MCP codebase
   path_instructions:
