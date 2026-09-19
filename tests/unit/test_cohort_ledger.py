@@ -424,3 +424,127 @@ class TestMediaResponseCohortLedger:
                 {"2025-W01": 100.0},
                 tolerance=bad_tolerance,
             )
+
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+    def test_record_validation_rejects_non_finite_response_components(self, bad_value):
+        with pytest.raises(ValidationError, match="non-finite|finite"):
+            MediaResponseCohortRecord(
+                cohort_id="c-nonfinite",
+                source_period="2025-W01",
+                channel="tv",
+                spend=100.0,
+                period_responses=[bad_value],
+            )
+
+        with pytest.raises(ValidationError, match="non-finite|finite"):
+            MediaResponseCohortRecord(
+                cohort_id="c-weight-nonfinite",
+                source_period="2025-W01",
+                channel="tv",
+                spend=100.0,
+                period_responses=[100.0],
+                adstock_decay_weights=[bad_value],
+            )
+
+    def test_record_validation_rejects_zero_sum_adstock_weights(self):
+        with pytest.raises(ValidationError, match="sum to > 0"):
+            MediaResponseCohortRecord(
+                cohort_id="c-zero-weights",
+                source_period="2025-W01",
+                channel="tv",
+                spend=100.0,
+                period_responses=[100.0],
+                adstock_decay_weights=[0.0, 0.0],
+            )
+
+    def test_reconciliation_rejects_empty_authoritative_series(self):
+        ledger = build_media_response_cohort_ledger(
+            [
+                {
+                    "source_period": "2025-W01",
+                    "channel": "tv",
+                    "spend": 1000.0,
+                    "total_response": 100.0,
+                }
+            ],
+            {"tv": [1.0]},
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="calendar_responses must contain at least one authoritative period",
+        ):
+            ledger.reconcile_to_calendar_response({})
+
+    def test_reconciliation_fails_when_carryover_falls_outside_authoritative_window(self):
+        ledger = build_media_response_cohort_ledger(
+            [
+                {
+                    "source_period": "2025-W01",
+                    "channel": "tv",
+                    "spend": 1000.0,
+                    "total_response": 100.0,
+                }
+            ],
+            {"tv": [0.0, 1.0]},
+        )
+
+        # The authoritative window only covers W01. The full modeled response is
+        # carried into the next period and must not be silently dropped.
+        recon = ledger.reconcile_to_calendar_response({"2025-W01": 0.0})
+        assert recon["is_reconciled"] is False
+        assert recon["unmapped_response_total"] == pytest.approx(100.0)
+        assert recon["unmapped_cohort_ids"] == [ledger.cohorts[0].cohort_id]
+
+    def test_reconciliation_fails_when_period_order_contains_uncovered_response_period(self):
+        ledger = build_media_response_cohort_ledger(
+            [
+                {
+                    "source_period": "2025-W01",
+                    "channel": "tv",
+                    "spend": 1000.0,
+                    "total_response": 100.0,
+                }
+            ],
+            {"tv": [0.5, 0.5]},
+        )
+
+        recon = ledger.reconcile_to_calendar_response(
+            {"2025-W01": 50.0},
+            period_order=["2025-W01", "2025-W02"],
+        )
+        assert recon["is_reconciled"] is False
+        assert recon["unmapped_response_total"] == pytest.approx(50.0)
+        assert recon["uncovered_periods"] == ["2025-W02"]
+
+    def test_reconciliation_rejects_invalid_period_order(self):
+        ledger = build_media_response_cohort_ledger(
+            [
+                {
+                    "source_period": "2025-W01",
+                    "channel": "tv",
+                    "spend": 1000.0,
+                    "total_response": 100.0,
+                }
+            ],
+            {"tv": [1.0]},
+        )
+
+        with pytest.raises(ValueError, match="cannot be empty"):
+            ledger.reconcile_to_calendar_response(
+                {"2025-W01": 100.0},
+                period_order=[],
+            )
+
+        with pytest.raises(ValueError, match="duplicate periods"):
+            ledger.reconcile_to_calendar_response(
+                {"2025-W01": 100.0},
+                period_order=["2025-W01", "2025-W01"],
+            )
+
+        with pytest.raises(ValueError, match="missing authoritative period"):
+            ledger.reconcile_to_calendar_response(
+                {"2025-W01": 100.0},
+                period_order=["2025-W02"],
+            )
