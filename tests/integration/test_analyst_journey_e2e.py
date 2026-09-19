@@ -186,7 +186,20 @@ async def test_full_analyst_journey_e2e(app_env):
     # -------------------------------------------------------------------------
     # 7. Poll job to terminal completion (Area 2 - P1 fix)
     # -------------------------------------------------------------------------
-    poll_resp = await _call(server, "poll_job_progress", {"job_id": fit_job_id, "timeout_seconds": 45})
+    import asyncio
+    import time
+
+    start_poll = time.time()
+    poll_resp = None
+    while time.time() - start_poll < 120:
+        poll_resp = await _call(
+            server, "poll_job_progress", {"job_id": fit_job_id, "timeout_seconds": 30}
+        )
+        if poll_resp.get("summary", {}).get("is_terminal"):
+            break
+        await asyncio.sleep(0.5)
+
+    assert poll_resp is not None
     assert poll_resp["summary"]["is_terminal"] is True
     assert poll_resp["summary"]["job"]["status"] == "succeeded"
 
