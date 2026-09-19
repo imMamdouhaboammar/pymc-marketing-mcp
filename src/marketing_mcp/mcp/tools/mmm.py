@@ -8,7 +8,10 @@ from typing import Any
 from marketing_mcp.app import Application
 from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
-from marketing_mcp.jobs.operation_guard import ConcurrencyCancellationGuard
+from marketing_mcp.jobs.operation_guard import (
+    ConcurrencyCancellationGuard,
+    canonical_operation_identity,
+)
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.schemas.models import (
     ArchiveModelInput,
@@ -55,7 +58,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                     lambda cancel_ev: app.models.fit(config, principal, cancel_event=cancel_ev),
                     principal=principal,
                     details={"dataset_id": config.dataset_id},
-                    identity_key=f"fit_{config.dataset_id}",
+                    identity_key=canonical_operation_identity("fit_mmm", principal, config),
                 )
             else:
                 loop = asyncio.get_running_loop()
@@ -147,7 +150,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                     lambda cancel_ev: app.diagnostics.cross_validate(input, cancel_event=cancel_ev),
                     principal=principal,
                     details={"model_id": input.model_id},
-                    identity_key=f"cv_{input.model_id}",
+                    identity_key=canonical_operation_identity("cross_validate_mmm", principal, input),
                 )
             else:
                 loop = asyncio.get_running_loop()
@@ -189,7 +192,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                     lambda cancel_ev: app.diagnostics.prior_sensitivity(input, cancel_event=cancel_ev),
                     principal=principal,
                     details={"model_id": input.model_id},
-                    identity_key=f"prior_sens_{input.model_id}",
+                    identity_key=canonical_operation_identity("evaluate_prior_sensitivity", principal, input),
                 )
             else:
                 loop = asyncio.get_running_loop()

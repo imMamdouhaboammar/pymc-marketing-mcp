@@ -9,7 +9,10 @@ import threading
 import pytest
 
 from marketing_mcp.errors import DomainError
-from marketing_mcp.jobs.operation_guard import ConcurrencyCancellationGuard
+from marketing_mcp.jobs.operation_guard import (
+    ConcurrencyCancellationGuard,
+    canonical_operation_identity,
+)
 from marketing_mcp.schemas.models import FitMMMInput
 from marketing_mcp.security.principal import Principal
 from marketing_mcp.services.modeling_service import ModelingService
@@ -234,5 +237,140 @@ def test_decision_service_aborts_when_cancel_event_set(tmp_path):
             cancel_event=cancel_event,
         )
     assert exc3.value.code == "OPERATION_CANCELLED"
+
+
+def test_operation_guard_atomic_barrier_duplicate_admission():
+    """Verify atomic admission under concurrency with threading.Barrier.
+
+    Two concurrent threads arriving at the exact same instant attempting to register
+    the same identity key must be strictly serialized: exactly one wins and is admitted,
+    and the other is rejected with OPERATION_ALREADY_RUNNING.
+    """
+    guard = ConcurrencyCancellationGuard()
+    barrier = threading.Barrier(2)
+    results = []
+    errors = []
+
+    def attempt_register(thread_idx: int):
+        try:
+            barrier.wait(timeout=5.0)
+            op = guard.register_operation(
+                op_type="fit_mmm",
+                identity_key="barrier-collision-key",
+                details={"thread": thread_idx},
+            )
+            results.append(op)
+        except Exception as e:
+            errors.append(e)
+
+    t1 = threading.Thread(target=attempt_register, args=(1,))
+    t2 = threading.Thread(target=attempt_register, args=(2,))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert len(results) == 1, f"Expected exactly 1 admitted operation, got {len(results)}"
+    assert len(errors) == 1, f"Expected exactly 1 rejected operation, got {len(errors)}"
+    assert isinstance(errors[0], DomainError)
+    assert errors[0].code == "OPERATION_ALREADY_RUNNING"
+    assert "barrier-collision-key" in str(errors[0])
+
+    # After cleanup, new registration succeeds
+    guard.unregister_operation(results[0].op_id)
+    assert len(guard.list_active()) == 0
+
+    new_op = guard.register_operation(
+        op_type="fit_mmm",
+        identity_key="barrier-collision-key",
+    )
+    assert new_op is not None
+    guard.unregister_operation(new_op.op_id)
+
+
+def test_canonical_operation_identity_contract():
+    """Verify canonical_operation_identity semantic hashing and scoping guarantees."""
+    principal_a1 = Principal(
+        subject="alice",
+        tenant_id="tenant-1",
+        scopes=frozenset({"marketing:model"}),
+        auth_type="api_key",
+    )
+    principal_a2 = Principal(
+        subject="alice",
+        tenant_id="tenant-1",
+        scopes=frozenset({"marketing:model"}),
+        auth_type="api_key",
+    )
+    principal_bob = Principal(
+        subject="bob",
+        tenant_id="tenant-1",
+        scopes=frozenset({"marketing:model"}),
+        auth_type="api_key",
+    )
+    principal_t2 = Principal(
+        subject="alice",
+        tenant_id="tenant-2",
+        scopes=frozenset({"marketing:model"}),
+        auth_type="api_key",
+    )
+
+    payload_dict_1 = {
+        "dataset_id": "ds_100",
+        "date_column": "date",
+        "target_column": "revenue",
+        "channel_columns": ["tv", "radio"],
+    }
+    payload_dict_2 = {
+        "channel_columns": ["tv", "radio"],
+        "target_column": "revenue",
+        "date_column": "date",
+        "dataset_id": "ds_100",
+    }
+    payload_model = FitMMMInput(
+        dataset_id="ds_100",
+        date_column="date",
+        target_column="revenue",
+        channel_columns=["tv", "radio"],
+    )
+
+    # 1. Determinism and format
+    key1 = canonical_operation_identity("fit_mmm", principal_a1, payload_dict_1)
+    assert key1.startswith("op_ident_fit_mmm_")
+    assert len(key1) == len("op_ident_fit_mmm_") + 16
+
+    # 2. Key ordering invariance in dict
+    key2 = canonical_operation_identity("fit_mmm", principal_a1, payload_dict_2)
+    assert key1 == key2
+
+    # 3. Repeatability and principal equivalence
+    key_model = canonical_operation_identity("fit_mmm", principal_a1, payload_model)
+    key_model_repeat = canonical_operation_identity("fit_mmm", principal_a1, payload_model)
+    assert key_model == key_model_repeat
+    assert key_model == canonical_operation_identity("fit_mmm", principal_a2, payload_model)
+
+    # 4. Multi-tenant isolation: different tenant_id yields different identity
+    key_t2 = canonical_operation_identity("fit_mmm", principal_t2, payload_model)
+    assert key_model != key_t2
+
+    # 5. User/owner isolation: different subject yields different identity
+    key_bob = canonical_operation_identity("fit_mmm", principal_bob, payload_model)
+    assert key_model != key_bob
+
+    # 6. Semantic change: different configuration yields different identity
+    payload_modified = FitMMMInput(
+        dataset_id="ds_100",
+        date_column="date",
+        target_column="revenue",
+        channel_columns=["tv", "social"],
+    )
+    key_modified = canonical_operation_identity("fit_mmm", principal_a1, payload_modified)
+    assert key_model != key_modified
+
+    # 7. Op type change yields different identity
+    key_other_op = canonical_operation_identity("predict_mmm", principal_a1, payload_model)
+    assert key_model != key_other_op
+
+
 
 

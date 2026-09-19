@@ -404,3 +404,39 @@ def test_process_worker_cancellation_propagation(tmp_path):
     assert final_job.status == JobStatus.CANCELLED
 
 
+def test_worker_handler_type_error_executed_exactly_once(tmp_path) -> None:
+    """Verify that an internal TypeError inside a 2-arg handler does not re-invoke the handler."""
+    db_path = tmp_path / "type_err_worker.db"
+    repo = _repo(db_path)
+    repo.create_job(
+        JobRecord(
+            job_id="job-type-err",
+            job_type="test_type_err",
+            status=JobStatus.QUEUED,
+            payload={},
+        )
+    )
+
+    invocation_count = 0
+
+    def two_arg_handler(job, cancel_event=None):
+        nonlocal invocation_count
+        invocation_count += 1
+        # Intentionally raise an internal TypeError
+        raise TypeError("internal calculation invalid type error")
+
+    worker = ProcessJobWorker(
+        repo,
+        handlers={"test_type_err": two_arg_handler},
+        worker_id="worker-type-err",
+    )
+
+    did_work = worker.execute_next_job()
+    assert did_work is True
+    assert invocation_count == 1, f"Expected exactly 1 invocation, got {invocation_count}"
+
+    final_job = repo.get_job("job-type-err")
+    assert final_job.status == JobStatus.FAILED
+    assert "internal calculation invalid type error" in str(final_job.error)
+
+

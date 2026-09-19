@@ -125,13 +125,20 @@ class ProcessJobWorker:
         try:
             import inspect
             sig = inspect.signature(handler)
-            if "cancel_event" in sig.parameters:
+            params = list(sig.parameters.values())
+            has_cancel_kw = "cancel_event" in sig.parameters
+            has_two_pos = len([
+                p for p in params
+                if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            ]) >= 2
+            has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params)
+
+            if has_cancel_kw:
                 result = handler(job, cancel_event=cancel_event)
+            elif has_two_pos or has_varargs:
+                result = handler(job, cancel_event)
             else:
-                try:
-                    result = handler(job, cancel_event)
-                except TypeError:
-                    result = handler(job)
+                result = handler(job)
         except Exception as exc:
             self._stop_heartbeat(stop, heartbeat)
             logger.exception("Worker execution failed for job %s", job.job_id)

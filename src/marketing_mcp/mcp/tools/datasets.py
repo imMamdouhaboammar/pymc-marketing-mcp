@@ -15,7 +15,10 @@ from pydantic import Field
 from marketing_mcp.app import Application
 from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
-from marketing_mcp.jobs.operation_guard import ConcurrencyCancellationGuard
+from marketing_mcp.jobs.operation_guard import (
+    ConcurrencyCancellationGuard,
+    canonical_operation_identity,
+)
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.security import safe_ingest_path
 from marketing_mcp.security.ownership import authorize_dataset
@@ -365,7 +368,19 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                     ),
                     principal=principal,
                     details={"dataset_id": dataset_id},
-                    identity_key=f"transform_{dataset_id}",
+                    identity_key=canonical_operation_identity(
+                        "transform_ad_export",
+                        principal,
+                        {
+                            "dataset_id": dataset_id,
+                            "date_column": date_column,
+                            "channel_column": channel_column,
+                            "spend_column": spend_column,
+                            "target_columns": target_columns,
+                            "dimension_columns": dimension_columns,
+                            "frequency": frequency,
+                        },
+                    ),
                 )
             else:
                 loop = asyncio.get_running_loop()

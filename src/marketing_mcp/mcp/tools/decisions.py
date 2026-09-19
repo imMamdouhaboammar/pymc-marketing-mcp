@@ -8,7 +8,10 @@ from typing import Any
 from marketing_mcp.app import Application
 from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
-from marketing_mcp.jobs.operation_guard import ConcurrencyCancellationGuard
+from marketing_mcp.jobs.operation_guard import (
+    ConcurrencyCancellationGuard,
+    canonical_operation_identity,
+)
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.schemas.models import (
     BudgetOptimizationInput,
@@ -134,7 +137,7 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
                 lambda cancel_ev: app.decisions.optimize(config, cancel_event=cancel_ev),
                 principal=principal,
                 details={"model_id": config.model_id},
-                identity_key=f"opt_{config.model_id}",
+                identity_key=canonical_operation_identity("optimize_budget", principal, config),
             )
         else:
             loop = asyncio.get_running_loop()
@@ -194,7 +197,7 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
                 lambda cancel_ev: app.decisions.optimize_flighting(config, cancel_event=cancel_ev),
                 principal=principal,
                 details={"model_id": config.model_id},
-                identity_key=f"flighting_{config.model_id}",
+                identity_key=canonical_operation_identity("optimize_flighting", principal, config),
             )
         else:
             loop = asyncio.get_running_loop()
