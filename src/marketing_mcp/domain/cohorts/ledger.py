@@ -1,4 +1,9 @@
-"""Response Cohort Ledger builder and analysis service (T7)."""
+"""Response Cohort Ledger builder and analysis service (T7 & RFC 003).
+
+Provides:
+- Customer acquisition cohort building from transaction microdata or summary tables.
+- Media source-period response cohort decomposition using fitted adstock weights.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +14,12 @@ import pandas as pd
 
 from marketing_mcp.domain.cohorts.contracts import (
     CohortRecord,
+    MediaResponseCohortLedger,
+    MediaResponseCohortRecord,
     PeriodType,
     ResponseCohortLedger,
 )
+from marketing_mcp.domain.decisions.financial import FinancialAssumptions
 
 
 def build_cohort_ledger(
@@ -22,7 +30,7 @@ def build_cohort_ledger(
     target_metric: str = "revenue",
     period_type: PeriodType = "weekly",
 ) -> ResponseCohortLedger:
-    """Construct a ResponseCohortLedger from cohort aggregation records.
+    """Construct a CustomerAcquisitionCohortLedger from customer cohort records.
 
     Each entry in cohort_data should specify:
     - acquisition_period (str)
@@ -116,10 +124,94 @@ def extract_cohorts_from_transactions(
             rev = float(c_df[c_df["tx_period"] == p][value_col].sum())
             p_revs.append(round(rev, 2))
 
-        cohorts_data.append({
-            "acquisition_period": c_p,
-            "acquired_customers": n_cust,
-            "period_revenues": p_revs,
-        })
+        cohorts_data.append(
+            {
+                "acquisition_period": c_p,
+                "acquired_customers": n_cust,
+                "period_revenues": p_revs,
+            }
+        )
 
     return build_cohort_ledger(cohorts_data, tenant_id=tenant_id)
+
+
+def build_media_response_cohort_ledger(
+    spend_records: list[dict[str, Any]],
+    adstock_weights: dict[str, list[float]],
+    channel_response_rates: dict[str, float] | None = None,
+    financial: FinancialAssumptions | None = None,
+    ledger_id: str | None = None,
+    tenant_id: str = "default",
+    project_id: str | None = None,
+    model_id: str | None = None,
+    target_metric: str = "response",
+    period_type: PeriodType = "weekly",
+) -> MediaResponseCohortLedger:
+    """Construct a MediaResponseCohortLedger decomposing spend into carryover response cohorts (RFC 003).
+
+    Parameters
+    ----------
+    spend_records:
+        List of dicts with 'source_period', 'channel', 'spend', and optional 'total_response'.
+    adstock_weights:
+        Mapping of channel name to list of lag weights [w_0, w_1, ..., w_L] from fitted model.
+    channel_response_rates:
+        Optional mapping of channel to incremental response per dollar of spend.
+    financial:
+        Optional FinancialAssumptions for cohort valuation (gross revenue, net profit, ROAS, NPV).
+    """
+    lid = ledger_id or f"media_ledger_{uuid.uuid4().hex[:10]}"
+    cohorts: list[MediaResponseCohortRecord] = []
+
+    for item in spend_records:
+        src = str(item["source_period"])
+        ch = str(item["channel"])
+        spend = float(item.get("spend", 0.0))
+
+        if "total_response" in item:
+            tot_resp = float(item["total_response"])
+        elif channel_response_rates and ch in channel_response_rates:
+            tot_resp = spend * float(channel_response_rates[ch])
+        else:
+            tot_resp = spend
+
+        raw_weights = adstock_weights.get(ch, [1.0])
+        total_w = sum(raw_weights) or 1.0
+        norm_weights = [float(w) / total_w for w in raw_weights]
+
+        immediate = round(tot_resp * norm_weights[0], 4)
+        carryovers = [round(tot_resp * w, 4) for w in norm_weights[1:]]
+        period_resps = [immediate, *carryovers]
+
+        cid = f"media_{src}_{ch}"
+        record = MediaResponseCohortRecord(
+            cohort_id=cid,
+            source_period=src,
+            channel=ch,
+            spend=spend,
+            immediate_response=immediate,
+            carryover_responses=carryovers,
+            period_responses=period_resps,
+            cumulative_response=round(tot_resp, 4),
+            adstock_decay_weights=norm_weights,
+            provenance={"source": "media_spend_adstock_decomposition"},
+        )
+
+        if financial is not None:
+            record.evaluate_financials(
+                revenue_per_outcome=financial.revenue_per_outcome,
+                margin_rate=financial.effective_margin_rate(),
+                discount_rate=financial.discount_rate,
+            )
+
+        cohorts.append(record)
+
+    return MediaResponseCohortLedger(
+        ledger_id=lid,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        target_metric=target_metric,
+        period_type=period_type,
+        cohorts=cohorts,
+    )
