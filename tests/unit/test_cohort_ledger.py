@@ -548,3 +548,86 @@ class TestMediaResponseCohortLedger:
                 {"2025-W01": 100.0},
                 period_order=["2025-W02"],
             )
+
+
+def test_media_record_rejects_hidden_cumulative_response_without_period_decomposition():
+    with pytest.raises(
+        ValidationError,
+        match="cumulative_response cannot be positive without a period response decomposition",
+    ):
+        MediaResponseCohortRecord(
+            cohort_id="hidden-mass",
+            source_period="2025-W01",
+            channel="tv",
+            spend=100.0,
+            cumulative_response=50.0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("period_type", "calendar_responses", "period_order"),
+    [
+        ("weekly", {"2025-W01": 50.0, "2025-W03": 50.0}, None),
+        (
+            "weekly",
+            {"2025-W01": 50.0, "2025-W02": 50.0},
+            ["2025-W02", "2025-W01"],
+        ),
+        ("daily", {"2025-01-01": 50.0, "2025-01-03": 50.0}, None),
+        ("monthly", {"2025-01": 50.0, "2025-03": 50.0}, None),
+    ],
+)
+def test_reconciliation_rejects_gapped_or_out_of_order_period_sequences(
+    period_type, calendar_responses, period_order
+):
+    source_period = next(iter(calendar_responses))
+    ledger = MediaResponseCohortLedger(
+        ledger_id="ledger-period-order",
+        period_type=period_type,
+        cohorts=[
+            MediaResponseCohortRecord(
+                cohort_id="cohort-period-order",
+                source_period=source_period,
+                channel="tv",
+                spend=100.0,
+                period_responses=[50.0, 50.0],
+            )
+        ],
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="period_order must be chronological and contiguous",
+    ):
+        ledger.reconcile_to_calendar_response(
+            calendar_responses,
+            period_order=period_order,
+        )
+
+
+@pytest.mark.parametrize(
+    ("period_type", "calendar_responses"),
+    [
+        ("weekly", {"2025-W01": 50.0, "2025-W02": 50.0}),
+        ("daily", {"2025-01-01": 50.0, "2025-01-02": 50.0}),
+        ("monthly", {"2025-01": 50.0, "2025-02": 50.0}),
+    ],
+)
+def test_reconciliation_accepts_contiguous_period_sequences(period_type, calendar_responses):
+    source_period = next(iter(calendar_responses))
+    ledger = MediaResponseCohortLedger(
+        ledger_id="ledger-contiguous-period-order",
+        period_type=period_type,
+        cohorts=[
+            MediaResponseCohortRecord(
+                cohort_id="cohort-contiguous-period-order",
+                source_period=source_period,
+                channel="tv",
+                spend=100.0,
+                period_responses=[50.0, 50.0],
+            )
+        ],
+    )
+
+    reconciliation = ledger.reconcile_to_calendar_response(calendar_responses)
+    assert reconciliation["is_reconciled"] is True
