@@ -2,6 +2,15 @@
 
 Decision-safe MCP interface over PyMC-Marketing for Bayesian marketing science
 
+> 🚨 **UNBREAKABLE OPERATIONAL INVARIANT: SOLE ACTIVE REPOSITORY LAW**
+> 
+> **THIS IS THE ONLY ACTIVE REPOSITORY LOCALLY AND REMOTELY ACROSS THE PROJECT:**
+> 👉 **`https://github.com/imMamdouhaboammar/pymc-marketing-mcp`**
+> 
+> - Every git commit, PR, and remote push MUST be executed within this repository.
+> - Pushing to any other repository (such as `pymc-marketing-platform`) is strictly forbidden.
+> - Always verify `git remote -v` points to `imMamdouhaboammar/pymc-marketing-mcp.git`.
+
 Supported runtime: Python `>=3.12,<3.14` (3.12 and 3.13). The Ruff `py311` target is a lint/parser compatibility setting, not the declared runtime support floor
 
 ## Read before changing code
