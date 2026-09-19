@@ -45,6 +45,7 @@ Every engineering agent and contributor working on this repository must preserve
 31. **Semantic DOM & WCAG 2.1 AA Primitives in Analytical Dashboards**: All frontend UI components must enforce WCAG 2.1 AA: explicit `scope` on table headers, `htmlFor` on labels, accessible names for external links, and semantic button/keyboard handling on interactive controls.
 32. **Programmatic Branch Protection with Exact CI Status Checks**: Default branches must programmatically enforce branch protection with strict status checks matching exact CI job names before declaring production readiness.
 33. **Statistical Test Sampler Step-Size Calibration Across CPU Microarchitectures**: Statistical test fixtures with reduced warm-up/draw counts on high-dimensional posteriors must set `target_accept >= 0.97` to prevent platform-specific CPU divergence flakiness.
+34. **Sole Active Repository Law**: The ONLY active repository locally and remotely across this entire project is `https://github.com/imMamdouhaboammar/pymc-marketing-mcp`. All other repositories, specification directories, and legacy workspaces are read-only donors or frozen specs. Every git commit, PR, and remote push MUST be executed strictly inside `pymc-marketing-mcp/` targeting `imMamdouhaboammar/pymc-marketing-mcp.git`. Pushing to any other repository is strictly prohibited (`WS-ACT-001`).
 
 ---
 
