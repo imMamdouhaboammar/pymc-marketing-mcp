@@ -155,4 +155,17 @@ Before declaring any bug resolved or submitting code, every agent must follow th
 | `tests/benchmarks/benchmark_engine.py` | Multi-scenario native vs Python engine throughput benchmark | 7 scenarios |
 | `tests/unit/test_request_safety.py` | Safety middleware rate limiting and configurable threshold verification | 5 passed |
 | `tests/unit/test_native_parity.py` | Parity verification between native Rust and Python fallback engines | 8 passed |
+| `tests/statistical/test_multidimensional_pymc_sampling.py` | High-dimensional MCMC step-size calibration (target_accept >= 0.97, 0 divergences) | 1 passed |
+| `tests/release/test_candidate_provenance.py` | Branch protection, candidate SHA binding, and release truth gates | 5 passed |
+| `dashboard/ (Insight Code a11y)` | WCAG 2.1 AA 47-rule automated accessibility audit suite | 47 passed (Grade A) |
+
+---
+
+## 6. Newly Enforced Testing Invariants
+
+1. **MCMC Sampler Calibration in Tests**: Truncated MCMC test fixtures on high-dimensional posteriors must set `target_accept >= 0.97` with deterministic seeds to prevent platform-specific floating-point divergence flakiness across CPU microarchitectures (`MCMC-001`).
+2. **Container Lint Integrity (Hadolint / Super-Linter)**: Any PR touching Dockerfile or deployment scripts must pass Hadolint (`DL4006` pipefail, `DL3008` package pinning). Never rely on unverified inline shell pipes (`LINT-001`).
+3. **Frontend Accessibility (WCAG 2.1 AA)**: All dashboard and web components must pass automated accessibility scans: explicit table `scope="col"`, `htmlFor` label bindings, and keyboard listener parity for interactive elements (`A11Y-001`).
+4. **Programmatic Branch Protection**: Before declaring production readiness, verify that `main` enforces exact required CI status check contexts (`["Unit & Contract Tests", "MCP Protocol & Integration Tests", "Release Truth Gates", "Lint, Types & Docs Drift"]`) with strict rebase via the GitHub REST API (`PROT-001`).
+
 

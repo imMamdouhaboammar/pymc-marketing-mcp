@@ -10,7 +10,7 @@ This directory is the durable engineering memory of `pymc-marketing-mcp`. It rec
 
 ## Rules We Now Enforce
 
-Every engineering agent and contributor working on this repository must preserve these 10 non-negotiable invariants:
+Every engineering agent and contributor working on this repository must preserve these non-negotiable invariants:
 
 1. **One Model Registry**: Model identity and resolution must have one canonical implementation (`ModelRegistry.resolve`) that normalizes prefixes, UUIDs, and URI schemes, and strictly validates model type invariants.
 2. **One Artifact Readiness Contract**: Never expose a model or job as `completed` before physical artifact publication, checksum verification, and registry indexation are fully committed (`serialize -> validate -> atomic move -> register -> expose`).
@@ -32,6 +32,19 @@ Every engineering agent and contributor working on this repository must preserve
 18. **Release Integrity Enforced in CI, Not SaaS Settings**: Release integrity must be mathematically guaranteed within repository CI workflows (via candidate commit SHA equality and digest verification) rather than relying on external SaaS administrative settings that may be restricted by plan or visibility.
 19. **Explicit Provenance Allowlisting**: Release evidence, telemetry, and audit logs must strictly enforce an explicit allowlist (`_SAFE_ENV_KEYS`) of safe variables. Ambient environment dumps with denylists are strictly prohibited.
 20. **Single-Build Promotion**: Release artifacts (wheel, sdist, containers) must be built once from a verified immutable commit SHA, tested in place, and promoted by cryptographic hash without rebuilding.
+21. **Active Git Remote Verification in Composite Workspaces**: Never infer a Git remote target from ambient root documentation (`state.toon`, parent README) when working in composite or nested workspaces. Always resolve and verify `git remote -v`, active branch, and open PR status in the project directory before staging, committing, or pushing (`WS-REM-001`).
+22. **Pre-Push Quality Gate Batching & Timeout Isolation**: Do not submit large monolithic batches of multi-file findings into automated gate fixes (`no-mistakes axi respond --action fix`). Remediate straightforward manifest, naming, and packaging findings locally before invoking quality gates, and partition remaining automated fixes into single-domain batches (`GATE-RUN-001`).
+23. **Package Manifest Boundary for Review Path Filters**: Code review and static analysis path filters (`.coderabbit.yaml`, Sonar, linter scopes) must be derived directly from the active project's packaging manifest (`pyproject.toml`, `Cargo.toml`, `package.json`), never from generic templates that omit primary source trees (`src/**`) (`CFG-PATH-001`).
+24. **Resource Identity Binding in Recovery**: Recovery authorization must strictly bind to the concrete resource instance (`job_id`) and originating tool family; completing recovery or executing usable continuations must reset lifecycle flags to prevent stale context leakage.
+25. **Parameter-Kind Worker Introspection**: Never catch `TypeError` at the call site to detect function arity; always inspect `inspect.signature` parameter kinds (`POSITIONAL_ONLY`, `KEYWORD_ONLY`, `VAR_POSITIONAL`) before invocation to guarantee exactly-once execution.
+26. **Atomic Resource Admission**: In-flight operation admission must be atomic within a single lock acquisition; never release a lock between checking for existing execution and registering new execution. Direct-operation identities must be scoped by tenant, principal, and canonical payload.
+27. **Evaluator Schema Fidelity**: Evaluation trace fixtures and validator assertions must strictly conform to public API contracts; never inject synthetic helper fields into tool argument payloads that the live server rejects.
+28. **Deterministic Testing for Governance Gates**: Never rely on stochastic sampling to trigger safety and decision gates in contract tests; always verify governance policies against deterministic injected failure payloads.
+29. **Non-Interactive Credential Helpers in Automated Environments**: Automated agents and headless subshells must configure token-based, non-interactive credential helpers locally (`!gh auth git-credential`), clearing desktop GUI helpers (`osxkeychain`) to prevent silent subshell execution hangs.
+30. **Container Shell Pipefail Safety & Container Lint Standards**: Automated AI security bot PRs must never be merged without full container lint (Hadolint/Super-Linter) verification; lockfiles (`uv.lock`, `Cargo.lock`) govern integrity rather than unpinned inline shell pipes.
+31. **Semantic DOM & WCAG 2.1 AA Primitives in Analytical Dashboards**: All frontend UI components must enforce WCAG 2.1 AA: explicit `scope` on table headers, `htmlFor` on labels, accessible names for external links, and semantic button/keyboard handling on interactive controls.
+32. **Programmatic Branch Protection with Exact CI Status Checks**: Default branches must programmatically enforce branch protection with strict status checks matching exact CI job names before declaring production readiness.
+33. **Statistical Test Sampler Step-Size Calibration Across CPU Microarchitectures**: Statistical test fixtures with reduced warm-up/draw counts on high-dimensional posteriors must set `target_accept >= 0.97` to prevent platform-specific CPU divergence flakiness.
 
 ---
 
@@ -49,16 +62,6 @@ Every engineering agent and contributor working on this repository must preserve
 | [statistical-workflows.md](./statistical-workflows.md) | Workflow sequencing, LOO/WAIC prerequisites, capability manifests | `MODEL-SEL-001` |
 | [api-contracts.md](./api-contracts.md) | Normalized error taxonomy, traceback sanitization, registered `next_actions` | `API-ERR-001`, `API-NEXT-001` |
 | [testing-and-verification.md](./testing-and-verification.md) | Red-green verification protocol, adversarial fixtures, anti-pattern catalog | `TEST-001` |
-| [35-fictional-crypto-acceleration-and-streaming-claims.md](./35-fictional-crypto-acceleration-and-streaming-claims.md) | Verified runtime claims, hardware acceleration telemetry | `CRYPTO-001` |
-| [36-rate-limiter-choke-on-high-throughput-benchmarks.md](./36-rate-limiter-choke-on-high-throughput-benchmarks.md) | Configurable ingress throttling, benchmark safety isolation | `RATE-001` |
-| [37-macos-pyo3-linker-symbol-resolution-and-virtualenv.md](./37-macos-pyo3-linker-symbol-resolution-and-virtualenv.md) | Darwin PyO3 symbol resolution, dynamic lookup, toolchain paths | `LINK-001` |
-| [38-dual-parse-protocol-boundary-and-typed-contracts.md](./38-dual-parse-protocol-boundary-and-typed-contracts.md) | Dual-parsing boundary truth, typed interaction envelopes | `BOUND-001` |
-| [39-statistical-test-assertion-drift-and-budget-conservation.md](./39-statistical-test-assertion-drift-and-budget-conservation.md) | Dynamic budget bounds assertions, linter F841 enforcement | `TEST-002` |
-| [40-multi-virtualenv-submodule-import-collision.md](./40-multi-virtualenv-submodule-import-collision.md) | Submodule import isolation, monorepo virtualenv dependency synchronization | `ENV-001` |
-| [41-phantom-open-issue-accumulation-vs-branch-landing-drift.md](./41-phantom-open-issue-accumulation-vs-branch-landing-drift.md) | Issue triage governance, landing drift prevention, verified issue closure | `GOV-001` |
-| [42-private-repo-branch-protection-api-entitlement-boundary.md](./42-private-repo-branch-protection-api-entitlement-boundary.md) | SaaS entitlement boundary, programmatic CI candidate SHA enforcement | `ENT-001` |
-| [43-release-evidence-environment-allowlist-hygiene.md](./43-release-evidence-environment-allowlist-hygiene.md) | Provenance allowlisting vs dangerous ambient environment denylists | `SEC-ENV-001` |
-| [44-exact-candidate-sha-binding-and-single-build-promotion.md](./44-exact-candidate-sha-binding-and-single-build-promotion.md) | Supply-chain release integrity, single-build digest promotion | `REL-SHA-001` |
 | [lessons-index.md](./lessons-index.md) | Master lookup table mapping lessons, rules, systems, and regression tests | Master Cross-Reference |
 
 ---
@@ -70,16 +73,19 @@ Every failure lesson in this directory follows a structured engineering post-mor
 ```markdown
 ## [Failure Identifier]: [Descriptive Name]
 
+### Context
+Where this class of problem appeared.
+
 ### What happened
 Short factual description.
 
-### Why it mattered
+### Why it mattered / Impact
 Correctness, business, reliability, statistical, or operational impact.
 
 ### Observable symptom
 What was actually observed (errors, unexpected outputs, logs).
 
-### Initial assumption
+### Initial assumption / Incorrect assumption
 What was originally believed or what the implementation implicitly assumed.
 
 ### Root cause
@@ -100,8 +106,14 @@ A concise, binding engineering invariant.
 ### Reusable lesson
 Where else this pattern or principle applies across the codebase.
 
-### Related failures
-Cross-links to related failure lessons.
+### Related code
+Stable module, symbol, or file references.
+
+### Related tests
+Relevant regression, contract, or statistical tests.
+
+### Status
+One of: Resolved, Partially mitigated, Unresolved, Superseded.
 ```
 
 ---
@@ -117,9 +129,9 @@ Documents in this directory must be updated when:
 
 ---
 
-## Historical Post-Mortem Archive (Lessons 01–39)
+## Historical Post-Mortem Archive (Lessons 01–61)
 
-Detailed case studies from earlier container deployment and Cloud Run hardening sessions remain indexed in [lessons-index.md](./lessons-index.md) and archived below:
+Detailed case studies from earlier container deployment, hardening, and multi-repo sessions remain indexed in [lessons-index.md](./lessons-index.md) and archived below:
 
 * [01: Fail-Closed Anonymous HTTP Binding](./01-fail-closed-anonymous-http-binding.md)
 * [02: FastMCP Async Worker Context Decoupling](./02-fastmcp-async-worker-context-decoupling.md)
@@ -160,3 +172,25 @@ Detailed case studies from earlier container deployment and Cloud Run hardening 
 * [37: macOS PyO3 Linker Symbol Resolution & Virtualenv Incompatibility](./37-macos-pyo3-linker-symbol-resolution-and-virtualenv.md)
 * [38: Dual-Parse Protocol Boundary & Typed Interaction Contracts](./38-dual-parse-protocol-boundary-and-typed-contracts.md)
 * [39: Statistical Test Assertion Drift & Budget Conservation Invariant](./39-statistical-test-assertion-drift-and-budget-conservation.md)
+* [40: Multi-Virtualenv Submodule Import Collision](./40-multi-virtualenv-submodule-import-collision.md)
+* [41: Phantom Open Issue Accumulation vs Branch Landing Drift](./41-phantom-open-issue-accumulation-vs-branch-landing-drift.md)
+* [42: Private Repo Branch Protection API Entitlement Boundary](./42-private-repo-branch-protection-api-entitlement-boundary.md)
+* [43: Release Evidence Environment Allowlist Hygiene](./43-release-evidence-environment-allowlist-hygiene.md)
+* [44: Exact Candidate SHA Binding & Single-Build Promotion](./44-exact-candidate-sha-binding-and-single-build-promotion.md)
+* [45: Multidimensional Allocation Normalization in Decision Service](./45-multidimensional-allocation-normalization.md)
+* [46: Bogus Provenance Acceptance on Uncalibrated Confidence](./46-bogus-provenance-acceptance-on-uncalibrated-confidence.md)
+* [47: Conflation of Media Response & Customer Acquisition Cohorts](./47-conflation-of-media-response-and-customer-acquisition-cohorts.md)
+* [48: Registry Negative Guards & RFC-Gated Objectives](./48-registry-negative-guards-and-rfc-gated-objectives.md)
+* [49: Boundary Overlap in Text Replacement Code Modifications](./49-boundary-overlap-in-text-replacement-code-modifications.md)
+* [50: Pre-Push Quality Gate Bounded Timeout & Remediated Batch Sizing](./50-pre-push-quality-gate-bounded-execution-drift.md)
+* [51: Resource-Bound Recovery and Disconnect Lifecycle Reset](./51-resource-bound-recovery-and-lifecycle-reset.md)
+* [52: Composite Workspace Git Remote Misdirection](./52-composite-workspace-git-remote-misdirection.md)
+* [53: Positional Parameter Inspection and Exactly-Once Worker Dispatch](./53-positional-parameter-inspection-and-worker-dispatch.md)
+* [54: Atomic Direct-Operation Admission and Scoped Canonical Identities](./54-atomic-operation-admission-and-canonical-scoping.md)
+* [55: Evaluator Schema Fidelity and Public Tool Contract Alignment](./55-evaluator-schema-fidelity-and-contract-alignment.md)
+* [56: Deterministic Contract Injection for Stochastic Failure Gates](./56-deterministic-contract-injection-for-stochastic-failure-gates.md)
+* [57: Desktop GUI Keychain Blocks in Headless/Agentic CI Subshells](./57-desktop-keychain-hang-in-headless-agentic-subshells.md)
+* [58: Automated AI Security Patches Breaking Container Linting Standards (Hadolint / Super-Linter)](./58-automated-security-patch-container-linter-compliance.md)
+* [59: Frontend Accessibility & WCAG 2.1 AA Compliance in Analytical Dashboards](./59-frontend-accessibility-wcag-compliance-in-analytical-dashboards.md)
+* [60: Programmatic Branch Protection & Exact CI Status Check Binding](./60-programmatic-branch-protection-ci-status-check-binding.md)
+* [61: MCMC Posterior Sampler Step-Size Calibration Across CPU Architectures](./61-mcmc-posterior-sampler-step-size-calibration-across-cpu-architectures.md)
