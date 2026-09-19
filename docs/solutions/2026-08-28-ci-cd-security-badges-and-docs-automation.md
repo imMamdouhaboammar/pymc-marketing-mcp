@@ -19,6 +19,8 @@ tags:
 
 This document codifies the technical findings, implementation patterns, security hygiene practices, and CI/CD workflow designs from configuring **OWASP Noir** attack-surface mapping, **Dynamic Shields.io Badges** (via Gist automation), and **Markdown Docs** static site deployment for the `pymc-marketing-mcp` repository.
 
+> **Current-state note (2026-09-19):** this file is a historical implementation record. The dynamic-badge workflow and GitHub Pages deployment were later retired during CI cleanup because they were non-essential/noisy. The active documentation workflow now performs documentation drift validation only; it does not publish to GitHub Pages.
+
 ---
 
 ## 1. Full Session Chronology (A to Z)
