@@ -15,8 +15,8 @@ This document provides the configuration required for **[app.coderabbit.ai/code/
 
 ## 2. Toolchains
 
-* **Python**: `3.12`
-* **Rust**: `1.86` (or `1.85`)
+* **Python**: `3.12` baseline; project support range is `>=3.12,<3.14`
+* **Rust**: stable toolchain, matching the repository Docker build
 
 ---
 
@@ -26,20 +26,20 @@ This document provides the configuration required for **[app.coderabbit.ai/code/
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "==> [1/3] Setting up Python 3.12 virtualenv..."
+echo "==> [1/3] Setting up Python 3.12 environment..."
+python3.12 --version
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip setuptools wheel
+python -m pip install --upgrade pip setuptools wheel uv
 
-echo "==> [2/3] Installing project dependencies..."
-pip install -e '.[dev]' || pip install -r requirements.txt || true
+echo "==> [2/3] Installing locked project dependencies..."
+uv sync --frozen --extra dev
 
-echo "==> [3/3] Checking Rust acceleration crates..."
-if [ -d "crates" ]; then
-  cargo check --workspace || true
-fi
+echo "==> [3/3] Verifying Rust acceleration crates..."
+cargo --version
+cargo check --workspace
 
-echo "==> Environment ready!"
+echo "==> Environment ready: dependency installation and Rust checks passed."
 ```
 
 ---
@@ -54,7 +54,7 @@ This repository is the PyMC Marketing MCP Server (`pymc-marketing-mcp`).
    pytest tests/unit tests/contract -v
 
 2. Invariants:
-   - Python 3.12 runtime.
-   - Enforce server-side diagnostic decision gates (`max_rhat <= 1.05`, zero divergences, `min_bfmi >= 0.2`).
-   - Every MCP tool and storage access must be tenant-scoped.
+   - Preserve compatibility with the declared Python range `>=3.12,<3.14`, with Python 3.12 as the CI baseline.
+   - Use the repository decision-gate implementation as the source of truth: block when `max_rhat > 1.05`, `divergences > 5`, or `min_bfmi < 0.20`; intermediate bands are caution.
+   - Preserve tenant/ownership boundaries for tenant-aware MCP and persistence paths; verify intentional local/stdio behavior before flagging it.
 ```
