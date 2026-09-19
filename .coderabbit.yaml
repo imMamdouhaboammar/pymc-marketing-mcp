@@ -37,7 +37,7 @@ reviews:
       instructions: |
         CRITICAL OPERATING INVARIANTS:
         - Python Runtime: support the declared project range `>=3.12,<3.14`; keep the Python 3.12 CI/runtime baseline working.
-        - Statistical Decision Gates: use `src/marketing_mcp/scientific/decision_gate.py` and the diagnostic baselines as the source of truth. Current blocking thresholds are `max_rhat > 1.05`, `divergences > 5`, or `min_bfmi < 0.20`; intermediate bands are caution, not block. Do not invent stricter thresholds in review comments.
+        - Statistical Decision Gates: use `src/marketing_mcp/domain/diagnostics/engine.py`, `docs/DECISION-INTEGRITY.md`, and `migration/baselines/decision_gate_fixtures.json` as the source of truth. Current hard failures include any divergences (`> 0`), `max_rhat > 1.05`, minimum bulk ESS `< 50`, or 94% posterior-predictive coverage `< 0.50` when available. R-hat `(1.01, 1.05]`, ESS `[50, 400)`, and predictive coverage `[0.50, 0.80)` are caution bands. Do not import thresholds from non-authoritative parity/helper gates.
         - Multi-Tenant Isolation: tenant-aware persistence and MCP resource access must preserve ownership boundaries; verify any intentionally local/stdio path before flagging it as an isolation defect.
         - MCP Contract Adherence: Tool inputs and outputs must strictly conform to their Pydantic schemas. Preserve error classification and diagnostic reason payloads.
 
