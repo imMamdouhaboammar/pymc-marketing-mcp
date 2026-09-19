@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from marketing_mcp.capabilities import get_capability_inventory
@@ -140,8 +141,26 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
             reasons.append(f"{tool} called before an approved diagnostic gate at step {index}")
 
         if disconnected and tool == "recover_execution_state":
-            rec_args = step.get("arguments") or {}
+            raw_rec_args = step.get("arguments")
+            if raw_rec_args is None:
+                rec_args: Mapping[str, object] = {}
+            elif isinstance(raw_rec_args, Mapping):
+                rec_args = raw_rec_args
+            else:
+                reasons.append(
+                    f"recover_execution_state arguments must be a mapping at step {index}"
+                )
+                rec_args = {}
+
             rec_arg_id = rec_args.get("job_id_or_key") or rec_args.get("job_id")
+            if rec_arg_id is not None and (
+                not isinstance(rec_arg_id, str) or not rec_arg_id
+            ):
+                reasons.append(
+                    f"recovery argument mismatch: recover_execution_state at step {index} "
+                    "requires a non-empty string 'job_id_or_key'"
+                )
+                rec_arg_id = None
 
             recovery_raw = result if isinstance(result, dict) else {}
             recovery = (
@@ -253,7 +272,15 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
                 authorized_resume_job_type = None
 
         if tool == "resume_job":
-            resume_args = step.get("arguments") or {}
+            raw_resume_args = step.get("arguments")
+            if raw_resume_args is None:
+                resume_args: Mapping[str, object] = {}
+            elif isinstance(raw_resume_args, Mapping):
+                resume_args = raw_resume_args
+            else:
+                reasons.append(f"resume_job arguments must be a mapping at step {index}")
+                resume_args = {}
+
             unsupported_args = set(resume_args.keys()) - {"job_id"}
             if unsupported_args:
                 reasons.append(
@@ -322,7 +349,15 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
 
         if tool in ASYNC_SUBMIT_TOOLS:
             sub_res = step.get("result")
-            sub_args = step.get("arguments") or {}
+            raw_sub_args = step.get("arguments")
+            if raw_sub_args is None:
+                sub_args: Mapping[str, object] = {}
+            elif isinstance(raw_sub_args, Mapping):
+                sub_args = raw_sub_args
+            else:
+                reasons.append(f"{tool} arguments must be a mapping at step {index}")
+                sub_args = {}
+
             sub_job_id = None
             if isinstance(sub_res, dict):
                 sub_job_id = sub_res.get("job_id") or (sub_res.get("summary") or {}).get("job_id")
@@ -369,11 +404,10 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
                 last_submitted_async_job_id = None
 
             sub_idempotency_key = sub_args.get("idempotency_key")
-            if (
-                isinstance(sub_idempotency_key, str)
-                and sub_idempotency_key.strip()
-            ):
-                last_submitted_async_idempotency_key = sub_idempotency_key.strip()
+            if isinstance(sub_idempotency_key, str) and sub_idempotency_key:
+                # JobService persists and resolves idempotency keys verbatim.
+                # Preserve exact whitespace/casing so evaluator semantics match runtime.
+                last_submitted_async_idempotency_key = sub_idempotency_key
             else:
                 last_submitted_async_idempotency_key = None
 
