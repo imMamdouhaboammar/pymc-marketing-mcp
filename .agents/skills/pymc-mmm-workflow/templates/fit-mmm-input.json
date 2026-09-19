@@ -1,16 +1,15 @@
 {
-  "dataset_id": "ds_retail_weekly_2026",
+  "_comment": "Replace placeholder values with your verified dataset_id and schema columns from inspect_dataset",
+  "dataset_id": "ds_ecom_104w",
   "date_column": "date",
   "target_column": "revenue",
   "channel_columns": [
-    "tv_spend",
-    "search_brand_spend",
-    "search_nonbrand_spend",
-    "meta_spend"
+    "meta_spend",
+    "search_spend",
+    "tv_spend"
   ],
   "control_columns": [
-    "holiday_event",
-    "macro_economic_index"
+    "promo_flag"
   ],
   "yearly_seasonality": 2,
   "adstock": {

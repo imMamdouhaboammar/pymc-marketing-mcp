@@ -12,10 +12,9 @@ Use this checklist when a model receives `decision_status: "rejected"` or `decis
 1. **If Divergences Present**:
    - Elevate `target_accept` from 0.90 to 0.95 or 0.98.
    - Increase warmup iterations (`tune`) to 2000.
-2. **If High R-hat ($> 1.05$)**:
-   - Check channel correlations for near-perfect collinearity.
-   - Increase `draws` and `tune` to give chains more exploration time.
-   - Re-evaluate prior plausibility and simplify saturation curves if needed.
+2. **If Elevated R-hat ($> 1.01$)**:
+   - For cautionary R-hat ($1.01 < \hat{R} \le 1.05$): examine parameter traces, consider increasing `draws` and `tune` for better chain mixing, and verify that prior distributions are not overly diffuse.
+   - For severe non-convergence ($\hat{R} > 1.05$): check channel correlations for near-perfect collinearity, increase `draws` and `tune`, re-evaluate prior plausibility, and simplify saturation or adstock parameterization.
 3. **If Low ESS ($< 400$)**:
    - Autocorrelation is high. Verify adstock lag lengths are not excessively long.
    - Increase total draws.
