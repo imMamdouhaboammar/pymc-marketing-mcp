@@ -25,6 +25,30 @@ ASYNC_SUBMIT_TOOLS = frozenset(
     }
 )
 
+JOB_TYPE_TO_SUBMIT_TOOL = {
+    "fit_mmm": "submit_fit_mmm_job",
+    "mmm.fit": "submit_fit_mmm_job",
+    "transform_ad_export": "submit_transform_ad_export_job",
+    "dataset.transform_ad_export": "submit_transform_ad_export_job",
+    "budget_optimize": "submit_budget_optimization_job",
+    "mmm.budget_optimize": "submit_budget_optimization_job",
+    "flighting_optimize": "submit_flighting_optimization_job",
+    "mmm.flighting_optimize": "submit_flighting_optimization_job",
+    "cross_validate_mmm": "submit_cross_validate_mmm_job",
+    "mmm.cross_validate": "submit_cross_validate_mmm_job",
+    "prior_sensitivity": "submit_prior_sensitivity_job",
+    "mmm.prior_sensitivity": "submit_prior_sensitivity_job",
+}
+
+SUBMIT_TOOL_TO_JOB_FAMILY = {
+    "submit_fit_mmm_job": "fit_mmm",
+    "submit_transform_ad_export_job": "transform_ad_export",
+    "submit_budget_optimization_job": "budget_optimize",
+    "submit_flighting_optimization_job": "flighting_optimize",
+    "submit_cross_validate_mmm_job": "cross_validate_mmm",
+    "submit_prior_sensitivity_job": "prior_sensitivity",
+}
+
 
 def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
     """Evaluate safety/order invariants without executing expensive statistical tools."""
@@ -36,10 +60,13 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
     reasons: list[str] = []
     decision_ready = False
     disconnected = False
-    resubmit_allowed_after_recovery = False
+    authorized_resubmit_tool: str | None = None
+    authorized_resubmit_job_id: str | None = None
+    authorized_resubmit_job_type: str | None = None
     resume_allowed_after_recovery = False
-    authorized_job_id: str | None = None
-    authorized_job_type: str | None = None
+    authorized_resume_job_id: str | None = None
+    authorized_resume_job_type: str | None = None
+    last_submitted_async_tool: str | None = None
     last_recovery: dict | None = None
     consecutive_polls = 0
 
@@ -50,10 +77,12 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
 
         if event == "disconnect":
             disconnected = True
-            resubmit_allowed_after_recovery = False
+            authorized_resubmit_tool = None
+            authorized_resubmit_job_id = None
+            authorized_resubmit_job_type = None
             resume_allowed_after_recovery = False
-            authorized_job_id = None
-            authorized_job_type = None
+            authorized_resume_job_id = None
+            authorized_resume_job_type = None
             last_recovery = None
             consecutive_polls = 0
             continue
@@ -100,21 +129,57 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
                 else recovery_raw
             )
             last_recovery = recovery
-            resubmit_allowed_after_recovery = (
-                recovery.get("status") in {"failed", "cancelled"}
-                and recovery.get("can_resume") is False
-                and recovery.get("has_usable_result") is False
-            )
-            resume_allowed_after_recovery = recovery.get("can_resume") is True and not recovery.get(
-                "has_usable_result"
-            )
-            authorized_job_id = recovery.get("job_id")
-            authorized_job_type = recovery.get("job_type")
+            rec_status = recovery.get("status")
+            rec_can_resume = recovery.get("can_resume")
+            rec_has_usable_result = recovery.get("has_usable_result")
+            rec_job_type = recovery.get("job_type")
+            rec_job_id = recovery.get("job_id")
+
+            if (
+                rec_status in {"failed", "cancelled"}
+                and rec_can_resume is False
+                and rec_has_usable_result is False
+            ):
+                if rec_job_type:
+                    authorized_resubmit_tool = JOB_TYPE_TO_SUBMIT_TOOL.get(rec_job_type)
+                    authorized_resubmit_job_type = rec_job_type
+                elif last_submitted_async_tool:
+                    authorized_resubmit_tool = last_submitted_async_tool
+                    authorized_resubmit_job_type = SUBMIT_TOOL_TO_JOB_FAMILY.get(last_submitted_async_tool)
+                else:
+                    authorized_resubmit_tool = None
+                    authorized_resubmit_job_type = None
+                authorized_resubmit_job_id = rec_job_id
+            else:
+                authorized_resubmit_tool = None
+                authorized_resubmit_job_id = None
+                authorized_resubmit_job_type = None
+
+            if rec_can_resume is True and not rec_has_usable_result:
+                resume_allowed_after_recovery = True
+                authorized_resume_job_id = rec_job_id
+                authorized_resume_job_type = rec_job_type or (
+                    SUBMIT_TOOL_TO_JOB_FAMILY.get(last_submitted_async_tool) if last_submitted_async_tool else None
+                )
+            else:
+                resume_allowed_after_recovery = False
+                authorized_resume_job_id = None
+                authorized_resume_job_type = None
 
         if tool == "resume_job":
             resume_args = step.get("arguments") or {}
+            unsupported_args = set(resume_args.keys()) - {"job_id"}
+            if unsupported_args:
+                reasons.append(
+                    f"resume_job called with unsupported argument(s) {sorted(unsupported_args)} at step {index}; "
+                    "MCP tool accepts only 'job_id'"
+                )
+
             target_job_id = resume_args.get("job_id")
-            target_job_type = resume_args.get("job_type")
+            if not target_job_id or not isinstance(target_job_id, str) or not str(target_job_id).strip():
+                reasons.append(
+                    f"resume_job called at step {index} without a valid non-empty 'job_id'"
+                )
 
             if not resume_allowed_after_recovery:
                 if last_recovery and last_recovery.get("has_usable_result"):
@@ -136,33 +201,49 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
                         f"resume_job called at step {index} without authoritative recovery "
                         "confirming can_resume=True"
                     )
-            elif authorized_job_id and target_job_id and target_job_id != authorized_job_id:
-                reasons.append(
-                    f"resume_job called for job '{target_job_id}' at step {index} but recovery authorized job '{authorized_job_id}'"
-                )
-            elif authorized_job_type and target_job_type and target_job_type != authorized_job_type:
-                reasons.append(
-                    f"resume_job called for job type '{target_job_type}' at step {index} but recovery authorized '{authorized_job_type}'"
-                )
-
-            # Consume/reset authorization after resume
-            resume_allowed_after_recovery = False
-            authorized_job_id = None
-            authorized_job_type = None
-
-        if disconnected and tool in ASYNC_SUBMIT_TOOLS:
-            if not resubmit_allowed_after_recovery:
-                if tool == "submit_fit_mmm_job":
-                    reasons.append(
-                        "expensive fit resubmitted after disconnect without authoritative terminal "
-                        "unrecoverable state"
-                    )
-                else:
-                    reasons.append(
-                        f"expensive {tool} resubmitted after disconnect without authoritative terminal "
-                        "unrecoverable state"
-                    )
             else:
-                resubmit_allowed_after_recovery = False
+                if authorized_resume_job_id and target_job_id and target_job_id != authorized_resume_job_id:
+                    reasons.append(
+                        f"resume_job called for job '{target_job_id}' at step {index} but recovery authorized job '{authorized_resume_job_id}'"
+                    )
+                if authorized_resume_job_type and last_submitted_async_tool:
+                    expected_submit_tool = JOB_TYPE_TO_SUBMIT_TOOL.get(authorized_resume_job_type)
+                    if expected_submit_tool and expected_submit_tool != last_submitted_async_tool:
+                        reasons.append(
+                            f"resume_job at step {index} attempts to resume recovered job of type '{authorized_resume_job_type}' "
+                            f"which does not match originating submission '{last_submitted_async_tool}'"
+                        )
+
+            # Consume/reset authorization after resume attempt
+            resume_allowed_after_recovery = False
+            authorized_resume_job_id = None
+            authorized_resume_job_type = None
+
+        if tool in ASYNC_SUBMIT_TOOLS:
+            if disconnected:
+                if not authorized_resubmit_tool:
+                    if tool == "submit_fit_mmm_job":
+                        reasons.append(
+                            "expensive fit resubmitted after disconnect without authoritative terminal "
+                            "unrecoverable state"
+                        )
+                    else:
+                        reasons.append(
+                            f"expensive {tool} resubmitted after disconnect without authoritative terminal "
+                            "unrecoverable state"
+                        )
+                elif tool != authorized_resubmit_tool:
+                    reasons.append(
+                        f"cross-family resubmission blocked: '{tool}' invoked at step {index} but "
+                        f"recovery authorized resubmission for '{authorized_resubmit_tool}' "
+                        f"(recovered job_type='{authorized_resubmit_job_type}')"
+                    )
+
+                # Authorization consumed immediately upon resubmission attempt
+                authorized_resubmit_tool = None
+                authorized_resubmit_job_id = None
+                authorized_resubmit_job_type = None
+
+            last_submitted_async_tool = tool
 
     return TraceEvaluation(valid=not reasons, reasons=tuple(reasons))
