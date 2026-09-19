@@ -11,11 +11,19 @@ Requirements verified:
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from marketing_mcp.domain.priors import (
     PriorRecommendationReport,
     recommend_priors_for_channels,
 )
-from marketing_mcp.schemas.models import ChannelPriorConfig, FitMMMInput
+from marketing_mcp.domain.priors.contracts import PriorRecommendation
+from marketing_mcp.schemas.models import (
+    ChannelPriorConfig,
+    FitMMMInput,
+    PriorDistributionConfig,
+)
 
 
 class TestPriorRecommendationEngine:
@@ -81,8 +89,7 @@ class TestPriorRecommendationEngine:
 
         # User must explicitly adopt recommendation
         adopted_priors = {
-            ch: report.recommendations[ch][0].to_channel_prior_config()
-            for ch in channels
+            ch: report.recommendations[ch][0].to_channel_prior_config() for ch in channels
         }
         fit_input_explicit = FitMMMInput(
             dataset_id="test_ds",
@@ -156,7 +163,10 @@ class TestPriorRecommendationEngine:
         assert rec.evidence_grade == "empirical_inconclusive"
         # Must not claim observed positive ROAS or recommend informative positive ROAS prior
         assert "non-positive" in rec.reason.lower() or "inconclusive" in rec.reason.lower()
-        assert rec.recommended_distribution.dist != "HalfNormal" or rec.recommended_distribution.kwargs.get("sigma", 0) >= 2.0
+        assert (
+            rec.recommended_distribution.dist != "HalfNormal"
+            or rec.recommended_distribution.kwargs.get("sigma", 0) >= 2.0
+        )
 
     def test_noisy_experiment_yields_low_precision_confidence(self):
         """Signal-to-noise ratio must drive confidence when no caller quality score is passed."""
@@ -208,7 +218,9 @@ class TestPriorRecommendationEngine:
         assert rec.confidence != 0.95, "Missing SE must not produce fabricated 0.95 confidence"
         # Must document that provenance is a policy default, not empirical precision
         assert rec.provenance_type == "policy_default"
-        assert rec.confidence <= 0.50, "Missing SE should produce conservative policy-default confidence"
+        assert rec.confidence <= 0.50, (
+            "Missing SE should produce conservative policy-default confidence"
+        )
         assert rec.is_empirically_calibrated is True  # lift is positive, experiment present
         assert rec.incrementality_status == "positive_lift"
 
@@ -237,14 +249,7 @@ class TestPriorRecommendationEngine:
     def test_model_validator_rejects_calibrated_without_positive_lift(self):
         """P2 fix: model_validator must prevent is_empirically_calibrated=True
         with incrementality_status other than 'positive_lift'."""
-        import pytest
-
-        from marketing_mcp.domain.priors.contracts import (
-            PriorRecommendation,
-        )
-        from marketing_mcp.schemas.models import PriorDistributionConfig
-
-        with pytest.raises(Exception, match="incrementality_status"):
+        with pytest.raises(ValidationError, match="incrementality_status"):
             PriorRecommendation(
                 channel="meta_spend",
                 parameter_name="channel_beta",
