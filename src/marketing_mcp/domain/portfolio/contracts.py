@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from marketing_mcp.errors import DomainError
 
@@ -16,11 +16,25 @@ PortfolioEffectType = Literal[
     "cannibalization",
 ]
 
+PortfolioCoefficientProvenance = Literal[
+    "caller_supplied_assumption",
+    "econometric_benchmark",
+    "experimental_lift",
+]
+
+PortfolioConfidenceProvenance = Literal[
+    "caller_specified",
+    "empirical_precision",
+    "unspecified",
+]
+
 
 class PortfolioEntity(BaseModel):
     """An organizational or product entity within the multi-brand portfolio."""
 
-    entity_id: str = Field(description="Unique entity identifier, e.g. 'brand_premium', 'subbrand_lite'")
+    entity_id: str = Field(
+        description="Unique entity identifier, e.g. 'brand_premium', 'subbrand_lite'"
+    )
     name: str = Field(description="Display name")
     entity_type: PortfolioEntityType = Field(description="Type of portfolio entity")
     parent_entity_id: str | None = Field(
@@ -32,16 +46,59 @@ class PortfolioEntity(BaseModel):
 
 
 class PortfolioEffectEdge(BaseModel):
-    """A directional marketing spillover, halo, or cannibalization relationship."""
+    """A directional marketing spillover, halo, or cannibalization relationship.
+
+    Design & Provenance Invariants:
+    - coefficient_provenance explicitly records whether the edge multiplier is an
+      assumed heuristic, econometric benchmark, or empirical experiment.
+    - confidence defaults to None (uncalibrated) with confidence_provenance='unspecified'.
+      Never fabricates an arbitrary confidence default (e.g. 0.8).
+    - If effect_type == 'direct_channel', source_entity_id must equal target_entity_id.
+    - If effect_type in ('halo_umbrella', 'cannibalization', 'cross_channel_spillover'),
+      source_entity_id must not equal target_entity_id.
+    """
 
     source_entity_id: str = Field(description="Entity investing in marketing")
-    target_entity_id: str = Field(description="Entity receiving the spillover/halo/cannibalization effect")
+    target_entity_id: str = Field(
+        description="Entity receiving the spillover/halo/cannibalization effect"
+    )
     source_channel: str = Field(description="Channel generating the effect")
     effect_type: PortfolioEffectType = Field(description="Taxonomy classification of effect")
     coefficient: float = Field(
         description="Spillover rate (positive for halo/spillover, negative for cannibalization)"
     )
-    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    coefficient_provenance: PortfolioCoefficientProvenance = Field(
+        default="caller_supplied_assumption",
+        description="Origin of the effect coefficient",
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Caller-provided or empirically derived confidence score (None = uncalibrated)",
+    )
+    confidence_provenance: PortfolioConfidenceProvenance = Field(
+        default="unspecified",
+        description="Provenance of the confidence score",
+    )
+
+    @model_validator(mode="after")
+    def _validate_edge_semantics(self) -> "PortfolioEffectEdge":
+        if self.effect_type == "direct_channel":
+            if self.source_entity_id != self.target_entity_id:
+                raise ValueError(
+                    f"direct_channel effect requires source_entity_id == target_entity_id, "
+                    f"got source='{self.source_entity_id}' and target='{self.target_entity_id}'"
+                )
+        else:
+            if self.source_entity_id == self.target_entity_id:
+                raise ValueError(
+                    f"Cross-entity effect '{self.effect_type}' requires source_entity_id must not equal target_entity_id, "
+                    f"got identical entity '{self.source_entity_id}'"
+                )
+        if self.confidence is not None and self.confidence_provenance == "unspecified":
+            self.confidence_provenance = "caller_specified"
+        return self
 
 
 class PortfolioGraph(BaseModel):
@@ -75,7 +132,9 @@ class PortfolioGraph(BaseModel):
             if edge.source_entity_id != edge.target_entity_id:
                 adj[edge.source_entity_id].append(edge.target_entity_id)
 
-        visited: dict[str, int] = {e_id: 0 for e_id in self.entities}  # 0=unvisited, 1=visiting, 2=visited
+        visited: dict[str, int] = {
+            e_id: 0 for e_id in self.entities
+        }  # 0=unvisited, 1=visiting, 2=visited
 
         def dfs(u: str) -> None:
             visited[u] = 1
@@ -121,16 +180,26 @@ class PortfolioGraph(BaseModel):
                 delta = ch_spend * edge.coefficient
                 target = edge.target_entity_id
                 net_outcomes[target] = net_outcomes.get(target, 0.0) + delta
-                effects_detail.append({
-                    "source": edge.source_entity_id,
-                    "target": target,
-                    "channel": edge.source_channel,
-                    "type": edge.effect_type,
-                    "delta": round(delta, 2),
-                })
+                effects_detail.append(
+                    {
+                        "source": edge.source_entity_id,
+                        "target": target,
+                        "channel": edge.source_channel,
+                        "type": edge.effect_type,
+                        "delta": round(delta, 2),
+                        "coefficient_provenance": edge.coefficient_provenance,
+                    }
+                )
 
         return {
             "net_outcomes": {k: round(v, 2) for k, v in net_outcomes.items()},
             "total_portfolio_outcome": round(sum(net_outcomes.values()), 2),
             "effects_detail": effects_detail,
+            "method": "deterministic_spillover_arithmetic",
+            "uncertainty_quantified": False,
+            "estimation_type": "deterministic_domain_graph",
         }
+
+
+#: Honest scientific alias distinguishing deterministic domain DAG from Bayesian estimation
+DeterministicPortfolioGraph = PortfolioGraph

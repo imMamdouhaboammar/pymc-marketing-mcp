@@ -10,8 +10,10 @@ Requirements tested:
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from marketing_mcp.domain.portfolio import (
+    DeterministicPortfolioGraph,
     PortfolioEffectEdge,
     PortfolioEntity,
     PortfolioGraph,
@@ -22,9 +24,21 @@ from marketing_mcp.errors import DomainError
 class TestPortfolioGraph:
     def test_valid_dag_passes_validation(self):
         entities = {
-            "parent_brand": PortfolioEntity(entity_id="parent_brand", name="Parent Brand", entity_type="brand"),
-            "sub_brand_a": PortfolioEntity(entity_id="sub_brand_a", name="Sub Brand A", entity_type="sub_brand", parent_entity_id="parent_brand"),
-            "sub_brand_b": PortfolioEntity(entity_id="sub_brand_b", name="Sub Brand B", entity_type="sub_brand", parent_entity_id="parent_brand"),
+            "parent_brand": PortfolioEntity(
+                entity_id="parent_brand", name="Parent Brand", entity_type="brand"
+            ),
+            "sub_brand_a": PortfolioEntity(
+                entity_id="sub_brand_a",
+                name="Sub Brand A",
+                entity_type="sub_brand",
+                parent_entity_id="parent_brand",
+            ),
+            "sub_brand_b": PortfolioEntity(
+                entity_id="sub_brand_b",
+                name="Sub Brand B",
+                entity_type="sub_brand",
+                parent_entity_id="parent_brand",
+            ),
         }
         edges = [
             # Umbrella TV spend creates positive halo on sub_brand_a
@@ -53,8 +67,20 @@ class TestPortfolioGraph:
             "entity_2": PortfolioEntity(entity_id="entity_2", name="E2", entity_type="brand"),
         }
         edges = [
-            PortfolioEffectEdge(source_entity_id="entity_1", target_entity_id="entity_2", source_channel="tv", effect_type="cross_channel_spillover", coefficient=0.1),
-            PortfolioEffectEdge(source_entity_id="entity_2", target_entity_id="entity_1", source_channel="tv", effect_type="cross_channel_spillover", coefficient=0.1),
+            PortfolioEffectEdge(
+                source_entity_id="entity_1",
+                target_entity_id="entity_2",
+                source_channel="tv",
+                effect_type="cross_channel_spillover",
+                coefficient=0.1,
+            ),
+            PortfolioEffectEdge(
+                source_entity_id="entity_2",
+                target_entity_id="entity_1",
+                source_channel="tv",
+                effect_type="cross_channel_spillover",
+                coefficient=0.1,
+            ),
         ]
         graph = PortfolioGraph(entities=entities, edges=edges)
         with pytest.raises(DomainError) as exc_info:
@@ -63,9 +89,15 @@ class TestPortfolioGraph:
 
     def test_evaluate_portfolio_outcome_applies_halo_and_cannibalization(self):
         entities = {
-            "flagship": PortfolioEntity(entity_id="flagship", name="Flagship Brand", entity_type="brand"),
-            "midtier": PortfolioEntity(entity_id="midtier", name="Midtier Brand", entity_type="sub_brand"),
-            "budget": PortfolioEntity(entity_id="budget", name="Budget Brand", entity_type="sub_brand"),
+            "flagship": PortfolioEntity(
+                entity_id="flagship", name="Flagship Brand", entity_type="brand"
+            ),
+            "midtier": PortfolioEntity(
+                entity_id="midtier", name="Midtier Brand", entity_type="sub_brand"
+            ),
+            "budget": PortfolioEntity(
+                entity_id="budget", name="Budget Brand", entity_type="sub_brand"
+            ),
         }
         edges = [
             # Flagship branding creates 20% positive halo on midtier
@@ -104,3 +136,68 @@ class TestPortfolioGraph:
         assert res["net_outcomes"]["budget"] == pytest.approx(19000.0)
         # Total portfolio: 100,000 + 54,000 + 19,000 = 173,000
         assert res["total_portfolio_outcome"] == pytest.approx(173000.0)
+
+    def test_deterministic_evaluation_metadata_and_provenance(self):
+        """Evaluation output must disclose deterministic arithmetic and zero uncertainty quantification."""
+        entities = {
+            "b1": PortfolioEntity(entity_id="b1", name="B1", entity_type="brand"),
+            "b2": PortfolioEntity(entity_id="b2", name="B2", entity_type="brand"),
+        }
+        edges = [
+            PortfolioEffectEdge(
+                source_entity_id="b1",
+                target_entity_id="b2",
+                source_channel="tv",
+                effect_type="halo_umbrella",
+                coefficient=0.10,
+                coefficient_provenance="econometric_benchmark",
+            )
+        ]
+        graph = PortfolioGraph(entities=entities, edges=edges)
+        res = graph.evaluate_portfolio_outcome({"b1": 1000.0, "b2": 2000.0}, {"b1": {"tv": 500.0}})
+
+        assert res["method"] == "deterministic_spillover_arithmetic"
+        assert res["uncertainty_quantified"] is False
+        assert res["estimation_type"] == "deterministic_domain_graph"
+        assert res["effects_detail"][0]["coefficient_provenance"] == "econometric_benchmark"
+
+    def test_edge_default_provenance_and_no_fabricated_confidence(self):
+        """Default edge must not fabricate high confidence and must record caller assumption."""
+        edge = PortfolioEffectEdge(
+            source_entity_id="b1",
+            target_entity_id="b2",
+            source_channel="tv",
+            effect_type="halo_umbrella",
+            coefficient=0.10,
+        )
+        assert edge.coefficient_provenance == "caller_supplied_assumption"
+        assert edge.confidence is None
+        assert edge.confidence_provenance == "unspecified"
+
+    def test_edge_validation_rejects_cross_entity_for_direct_channel(self):
+        """direct_channel must target the same entity."""
+        with pytest.raises(ValidationError, match="direct_channel"):
+            PortfolioEffectEdge(
+                source_entity_id="b1",
+                target_entity_id="b2",
+                source_channel="tv",
+                effect_type="direct_channel",
+                coefficient=1.0,
+            )
+
+    def test_edge_validation_rejects_same_entity_for_halo_or_cannibalization(self):
+        """Cross-entity effects (halo, cannibalization, spillover) cannot have source == target."""
+        with pytest.raises(
+            ValidationError, match="source_entity_id must not equal target_entity_id"
+        ):
+            PortfolioEffectEdge(
+                source_entity_id="b1",
+                target_entity_id="b1",
+                source_channel="tv",
+                effect_type="halo_umbrella",
+                coefficient=0.10,
+            )
+
+    def test_deterministic_portfolio_graph_alias(self):
+        """DeterministicPortfolioGraph must be honest alias for PortfolioGraph."""
+        assert DeterministicPortfolioGraph is PortfolioGraph
