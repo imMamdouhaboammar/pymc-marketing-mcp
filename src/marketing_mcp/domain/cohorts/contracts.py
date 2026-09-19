@@ -15,6 +15,7 @@ Key invariants:
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -260,7 +261,34 @@ class MediaResponseCohortLedger(BaseModel):
 
         For each calendar evaluation period T, sums contributions from all source cohorts
         t where t + lag == T. Enforces period-by-period comparison to detect timing shifts.
+
+        Authoritative media-response values are domain-constrained to finite, non-negative
+        quantities. Invalid signed/non-finite inputs are rejected before discrepancy
+        arithmetic so reconciliation cannot certify impossible response series.
         """
+        if not math.isfinite(tolerance) or tolerance < 0:
+            raise ValueError("tolerance must be a finite non-negative number")
+
+        normalized_calendar: dict[str, float] = {}
+        for period, raw_value in calendar_responses.items():
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"calendar response for period '{period}' must be numeric"
+                ) from exc
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"calendar response for period '{period}' must be finite, got {raw_value!r}"
+                )
+            if value < 0:
+                raise ValueError(
+                    f"calendar response for period '{period}' must be non-negative, got {value}"
+                )
+            normalized_calendar[period] = value
+
+        calendar_responses = normalized_calendar
+
         if period_order is None:
             all_periods = set(calendar_responses.keys())
             for c in self.cohorts:
