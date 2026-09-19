@@ -1,8 +1,9 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit Configuration for PyMC Marketing MCP Server
 # Repository: https://github.com/imMamdouhaboammar/pymc-marketing-mcp
 # Schema & Reference: https://docs.coderabbit.ai/reference/configuration
 
-version: "2"
+version: 2
 language: "en-US"
 
 reviews:
@@ -12,13 +13,14 @@ reviews:
   collapse_walkthrough: false
   enable_prompt_for_ai_agents: true
 
-  # Path Filters: Scoped to primary source trees while excluding build/binary artifacts
+  # Review the whole repository surface, including Skills and CI configuration.
+  # Explicit dot-directory includes avoid blind spots in glob implementations.
   path_filters:
-    - "src/**"
-    - "crates/**"
-    - "dashboard/**"
-    - "tests/**"
-    - "docs/**"
+    - "**/*"
+    - ".agents/**"
+    - ".github/**"
+    - ".cargo/**"
+    - ".coderabbit.yaml"
     - "!**/node_modules/**"
     - "!**/dist/**"
     - "!**/target/**"
@@ -26,6 +28,7 @@ reviews:
     - "!uv.lock"
     - "!metadata.db"
     - "!**/*.csv"
+    - "!profile-summary-card-output/**"
 
   # Path-based instructions for the MCP codebase
   path_instructions:
@@ -33,9 +36,9 @@ reviews:
     - path: "src/marketing_mcp/**"
       instructions: |
         CRITICAL OPERATING INVARIANTS:
-        - Python Runtime: Python 3.12 strictly (avoid features incompatible with 3.12 or dependencies broken by 3.14).
-        - Statistical Decision Gates: Enforce strict MCMC diagnostic thresholds (`max_rhat <= 1.05`, zero divergences, `min_bfmi >= 0.2`). Downstream optimizations and allocations must be hard-blocked if diagnostics fail policy.
-        - Multi-Tenant Isolation: Every storage call, job dispatch, and MCP resource lookup MUST be scoped by tenant/organization. Lookups by un-scoped IDs are strictly prohibited.
+        - Python Runtime: support the declared project range `>=3.12,<3.14`; keep the Python 3.12 CI/runtime baseline working.
+        - Statistical Decision Gates: use `src/marketing_mcp/domain/diagnostics/engine.py`, `docs/DECISION-INTEGRITY.md`, and `migration/baselines/decision_gate_fixtures.json` as the source of truth. Current hard failures include any divergences (`> 0`), `max_rhat > 1.05`, minimum bulk ESS `< 50`, or 94% posterior-predictive coverage `< 0.50` when available. R-hat `(1.01, 1.05]`, ESS `[50, 400)`, and predictive coverage `[0.50, 0.80)` are caution bands. Do not import thresholds from non-authoritative parity/helper gates.
+        - Multi-Tenant Isolation: tenant-aware persistence and MCP resource access must preserve ownership boundaries; verify any intentionally local/stdio path before flagging it as an isolation defect.
         - MCP Contract Adherence: Tool inputs and outputs must strictly conform to their Pydantic schemas. Preserve error classification and diagnostic reason payloads.
 
     # 2. Rust Acceleration Crates
@@ -55,6 +58,30 @@ reviews:
       instructions: |
         - Statistical & Invariant Tests: Ensure tests verify mathematical convergence, parameter recovery, and diagnostic boundary conditions.
         - Security Tests: Strictly enforce tenant isolation, credential leak prevention, and adversarial payload rejection.
+
+    # 5. Agent Skills and evaluation contracts
+    - path: ".agents/**"
+      instructions: |
+        - Treat Skill manifests, guidance, and eval traces as public agent contracts.
+        - Verify tool names and arguments against the real MCP schemas.
+        - Recovery traces must preserve job identity, job family, idempotency semantics, and one-time authorization.
+        - Generated Skill assets must remain synchronized with their canonical source.
+
+    # 6. CI and automation
+    - path: ".github/**"
+      instructions: |
+        - Keep workflows product-relevant and non-duplicative.
+        - Flag stale deployment jobs, redundant scans, hidden failures, and required checks that no longer map to a supported runtime.
+        - Do not weaken correctness, statistical, security, packaging, or native-runtime gates to make CI green.
+
+    # 7. Migration baselines and scripts
+    - path: "migration/**"
+      instructions: |
+        - Treat baselines as evidence contracts. Reject hand-edited snapshots that drift from their generator or runtime source of truth.
+
+    - path: "scripts/**"
+      instructions: |
+        - Prefer fail-closed verification scripts with explicit exit codes and reproducible inputs.
 
   # Finishing Touches: Custom Agent Tasks
   finishing_touches:
@@ -77,7 +104,8 @@ reviews:
         instructions: |
           Audit any changes touching MCMC sampling, run evaluations, or downstream optimization.
           Ensure that diagnostic decision gates (`pass`, `caution`, `block`) are evaluated
-          against thresholds before allowing downstream optimization.
+          against the repository's canonical policy before allowing downstream optimization.
+          Do not replace caution thresholds with stricter invented blocking rules.
 
       - name: "cleanup stale imports"
         instructions: |
@@ -87,6 +115,6 @@ reviews:
 knowledge_base:
   code_guidelines:
     enabled: true
-    file_patterns:
+    filePatterns:
       - "**/AGENTS.md"
       - "**/task_plan.md"
