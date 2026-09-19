@@ -62,6 +62,11 @@ TOOL_SCOPES: dict[str, str] = {
     "predict_customer_clv": "marketing:clv",
     # asynchronous jobs
     "submit_fit_mmm_job": "marketing:model",
+    "submit_cross_validate_mmm_job": "marketing:model",
+    "submit_prior_sensitivity_job": "marketing:model",
+    "submit_budget_optimization_job": "marketing:decide",
+    "submit_flighting_optimization_job": "marketing:decide",
+    "submit_transform_ad_export_job": "marketing:model",
     "get_job_status": "marketing:read",
     "poll_job_progress": "marketing:read",
     "recover_execution_state": "marketing:read",

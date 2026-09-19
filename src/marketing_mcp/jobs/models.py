@@ -27,7 +27,12 @@ class JobCheckpointStage(str, Enum):
     SAMPLING_INITIALIZED = "sampling_initialized"
     CHAINS_SAMPLING = "chains_sampling"
     POSTERIOR_SAVED = "posterior_saved"
+    FIT_COMPLETED = "fit_completed"
     DIAGNOSTICS_COMPLETED = "diagnostics_completed"
+    OPTIMIZATION_COMPLETED = "optimization_completed"
+    CV_COMPLETED = "cv_completed"
+    SENSITIVITY_COMPLETED = "sensitivity_completed"
+    TRANSFORMATION_COMPLETED = "transformation_completed"
     CUSTOM = "custom"
 
 

@@ -421,7 +421,15 @@ class SQLiteJobRepository:
             for row in unleased_running:
                 job_id = row["job_id"]
                 latest_cp = self.get_latest_checkpoint(job_id)
-                if latest_cp and latest_cp.stage in ("posterior_saved", "diagnostics_completed"):
+                if latest_cp and latest_cp.stage in (
+                    "posterior_saved",
+                    "fit_completed",
+                    "diagnostics_completed",
+                    "optimization_completed",
+                    "cv_completed",
+                    "sensitivity_completed",
+                    "transformation_completed",
+                ):
                     # Checkpoint shows model was already fitted and saved before restart!
                     rec_result = latest_cp.state_data.get("result") or {"recovered": True, "stage": latest_cp.stage}
                     self.conn.execute(

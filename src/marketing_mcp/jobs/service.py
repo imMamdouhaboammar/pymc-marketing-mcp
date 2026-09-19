@@ -146,8 +146,40 @@ class JobService:
 
         can_resume = job.status in (JobStatus.FAILED, JobStatus.CANCELLED) and bool(checkpoints)
         has_usable_result = job.status == JobStatus.SUCCEEDED or (
-            latest_cp and latest_cp.stage in ("posterior_saved", "diagnostics_completed")
+            latest_cp
+            and latest_cp.stage
+            in (
+                "posterior_saved",
+                "fit_completed",
+                "diagnostics_completed",
+                "optimization_completed",
+                "cv_completed",
+                "sensitivity_completed",
+                "transformation_completed",
+            )
         )
+
+        recommended_action = "poll_job_progress"
+        if has_usable_result:
+            if job.job_type in ("fit_mmm", "mmm.fit"):
+                recommended_action = "diagnose_mmm"
+            elif job.job_type in ("cross_validate_mmm", "mmm.cross_validate"):
+                recommended_action = "diagnose_mmm"
+            elif job.job_type in ("prior_sensitivity", "mmm.prior_sensitivity"):
+                recommended_action = "recommend_next_measurement"
+            elif job.job_type in (
+                "budget_optimize",
+                "mmm.budget_optimize",
+                "flighting_optimize",
+                "mmm.flighting_optimize",
+            ):
+                recommended_action = "simulate_budget"
+            elif job.job_type in ("transform_ad_export", "dataset.transform_ad_export"):
+                recommended_action = "inspect_dataset"
+            else:
+                recommended_action = "get_model_status"
+        elif can_resume:
+            recommended_action = "resume_job"
 
         return {
             "job_id": job.job_id,
@@ -159,11 +191,7 @@ class JobService:
             "latest_checkpoint": latest_cp.to_dict() if latest_cp else None,
             "result": job.result,
             "error": job.error,
-            "recommended_action": (
-                "get_model_status"
-                if has_usable_result
-                else ("resume_job" if can_resume else "poll_job_progress")
-            ),
+            "recommended_action": recommended_action,
         }
 
     def resume_job(

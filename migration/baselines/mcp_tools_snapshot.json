@@ -1,5 +1,5 @@
 {
-  "total": 45,
+  "total": 50,
   "tools": [
     {
       "name": "archive_model",
@@ -51,8 +51,16 @@
                   "$ref": "#/$defs/LiftTestMeasurement"
                 },
                 "maxItems": 100,
-                "minItems": 1,
                 "title": "Lift Tests",
+                "type": "array"
+              },
+              "experiment_ids": {
+                "description": "Registered experiment IDs from Experiment Evidence Registry",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "title": "Experiment Ids",
                 "type": "array"
               },
               "sampler": {
@@ -61,8 +69,7 @@
               }
             },
             "required": [
-              "model_id",
-              "lift_tests"
+              "model_id"
             ],
             "title": "CalibrateMMMInput",
             "type": "object"
@@ -1462,6 +1469,20 @@
           "dataset_id": {
             "title": "Dataset Id",
             "type": "string"
+          },
+          "user_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional user semantic overrides (e.g. target_column, channels, roles)",
+            "title": "User Overrides"
           }
         },
         "required": [
@@ -1706,6 +1727,128 @@
       "description": "Optimize a dynamic weekly media flighting schedule over a planning horizon, accounting for adstock carryover dynamics, channel spend constraints, target iROAS floors, and profit-maximization objectives. The model must be approved or approved_with_caution before optimization. Returns a week-by-week spend table per channel, posterior response distribution, and net-profit estimates.",
       "input_schema": {
         "$defs": {
+          "FinancialAssumptionsInput": {
+            "description": "Typed financial contract for all decision tools.\n\nReplaces scattered ``margin_pct`` / ``discount_rate`` fields.\n``margin_pct`` remains supported on individual tools as a legacy adapter\nvia ``FinancialAssumptions.from_legacy()``.",
+            "properties": {
+              "kpi_unit": {
+                "default": "revenue",
+                "description": "What the model target represents",
+                "enum": [
+                  "revenue",
+                  "conversions",
+                  "leads",
+                  "custom"
+                ],
+                "title": "Kpi Unit",
+                "type": "string"
+              },
+              "revenue_per_outcome": {
+                "default": 1.0,
+                "description": "Scaling factor converting model output to monetary revenue",
+                "minimum": 0,
+                "title": "Revenue Per Outcome",
+                "type": "number"
+              },
+              "gross_margin_rate": {
+                "default": 1.0,
+                "description": "Gross margin as a fraction of revenue (replaces margin_pct)",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Gross Margin Rate",
+                "type": "number"
+              },
+              "contribution_margin_rate": {
+                "anyOf": [
+                  {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Contribution margin rate; falls back to gross_margin_rate when absent",
+                "title": "Contribution Margin Rate"
+              },
+              "variable_cost_per_unit": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Variable cost per outcome unit",
+                "title": "Variable Cost Per Unit"
+              },
+              "acquisition_cost": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Cost to acquire one customer/lead",
+                "title": "Acquisition Cost"
+              },
+              "customer_lifetime_value_ref": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Reference CLV for LTV-aware objectives",
+                "title": "Customer Lifetime Value Ref"
+              },
+              "discount_rate": {
+                "default": 0.0,
+                "description": "Periodic discount rate for NPV/CLV",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Discount Rate",
+                "type": "number"
+              },
+              "discount_convention": {
+                "default": "periodic",
+                "enum": [
+                  "periodic",
+                  "annual"
+                ],
+                "title": "Discount Convention",
+                "type": "string"
+              },
+              "planning_horizon": {
+                "anyOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Planning periods for NPV; None uses model default",
+                "title": "Planning Horizon"
+              }
+            },
+            "title": "FinancialAssumptionsInput",
+            "type": "object"
+          },
           "FlightingOptimizationInput": {
             "properties": {
               "model_id": {
@@ -1743,11 +1886,23 @@
               },
               "margin_pct": {
                 "default": 1.0,
-                "description": "Revenue margin fraction for net-profit objective (revenue × margin − spend)",
+                "description": "Legacy revenue margin fraction (use financial.gross_margin_rate for new work)",
                 "maximum": 1.0,
                 "minimum": 0.0,
                 "title": "Margin Pct",
                 "type": "number"
+              },
+              "financial": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FinancialAssumptionsInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canonical financial contract. When supplied, takes precedence over margin_pct."
               },
               "channel_constraints": {
                 "description": "Per-channel weekly spend floor/cap and pattern constraints",
@@ -2293,7 +2448,7 @@
           "ModelComparisonInput": {
             "properties": {
               "model_ids": {
-                "description": "List of 2–10 model IDs to compare. All must be fitted on the same dataset.",
+                "description": "List of 2\u201310 model IDs to compare. All must be fitted on the same dataset.",
                 "items": {
                   "type": "string"
                 },
@@ -2484,6 +2639,314 @@
           "config"
         ],
         "title": "simulate_budgetArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "submit_budget_optimization_job",
+      "description": "Submit an asynchronous budget optimization job under channel/cell constraints without blocking the event loop.",
+      "input_schema": {
+        "$defs": {
+          "BudgetCellConstraint": {
+            "properties": {
+              "min": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Min"
+              },
+              "max": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max"
+              },
+              "fixed": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Fixed"
+              },
+              "channel": {
+                "title": "Channel",
+                "type": "string"
+              },
+              "dimensions": {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "title": "Dimensions",
+                "type": "object"
+              }
+            },
+            "required": [
+              "channel"
+            ],
+            "title": "BudgetCellConstraint",
+            "type": "object"
+          },
+          "BudgetOptimizationInput": {
+            "properties": {
+              "model_id": {
+                "title": "Model Id",
+                "type": "string"
+              },
+              "budget": {
+                "description": "Total budget amount to allocate",
+                "exclusiveMinimum": 0,
+                "title": "Budget",
+                "type": "number"
+              },
+              "planning_periods": {
+                "default": 8,
+                "description": "Number of future periods in planning horizon",
+                "maximum": 260,
+                "minimum": 1,
+                "title": "Planning Periods",
+                "type": "integer"
+              },
+              "constraints": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ChannelConstraint"
+                },
+                "description": "Channel-level min/max/fixed bounds",
+                "title": "Constraints",
+                "type": "object"
+              },
+              "cell_constraints": {
+                "description": "Cell-level dimension bounds",
+                "items": {
+                  "$ref": "#/$defs/BudgetCellConstraint"
+                },
+                "maxItems": 1000,
+                "title": "Cell Constraints",
+                "type": "array"
+              }
+            },
+            "required": [
+              "model_id",
+              "budget"
+            ],
+            "title": "BudgetOptimizationInput",
+            "type": "object"
+          },
+          "ChannelConstraint": {
+            "properties": {
+              "min": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Min"
+              },
+              "max": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max"
+              },
+              "fixed": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Fixed"
+              }
+            },
+            "title": "ChannelConstraint",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/BudgetOptimizationInput"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "submit_budget_optimization_jobArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "submit_cross_validate_mmm_job",
+      "description": "Submit an asynchronous Time-Slice Cross-Validation job across multiple temporal folds.",
+      "input_schema": {
+        "$defs": {
+          "CrossValidateMMMInput": {
+            "properties": {
+              "model_id": {
+                "description": "Fitted model ID to cross-validate",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "n_init": {
+                "default": 40,
+                "description": "Initial training period count",
+                "maximum": 500,
+                "minimum": 10,
+                "title": "N Init",
+                "type": "integer"
+              },
+              "forecast_horizon": {
+                "default": 10,
+                "description": "Out-of-sample forecast window size",
+                "maximum": 52,
+                "minimum": 1,
+                "title": "Forecast Horizon",
+                "type": "integer"
+              },
+              "step_size": {
+                "default": 10,
+                "description": "Step size between rolling folds",
+                "maximum": 52,
+                "minimum": 1,
+                "title": "Step Size",
+                "type": "integer"
+              },
+              "sampler": {
+                "$ref": "#/$defs/SamplerConfig",
+                "description": "Sampler settings for fold fitting"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "CrossValidateMMMInput",
+            "type": "object"
+          },
+          "SamplerConfig": {
+            "properties": {
+              "draws": {
+                "default": 1000,
+                "description": "Posterior draws per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Draws",
+                "type": "integer"
+              },
+              "tune": {
+                "default": 1000,
+                "description": "Tuning/warmup iterations per chain",
+                "maximum": 20000,
+                "minimum": 50,
+                "title": "Tune",
+                "type": "integer"
+              },
+              "chains": {
+                "default": 4,
+                "description": "Number of MCMC chains",
+                "maximum": 8,
+                "minimum": 2,
+                "title": "Chains",
+                "type": "integer"
+              },
+              "target_accept": {
+                "default": 0.9,
+                "description": "Target acceptance rate for NUTS",
+                "maximum": 0.999,
+                "minimum": 0.8,
+                "title": "Target Accept",
+                "type": "number"
+              },
+              "random_seed": {
+                "default": 42,
+                "description": "Deterministic random seed",
+                "title": "Random Seed",
+                "type": "integer"
+              }
+            },
+            "title": "SamplerConfig",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/CrossValidateMMMInput"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "submit_cross_validate_mmm_jobArguments",
         "type": "object"
       }
     },
@@ -2765,6 +3228,410 @@
       }
     },
     {
+      "name": "submit_flighting_optimization_job",
+      "description": "Submit an asynchronous dynamic media flighting optimization job over a planning horizon.",
+      "input_schema": {
+        "$defs": {
+          "FinancialAssumptionsInput": {
+            "description": "Typed financial contract for all decision tools.\n\nReplaces scattered ``margin_pct`` / ``discount_rate`` fields.\n``margin_pct`` remains supported on individual tools as a legacy adapter\nvia ``FinancialAssumptions.from_legacy()``.",
+            "properties": {
+              "kpi_unit": {
+                "default": "revenue",
+                "description": "What the model target represents",
+                "enum": [
+                  "revenue",
+                  "conversions",
+                  "leads",
+                  "custom"
+                ],
+                "title": "Kpi Unit",
+                "type": "string"
+              },
+              "revenue_per_outcome": {
+                "default": 1.0,
+                "description": "Scaling factor converting model output to monetary revenue",
+                "minimum": 0,
+                "title": "Revenue Per Outcome",
+                "type": "number"
+              },
+              "gross_margin_rate": {
+                "default": 1.0,
+                "description": "Gross margin as a fraction of revenue (replaces margin_pct)",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Gross Margin Rate",
+                "type": "number"
+              },
+              "contribution_margin_rate": {
+                "anyOf": [
+                  {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Contribution margin rate; falls back to gross_margin_rate when absent",
+                "title": "Contribution Margin Rate"
+              },
+              "variable_cost_per_unit": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Variable cost per outcome unit",
+                "title": "Variable Cost Per Unit"
+              },
+              "acquisition_cost": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Cost to acquire one customer/lead",
+                "title": "Acquisition Cost"
+              },
+              "customer_lifetime_value_ref": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Reference CLV for LTV-aware objectives",
+                "title": "Customer Lifetime Value Ref"
+              },
+              "discount_rate": {
+                "default": 0.0,
+                "description": "Periodic discount rate for NPV/CLV",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Discount Rate",
+                "type": "number"
+              },
+              "discount_convention": {
+                "default": "periodic",
+                "enum": [
+                  "periodic",
+                  "annual"
+                ],
+                "title": "Discount Convention",
+                "type": "string"
+              },
+              "planning_horizon": {
+                "anyOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Planning periods for NPV; None uses model default",
+                "title": "Planning Horizon"
+              }
+            },
+            "title": "FinancialAssumptionsInput",
+            "type": "object"
+          },
+          "FlightingOptimizationInput": {
+            "properties": {
+              "model_id": {
+                "description": "Approved MMM model ID to use for response estimation",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "total_budget": {
+                "description": "Total budget to allocate across all channels and weeks",
+                "exclusiveMinimum": 0,
+                "title": "Total Budget",
+                "type": "number"
+              },
+              "planning_weeks": {
+                "default": 12,
+                "description": "Planning horizon in weeks",
+                "maximum": 52,
+                "minimum": 2,
+                "title": "Planning Weeks",
+                "type": "integer"
+              },
+              "target_iroas_min": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Minimum acceptable posterior median iROAS across the planning period",
+                "title": "Target Iroas Min"
+              },
+              "margin_pct": {
+                "default": 1.0,
+                "description": "Legacy revenue margin fraction (use financial.gross_margin_rate for new work)",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Margin Pct",
+                "type": "number"
+              },
+              "financial": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FinancialAssumptionsInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canonical financial contract. When supplied, takes precedence over margin_pct."
+              },
+              "channel_constraints": {
+                "description": "Per-channel weekly spend floor/cap and pattern constraints",
+                "items": {
+                  "$ref": "#/$defs/WeeklyFlightingConstraint"
+                },
+                "title": "Channel Constraints",
+                "type": "array"
+              },
+              "objective": {
+                "default": "maximize_response",
+                "description": "Optimization objective function",
+                "enum": [
+                  "maximize_response",
+                  "maximize_net_profit",
+                  "target_roas"
+                ],
+                "title": "Objective",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model_id",
+              "total_budget"
+            ],
+            "title": "FlightingOptimizationInput",
+            "type": "object"
+          },
+          "WeeklyFlightingConstraint": {
+            "properties": {
+              "channel": {
+                "description": "Channel name this constraint applies to",
+                "title": "Channel",
+                "type": "string"
+              },
+              "min_weekly": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Minimum weekly spend floor",
+                "title": "Min Weekly"
+              },
+              "max_weekly": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Maximum weekly spend cap",
+                "title": "Max Weekly"
+              },
+              "pattern": {
+                "default": "flat",
+                "description": "Preferred spend pattern for this channel across the planning horizon",
+                "enum": [
+                  "flat",
+                  "frontloaded",
+                  "backloaded",
+                  "pulsed"
+                ],
+                "title": "Pattern",
+                "type": "string"
+              }
+            },
+            "required": [
+              "channel"
+            ],
+            "title": "WeeklyFlightingConstraint",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "config": {
+            "$ref": "#/$defs/FlightingOptimizationInput"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "submit_flighting_optimization_jobArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "submit_prior_sensitivity_job",
+      "description": "Submit an asynchronous prior sensitivity evaluation job exploring channel rank order stability.",
+      "input_schema": {
+        "$defs": {
+          "PriorSensitivityInput": {
+            "properties": {
+              "model_id": {
+                "description": "Model ID to evaluate for prior sensitivity",
+                "title": "Model Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "title": "PriorSensitivityInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/PriorSensitivityInput"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "submit_prior_sensitivity_jobArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "submit_transform_ad_export_job",
+      "description": "Submit an asynchronous job to transform raw long-form advertising exports into wide-form modeling format without blocking.",
+      "input_schema": {
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "date_column": {
+            "title": "Date Column",
+            "type": "string"
+          },
+          "channel_column": {
+            "title": "Channel Column",
+            "type": "string"
+          },
+          "spend_column": {
+            "title": "Spend Column",
+            "type": "string"
+          },
+          "target_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Columns",
+            "type": "array"
+          },
+          "dimension_columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dimension Columns"
+          },
+          "frequency": {
+            "default": "D",
+            "title": "Frequency",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "date_column",
+          "channel_column",
+          "spend_column",
+          "target_columns"
+        ],
+        "title": "submit_transform_ad_export_jobArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "transform_ad_export",
       "description": "Transform raw long-form advertising exports (e.g. from Google Ads, Meta Ads, LinkedIn) into a clean, wide-format modeling dataset. Pivots channel spend, enforces ratio non-summation invariants (CTR, CPA, ROAS recomputed from numerators/denominators), ensures calendar continuity, and generates cryptographic provenance with financial reconciliation.",
       "input_schema": {
@@ -2877,6 +3744,20 @@
             ],
             "default": null,
             "title": "Dims"
+          },
+          "user_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional user overrides for semantic interpretation",
+            "title": "User Overrides"
           }
         },
         "required": [

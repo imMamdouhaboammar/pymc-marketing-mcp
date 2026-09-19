@@ -52,11 +52,12 @@ class MarketingDataIntelligenceEngine:
         dims: list[str] | None = None,
     ) -> SemanticDatasetContract:
         """Runs comprehensive structural, semantic, statistical, and suitability profiling."""
-        user_overrides = user_overrides or {}
+        from marketing_mcp.schemas.overrides import normalize_user_overrides
+        user_overrides = normalize_user_overrides(user_overrides)
         dims = dims or []
 
         # 1. Structural profiling
-        date_override = next((col for col, ov in user_overrides.items() if ov.get("role") == SemanticRole.DATE), None)
+        date_override = next((col for col, ov in user_overrides.items() if isinstance(ov, dict) and ov.get("role") == SemanticRole.DATE), None)
         structural = profile_structure(df, date_column=date_override)
 
         # 2. Semantic role inference

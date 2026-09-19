@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from marketing_mcp.app import Application
@@ -46,7 +47,8 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                 raise DomainError("DATASET_NOT_FOUND", f"Dataset '{config.dataset_id}' was not found")
             authorize_dataset(principal, dataset, action="read")
 
-            r = app.models.fit(config, principal=principal)
+            loop = asyncio.get_running_loop()
+            r = await loop.run_in_executor(None, app.models.fit, config, principal)
             return env(
                 summary=r.model_dump(),
                 provenance=r.config.get("provenance", {}),
@@ -126,7 +128,8 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                 raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
             authorize_model(principal, model_rec, action="read")
 
-            r = app.diagnostics.cross_validate(input)
+            loop = asyncio.get_running_loop()
+            r = await loop.run_in_executor(None, app.diagnostics.cross_validate, input)
             decision = r.get("decision_provenance", {}).get("decision") or r.get("decision_impact")
             if decision == "blocked_predictive_failure" or r.get("failures"):
                 next_acts = ["diagnose_mmm", "validate_dataset", "evaluate_prior_sensitivity"]
@@ -157,7 +160,8 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                 raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
             authorize_model(principal, model_rec, action="read")
 
-            r = app.diagnostics.prior_sensitivity(input)
+            loop = asyncio.get_running_loop()
+            r = await loop.run_in_executor(None, app.diagnostics.prior_sensitivity, input)
             return env(
                 summary=r,
                 warnings=r.get("findings", []),

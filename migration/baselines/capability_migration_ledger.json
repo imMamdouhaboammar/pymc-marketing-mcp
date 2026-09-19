@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "total_capabilities_tracked": 57,
+  "total_capabilities_tracked": 62,
   "tools": [
     {
       "name": "archive_model",
@@ -297,6 +297,20 @@
       "adapter_compatibility_required": true
     },
     {
+      "name": "submit_budget_optimization_job",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "submit_cross_validate_mmm_job",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
       "name": "submit_fit_mmm_job",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "services/analytics-worker/jobs",
@@ -304,14 +318,35 @@
       "adapter_compatibility_required": true
     },
     {
-      "name": "validate_dataset",
+      "name": "submit_flighting_optimization_job",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "submit_prior_sensitivity_job",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "submit_transform_ad_export_job",
+      "source_repo": "pymc-marketing-mcp",
+      "target_owner": "services/analytics-worker/jobs",
+      "cutover_gate": "G_JOB_DURABILITY",
+      "adapter_compatibility_required": true
+    },
+    {
+      "name": "transform_ad_export",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/datasets",
       "cutover_gate": "G_DATASET_PARITY",
       "adapter_compatibility_required": true
     },
     {
-      "name": "transform_ad_export",
+      "name": "validate_dataset",
       "source_repo": "pymc-marketing-mcp",
       "target_owner": "packages/python/marketing_core/datasets",
       "cutover_gate": "G_DATASET_PARITY",

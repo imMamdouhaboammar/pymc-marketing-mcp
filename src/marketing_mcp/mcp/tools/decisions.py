@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from marketing_mcp.app import Application
@@ -125,7 +126,8 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
         authorize_model(principal, model_rec, action="read")
 
-        r = app.decisions.optimize(config)
+        loop = asyncio.get_running_loop()
+        r = await loop.run_in_executor(None, app.decisions.optimize, config)
         return env(
             summary=r,
             warnings=r.get("warnings", []),
@@ -174,7 +176,8 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
         authorize_model(principal, model_rec, action="read")
 
-        r = app.decisions.optimize_flighting(config)
+        loop = asyncio.get_running_loop()
+        r = await loop.run_in_executor(None, app.decisions.optimize_flighting, config)
         return env(
             summary={
                 "model_id": config.model_id,

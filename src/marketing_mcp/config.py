@@ -238,6 +238,12 @@ class Settings(BaseModel):
                 "MARKETING_MCP_PERSISTENCE_BACKEND", "sqlite"
             ).strip(),
             "shared_sql_url": os.getenv("MARKETING_MCP_SHARED_SQL_URL", "").strip() or None,
+            "rate_limit_per_minute": int(os.getenv("MARKETING_MCP_RATE_LIMIT_PER_MINUTE", "120")),
+            "gateway_url": os.getenv("MARKETING_MCP_GATEWAY_URL", "http://127.0.0.1:8080"),
+            "organization_id": os.getenv("MARKETING_MCP_ORGANIZATION_ID", "").strip() or None,
+            "principal_id": os.getenv("MARKETING_MCP_PRINCIPAL_ID", "").strip() or None,
+            "principal_role": os.getenv("MARKETING_MCP_PRINCIPAL_ROLE", "analyst").strip(),
+            "platform_client_enabled": os.getenv("MARKETING_MCP_PLATFORM_CLIENT_ENABLED", "false").strip().lower() in ("1", "true", "yes"),
         }
         if profile is not None:
             base["security_profile"] = profile

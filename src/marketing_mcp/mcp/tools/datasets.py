@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import urllib.error
 import urllib.parse
@@ -346,15 +347,19 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
             authorize_dataset(principal, dataset, action="read")
 
-            registered, provenance, plan = app.datasets.transform_long_form(
-                dataset_id=dataset_id,
-                date_column=date_column,
-                channel_column=channel_column,
-                spend_column=spend_column,
-                target_columns=target_columns,
-                dimension_columns=dimension_columns,
-                frequency=frequency,
-                principal=principal,
+            loop = asyncio.get_running_loop()
+            registered, provenance, plan = await loop.run_in_executor(
+                None,
+                lambda: app.datasets.transform_long_form(
+                    dataset_id=dataset_id,
+                    date_column=date_column,
+                    channel_column=channel_column,
+                    spend_column=spend_column,
+                    target_columns=target_columns,
+                    dimension_columns=dimension_columns,
+                    frequency=frequency,
+                    principal=principal,
+                ),
             )
 
             from dataclasses import asdict
