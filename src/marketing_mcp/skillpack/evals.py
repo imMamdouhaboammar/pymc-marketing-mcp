@@ -79,6 +79,7 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
     authorized_resume_job_type: str | None = None
     last_submitted_async_tool: str | None = None
     last_submitted_async_job_id: str | None = None
+    last_submitted_async_idempotency_key: str | None = None
     last_recovery: dict | None = None
     consecutive_polls = 0
 
@@ -191,16 +192,16 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
                     f"job '{rec_job_id}' but originating submission was for job '{last_submitted_async_job_id}'"
                 )
 
-            if (
-                rec_arg_id
-                and last_submitted_async_job_id
-                and rec_arg_id != last_submitted_async_job_id
-            ):
-                originating_job_matched = False
-                reasons.append(
-                    f"recovery argument mismatch: recover_execution_state at step {index} requested "
-                    f"'{rec_arg_id}' but originating submission was for job '{last_submitted_async_job_id}'"
-                )
+            if rec_arg_id and last_submitted_async_job_id:
+                allowed_recovery_keys = {last_submitted_async_job_id}
+                if last_submitted_async_idempotency_key:
+                    allowed_recovery_keys.add(last_submitted_async_idempotency_key)
+                if rec_arg_id not in allowed_recovery_keys:
+                    originating_job_matched = False
+                    reasons.append(
+                        f"recovery argument mismatch: recover_execution_state at step {index} requested "
+                        f"'{rec_arg_id}' but originating submission was for job '{last_submitted_async_job_id}'"
+                    )
 
             originating_family_matched = True
             if not last_submitted_async_tool:
@@ -321,6 +322,7 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
 
         if tool in ASYNC_SUBMIT_TOOLS:
             sub_res = step.get("result")
+            sub_args = step.get("arguments") or {}
             sub_job_id = None
             if isinstance(sub_res, dict):
                 sub_job_id = sub_res.get("job_id") or (sub_res.get("summary") or {}).get("job_id")
@@ -365,5 +367,14 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
                 last_submitted_async_job_id = sub_job_id.strip()
             else:
                 last_submitted_async_job_id = None
+
+            sub_idempotency_key = sub_args.get("idempotency_key")
+            if (
+                isinstance(sub_idempotency_key, str)
+                and sub_idempotency_key.strip()
+            ):
+                last_submitted_async_idempotency_key = sub_idempotency_key.strip()
+            else:
+                last_submitted_async_idempotency_key = None
 
     return TraceEvaluation(valid=not reasons, reasons=tuple(reasons))
