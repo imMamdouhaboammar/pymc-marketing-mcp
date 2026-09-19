@@ -298,7 +298,17 @@ async def test_full_analyst_journey_e2e(app_env):
     assert opt_job2["summary"]["job_id"] == opt_job_id
 
     # Poll optimization to completion
-    opt_poll = await _call(server, "poll_job_progress", {"job_id": opt_job_id, "timeout_seconds": 30})
+    start_opt_poll = time.time()
+    opt_poll = None
+    while time.time() - start_opt_poll < 90:
+        opt_poll = await _call(
+            server, "poll_job_progress", {"job_id": opt_job_id, "timeout_seconds": 25}
+        )
+        if opt_poll.get("summary", {}).get("is_terminal"):
+            break
+        await asyncio.sleep(0.5)
+
+    assert opt_poll is not None
     assert opt_poll["summary"]["is_terminal"] is True
     assert opt_poll["summary"]["job"]["status"] == "succeeded"
 

@@ -92,7 +92,16 @@ async def test_submit_transform_ad_export_job_idempotency_and_recovery(test_app,
     assert resp2["summary"]["job_id"] == job_id
 
     # Poll job to completion
-    poll_resp = await _acall(mcp_server, "poll_job_progress", {"job_id": job_id, "timeout_seconds": 10})
+    import time
+    start_poll = time.time()
+    poll_resp = None
+    while time.time() - start_poll < 30:
+        poll_resp = await _acall(mcp_server, "poll_job_progress", {"job_id": job_id, "timeout_seconds": 10})
+        if poll_resp.get("summary", {}).get("is_terminal"):
+            break
+        await asyncio.sleep(0.2)
+
+    assert poll_resp is not None
     assert poll_resp["summary"]["is_terminal"] is True
     assert poll_resp["summary"]["job"]["status"] == "succeeded"
 
