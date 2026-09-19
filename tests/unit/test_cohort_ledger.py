@@ -385,3 +385,42 @@ class TestMediaResponseCohortLedger:
         assert recon["total_authoritative_sum"] == 0.0
         assert recon["total_cohort_calendar_sum"] == pytest.approx(100.0)
         assert "2025-W01" in recon["discrepant_periods"]
+
+    def test_reconciliation_rejects_negative_authoritative_response(self):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "tv", "spend": 1000.0, "total_response": 100.0}
+        ]
+        adstock_weights = {"tv": [1.0]}
+        ledger = build_media_response_cohort_ledger(spend_records, adstock_weights)
+
+        # A negative authoritative period must fail closed instead of producing
+        # a negative relative discrepancy that could be certified as reconciled.
+        with pytest.raises(ValueError, match="must be non-negative"):
+            ledger.reconcile_to_calendar_response(
+                {"2025-W01": -5.0, "2025-W02": 105.0},
+                tolerance=0.05,
+                period_order=["2025-W01", "2025-W02"],
+            )
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+    def test_reconciliation_rejects_non_finite_authoritative_response(self, bad_value):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "tv", "spend": 1000.0, "total_response": 100.0}
+        ]
+        ledger = build_media_response_cohort_ledger(spend_records, {"tv": [1.0]})
+
+        with pytest.raises(ValueError, match="must be finite"):
+            ledger.reconcile_to_calendar_response({"2025-W01": bad_value})
+
+    @pytest.mark.parametrize("bad_tolerance", [-0.01, float("nan"), float("inf")])
+    def test_reconciliation_rejects_invalid_tolerance(self, bad_tolerance):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "tv", "spend": 1000.0, "total_response": 100.0}
+        ]
+        ledger = build_media_response_cohort_ledger(spend_records, {"tv": [1.0]})
+
+        with pytest.raises(ValueError, match="tolerance must be a finite non-negative number"):
+            ledger.reconcile_to_calendar_response(
+                {"2025-W01": 100.0},
+                tolerance=bad_tolerance,
+            )
