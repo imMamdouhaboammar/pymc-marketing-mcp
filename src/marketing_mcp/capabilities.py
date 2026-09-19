@@ -448,7 +448,7 @@ _INVENTORY: tuple[Capability, ...] = (
         status="stable",
         evidence_test_ids=(
             "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
-            "tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery",
+            "tests/unit/test_heavy_jobs_resilience.py::test_submit_flighting_optimization_job_idempotency_and_recovery",
         ),
     ),
     _tool(
@@ -459,7 +459,7 @@ _INVENTORY: tuple[Capability, ...] = (
         status="stable",
         evidence_test_ids=(
             "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
-            "tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery",
+            "tests/unit/test_heavy_jobs_resilience.py::test_submit_cross_validate_mmm_job_idempotency_and_recovery",
         ),
     ),
     _tool(
@@ -470,7 +470,7 @@ _INVENTORY: tuple[Capability, ...] = (
         status="stable",
         evidence_test_ids=(
             "tests/release/test_g2_jobs_persistence.py::TestGateG2JobsPersistence::test_job_submission_execution_and_persistence",
-            "tests/unit/test_heavy_jobs_resilience.py::test_submit_budget_optimization_job_idempotency_and_recovery",
+            "tests/unit/test_heavy_jobs_resilience.py::test_submit_prior_sensitivity_job_idempotency_and_recovery",
         ),
     ),
     _tool(

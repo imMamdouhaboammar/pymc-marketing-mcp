@@ -354,7 +354,7 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
             app.jobs.record_checkpoint(job.job_id, "cv_initialized", progress_percent=15.0)
             if cancel_event.is_set():
                 raise asyncio.CancelledError()
-            res = await loop.run_in_executor(None, app.diagnostics.cross_validate, input)
+            res = await loop.run_in_executor(None, lambda: app.diagnostics.cross_validate(input, cancel_event=cancel_event))
             if cancel_event.is_set():
                 raise asyncio.CancelledError()
             app.jobs.record_checkpoint(
@@ -402,7 +402,7 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
             app.jobs.record_checkpoint(job.job_id, "sensitivity_initialized", progress_percent=20.0)
             if cancel_event.is_set():
                 raise asyncio.CancelledError()
-            res = await loop.run_in_executor(None, app.diagnostics.prior_sensitivity, input)
+            res = await loop.run_in_executor(None, lambda: app.diagnostics.prior_sensitivity(input, cancel_event=cancel_event))
             if cancel_event.is_set():
                 raise asyncio.CancelledError()
             app.jobs.record_checkpoint(

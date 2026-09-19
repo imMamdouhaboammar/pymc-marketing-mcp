@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from marketing_mcp.domain.diagnostics.engine import diagnose_inferencedata
+from marketing_mcp.errors import DomainError
 from marketing_mcp.schemas.models import (
     CrossValidateMMMInput,
     DiagnosticResult,

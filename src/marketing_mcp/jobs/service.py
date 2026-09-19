@@ -230,8 +230,10 @@ class JobService:
             )
             return updated
 
-        # 2. Otherwise, restart the uncompleted stage with persisted payload/ownership
-        updated = self.repo.update_job(job_id, JobStatus.QUEUED, clear_error=True)
+        # 2. Otherwise, restart the uncompleted stage: re-queue with a fresh attempt budget
+        #    so claim_next_job (which gates on attempts < max_attempts) can claim it again.
+        #    Explicit user resume is treated as a new execution generation.
+        updated = self.repo.update_job(job_id, JobStatus.QUEUED, clear_error=True, reset_attempts=True)
         self.record_checkpoint(
             job_id,
             stage="resumed",

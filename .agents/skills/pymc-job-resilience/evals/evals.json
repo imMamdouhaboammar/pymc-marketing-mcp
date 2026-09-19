@@ -30,6 +30,36 @@
       "type": "recovery",
       "query": "The client disconnected after submit_fit_mmm_job; recover the existing execution state before considering a new submission.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-transform-recovery",
+      "type": "recovery",
+      "query": "The client disconnected during submit_transform_ad_export_job; check job status and recover state before transforming again.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-budget-opt-recovery",
+      "type": "recovery",
+      "query": "The long budget optimization job timed out on HTTP; poll progress and recover execution state.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-flighting-recovery",
+      "type": "recovery",
+      "query": "Recover the disconnected submit_flighting_optimization_job and resume if a checkpoint exists.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-cv-recovery",
+      "type": "recovery",
+      "query": "The asynchronous cross-validation job was interrupted; inspect progress with poll_job_progress.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-prior-sensitivity-recovery",
+      "type": "recovery",
+      "query": "Recover execution state for submit_prior_sensitivity_job after a network disconnect.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
     }
   ],
   "tool_traces": [
@@ -39,6 +69,50 @@
       "steps": [
         {
           "tool": "submit_fit_mmm_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state"
+        },
+        {
+          "tool": "resume_job"
+        }
+      ],
+      "max_consecutive_polls": 2
+    },
+    {
+      "id": "recover-transform-before-resubmit",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_transform_ad_export_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state"
+        },
+        {
+          "tool": "resume_job"
+        }
+      ],
+      "max_consecutive_polls": 2
+    },
+    {
+      "id": "recover-budget-optimization-before-resubmit",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_budget_optimization_job"
         },
         {
           "tool": "poll_job_progress"

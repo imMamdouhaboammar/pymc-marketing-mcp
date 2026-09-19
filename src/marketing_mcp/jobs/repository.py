@@ -22,6 +22,8 @@ class JobRepository(Protocol):
         status: JobStatus,
         result: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
+        clear_error: bool = False,
+        reset_attempts: bool = False,
     ) -> JobRecord: ...
     def list_jobs(
         self,
@@ -122,6 +124,7 @@ class SQLiteJobRepository:
         result: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
         clear_error: bool = False,
+        reset_attempts: bool = False,
     ) -> JobRecord:
         with self._lock:
             current = self.get_job(job_id)
@@ -136,14 +139,24 @@ class SQLiteJobRepository:
             else:
                 err_json = json.dumps(current.error) if current.error else None
 
-            self.conn.execute(
-                """
-                UPDATE jobs
-                SET status = ?, result = ?, error = ?, updated_at = ?
-                WHERE job_id = ?
-                """,
-                (status.value, res_json, err_json, now, job_id),
-            )
+            if reset_attempts:
+                self.conn.execute(
+                    """
+                    UPDATE jobs
+                    SET status = ?, result = ?, error = ?, updated_at = ?, attempts = 0
+                    WHERE job_id = ?
+                    """,
+                    (status.value, res_json, err_json, now, job_id),
+                )
+            else:
+                self.conn.execute(
+                    """
+                    UPDATE jobs
+                    SET status = ?, result = ?, error = ?, updated_at = ?
+                    WHERE job_id = ?
+                    """,
+                    (status.value, res_json, err_json, now, job_id),
+                )
             if self.conn.in_transaction:
                 self.conn.commit()
             return self.get_job(job_id)
@@ -457,26 +470,63 @@ class SQLiteJobRepository:
                     )
                     recovered += 1
 
-            requeued = self.conn.execute(
+            # For expired-leased running jobs: inspect checkpoint first.
+            # A worker may have written a completed checkpoint then died before finish_claim().
+            # Those jobs must become SUCCEEDED, not requeued, to avoid repeating completed work.
+            terminal_stages = {
+                "posterior_saved", "fit_completed", "diagnostics_completed",
+                "optimization_completed", "cv_completed", "sensitivity_completed",
+                "transformation_completed",
+            }
+            expired_leased_running = self.conn.execute(
                 """
-                UPDATE jobs
-                SET status = 'queued', error = ?, updated_at = ?,
-                    lease_owner = NULL, lease_expires_at = NULL
-                WHERE status = 'running' AND lease_expires_at IS NOT NULL
-                  AND lease_expires_at <= ? AND attempts < max_attempts
+                SELECT * FROM jobs
+                WHERE status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
                 """,
-                (retry_error, now, now),
-            ).rowcount
-            failed = self.conn.execute(
-                """
-                UPDATE jobs
-                SET status = 'failed', error = ?, updated_at = ?,
-                    lease_owner = NULL, lease_expires_at = NULL
-                WHERE status = 'running' AND lease_expires_at IS NOT NULL
-                  AND lease_expires_at <= ? AND attempts >= max_attempts
-                """,
-                (failed_error, now, now),
-            ).rowcount
+                (now,),
+            ).fetchall()
+
+            for row in expired_leased_running:
+                job_id = row["job_id"]
+                latest_cp = self.get_latest_checkpoint(job_id)
+                if latest_cp and latest_cp.stage in terminal_stages:
+                    # Worker completed the work but crashed before finish_claim — recover as SUCCEEDED
+                    rec_result = latest_cp.state_data.get("result") or {
+                        "recovered": True, "stage": latest_cp.stage
+                    }
+                    self.conn.execute(
+                        """
+                        UPDATE jobs
+                        SET status = 'succeeded', result = ?, error = NULL,
+                            lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
+                        WHERE job_id = ?
+                        """,
+                        (json.dumps(rec_result), now, job_id),
+                    )
+                    recovered += 1
+                elif row["attempts"] < row["max_attempts"]:
+                    self.conn.execute(
+                        """
+                        UPDATE jobs
+                        SET status = 'queued', error = ?, updated_at = ?,
+                            lease_owner = NULL, lease_expires_at = NULL
+                        WHERE job_id = ?
+                        """,
+                        (retry_error, now, job_id),
+                    )
+                    recovered += 1
+                else:
+                    self.conn.execute(
+                        """
+                        UPDATE jobs
+                        SET status = 'failed', error = ?, updated_at = ?,
+                            lease_owner = NULL, lease_expires_at = NULL
+                        WHERE job_id = ?
+                        """,
+                        (failed_error, now, job_id),
+                    )
+                    recovered += 1
+
             cancelled = self.conn.execute(
                 """
                 UPDATE jobs
@@ -497,7 +547,7 @@ class SQLiteJobRepository:
             ).rowcount
             cancelled += unleased_cancelling
             self.conn.commit()
-            return recovered + requeued + failed + cancelled
+            return recovered + cancelled
         except Exception:
             self.conn.rollback()
             raise

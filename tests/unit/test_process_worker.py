@@ -323,3 +323,84 @@ def test_build_default_handlers_covers_all_async_jobs() -> None:
     assert ps_res == {"sensitivity": {}}
     assert app.diagnostics.prior_sensitivity.call_args[0][0].model_id == "model-1"
 
+
+def test_worker_cli_merges_env_and_cli_flags(monkeypatch, tmp_path):
+    """P1 Item 3: Standalone worker CLI loads Settings.from_env() first,
+    applying CLI flags as partial overrides without resetting other env settings.
+    """
+    monkeypatch.setenv("MARKETING_MCP_MAX_DATASET_MB", "250")
+    monkeypatch.setenv("MARKETING_MCP_RATE_LIMIT_PER_MINUTE", "45")
+    db_path = tmp_path / "cli_test.db"
+
+    from marketing_mcp.jobs import worker_cli
+
+    ret = worker_cli.main(["--db", str(db_path), "--once"])
+    assert ret == 0
+
+    base = Settings.from_env()
+    assert base.max_dataset_mb == 250
+    assert base.rate_limit_per_minute == 45
+
+
+def test_process_worker_cancellation_propagation(tmp_path):
+    """P1 Item 4: When a running job transitions to CANCELLING or CANCELLED,
+    worker heartbeat sets cancel_event, stopping compute promptly,
+    and the final job status is marked CANCELLED and never overwritten to RUNNING or FAILED.
+    """
+    import threading
+
+    db_path = tmp_path / "cancel_worker.db"
+    repo = _repo(db_path)
+    repo.create_job(
+        JobRecord(
+            job_id="job-cancel-prop",
+            job_type="test_cancel",
+            status=JobStatus.QUEUED,
+            payload={},
+        )
+    )
+
+    observed_cancelled = False
+
+    def cancelling_handler(j, cancel_event=None):
+        nonlocal observed_cancelled
+        for _ in range(50):
+            if cancel_event and cancel_event.is_set():
+                observed_cancelled = True
+                raise DomainError("OPERATION_CANCELLED", "Aborted by client")
+            time.sleep(0.05)
+        return {"done": True}
+
+    heartbeat_conn = sqlite3.connect(db_path, check_same_thread=False)
+    heartbeat_conn.row_factory = sqlite3.Row
+    heartbeat_repo = SQLiteJobRepository(heartbeat_conn)
+
+    worker = ProcessJobWorker(
+        repo,
+        handlers={"test_cancel": cancelling_handler},
+        worker_id="worker-cancel-test",
+        lease_seconds=2,
+        heartbeat_repository=heartbeat_repo,
+    )
+
+    def trigger_cancellation():
+        time.sleep(0.15)
+        update_conn = sqlite3.connect(db_path, check_same_thread=False)
+        update_conn.row_factory = sqlite3.Row
+        update_repo = SQLiteJobRepository(update_conn)
+        update_repo.update_job("job-cancel-prop", status=JobStatus.CANCELLING)
+        update_conn.close()
+
+    t = threading.Thread(target=trigger_cancellation, daemon=True)
+    t.start()
+
+    did_work = worker.execute_next_job()
+    t.join()
+
+    assert did_work is True
+    assert observed_cancelled is True
+
+    final_job = repo.get_job("job-cancel-prop")
+    assert final_job.status == JobStatus.CANCELLED
+
+

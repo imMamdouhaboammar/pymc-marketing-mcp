@@ -273,9 +273,13 @@ class DecisionService:
 
         return warnings, channel_confidence
 
-    def optimize(self, input, cancel_event: Any = None):
+    @staticmethod
+    def _raise_if_cancelled(cancel_event: Any = None, action: str = "Operation") -> None:
         if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
-            raise DomainError("OPERATION_CANCELLED", "Optimization was cancelled by client")
+            raise DomainError("OPERATION_CANCELLED", f"{action} was cancelled by client")
+
+    def optimize(self, input, cancel_event: Any = None):
+        self._raise_if_cancelled(cancel_event, "Optimization")
         model, record = self._approved(input.model_id)
         result = self.modeling.adapter_factory().optimize_budget(
             model,
@@ -287,6 +291,7 @@ class DecisionService:
             },
             [constraint.model_dump(exclude_none=True) for constraint in input.cell_constraints],
         )
+        self._raise_if_cancelled(cancel_event, "Optimization")
         if result.get("optimizer_success") is not True:
             raise DomainError(
                 "OPTIMIZATION_FAILED",
@@ -414,6 +419,7 @@ class DecisionService:
             "allocation_rationale": rationale,
             "created_at": _utc(),
         }
+        self._raise_if_cancelled(cancel_event, "Optimization")
         self.metadata.put_scenario(payload)
         result.update(
             {
@@ -431,7 +437,8 @@ class DecisionService:
         )
         return result
 
-    def simulate(self, input):
+    def simulate(self, input, cancel_event: Any = None):
+        self._raise_if_cancelled(cancel_event, "Simulation")
         model, record = self._approved(input.model_id)
         baseline = historical_allocation(model, input.planning_periods)
         scenario = apply_changes(
@@ -447,6 +454,7 @@ class DecisionService:
             scenario,
             input.planning_periods,
         )
+        self._raise_if_cancelled(cancel_event, "Simulation")
         extrap_warnings = check_extrapolation_risk(
             model,
             scenario,
@@ -473,6 +481,7 @@ class DecisionService:
             "channel_confidence": channel_conf,
             "created_at": _utc(),
         }
+        self._raise_if_cancelled(cancel_event, "Simulation")
         self.metadata.put_scenario(payload)
 
         caveats = [
@@ -542,8 +551,7 @@ class DecisionService:
         return {"model_id": model_id, "recommendations": findings}
 
     def optimize_flighting(self, input, cancel_event: Any = None):
-        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
-            raise DomainError("OPERATION_CANCELLED", "Flighting optimization was cancelled by client")
+        self._raise_if_cancelled(cancel_event, "Flighting optimization")
         model, record = self._approved(input.model_id)
         import numpy as np
 
@@ -668,6 +676,7 @@ class DecisionService:
             response_evaluator=response_evaluator,
             financial=fin_assump,
         )
+        self._raise_if_cancelled(cancel_event, "Flighting optimization")
 
         total_channel_spend = flighting_res["total_channel_spend"]
         baseline_channel_spend = historical_allocation(
@@ -712,6 +721,7 @@ class DecisionService:
             scenario_allocation=scenario_allocation,
             planning_periods=input.planning_weeks,
         )
+        self._raise_if_cancelled(cancel_event, "Flighting optimization")
 
         scenario_id = f"flighting_{uuid.uuid4().hex[:12]}"
         payload = {
@@ -725,6 +735,7 @@ class DecisionService:
             "sim_result": sim_res,
             "created_at": _utc(),
         }
+        self._raise_if_cancelled(cancel_event, "Flighting optimization")
         self.metadata.put_scenario(payload)
 
         prov = self._provenance(input.model_id, record)

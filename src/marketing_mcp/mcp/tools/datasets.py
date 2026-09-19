@@ -15,6 +15,7 @@ from pydantic import Field
 from marketing_mcp.app import Application
 from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
+from marketing_mcp.jobs.operation_guard import ConcurrencyCancellationGuard
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.security import safe_ingest_path
 from marketing_mcp.security.ownership import authorize_dataset
@@ -347,8 +348,27 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                 raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
             authorize_dataset(principal, dataset, action="read")
 
-            loop = asyncio.get_running_loop()
-            async with app.operation_guard.track("transform_ad_export", principal=principal, details={"dataset_id": dataset_id}) as op:
+            guard = getattr(app, "operation_guard", None)
+            if isinstance(guard, ConcurrencyCancellationGuard):
+                registered, provenance, plan = await guard.run_tracked_executor(
+                    "transform_ad_export",
+                    lambda cancel_ev: app.datasets.transform_long_form(
+                        dataset_id=dataset_id,
+                        date_column=date_column,
+                        channel_column=channel_column,
+                        spend_column=spend_column,
+                        target_columns=target_columns,
+                        dimension_columns=dimension_columns,
+                        frequency=frequency,
+                        principal=principal,
+                        cancel_event=cancel_ev,
+                    ),
+                    principal=principal,
+                    details={"dataset_id": dataset_id},
+                    identity_key=f"transform_{dataset_id}",
+                )
+            else:
+                loop = asyncio.get_running_loop()
                 registered, provenance, plan = await loop.run_in_executor(
                     None,
                     lambda: app.datasets.transform_long_form(
@@ -360,7 +380,6 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
                         dimension_columns=dimension_columns,
                         frequency=frequency,
                         principal=principal,
-                        cancel_event=op.cancel_event,
                     ),
                 )
 

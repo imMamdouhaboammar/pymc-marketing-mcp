@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-import threading
-import uuid
 from typing import Any
-
-from marketing_mcp.errors import DomainError
 
 
 @dataclass
@@ -104,3 +102,64 @@ class ConcurrencyCancellationGuard:
             raise
         finally:
             self.unregister_operation(op.op_id)
+
+    async def run_tracked_executor(
+        self,
+        op_type: str,
+        func: Any,
+        principal: Any = None,
+        details: dict[str, Any] | None = None,
+        identity_key: str | None = None,
+    ) -> Any:
+        """Execute a blocking function in an executor thread with completion-bound tracking.
+
+        Unlike request-lifetime-bound tracking, the operation remains registered in
+        _active until the underlying executor thread actually terminates, preventing
+        overlapping duplicate retries under the same identity while compute is unwinding.
+        """
+        from marketing_mcp.errors import DomainError
+
+        ident = identity_key or (details.get("identity_key") if details else None) or (details.get("idempotency_key") if details else None)
+        if ident:
+            with self._lock:
+                for active_op in self._active.values():
+                    if active_op.details.get("identity_key") == ident:
+                        raise DomainError(
+                            "OPERATION_ALREADY_RUNNING",
+                            f"An operation with identity '{ident}' is currently active",
+                            evidence={"op_id": active_op.op_id, "op_type": active_op.op_type, "status": active_op.status},
+                            next_action="Wait for the active operation to complete or check its status.",
+                        )
+
+        effective_details = dict(details or {})
+        if ident:
+            effective_details["identity_key"] = ident
+
+        op = self.register_operation(op_type, principal, effective_details)
+        loop = asyncio.get_running_loop()
+
+        result_holder: list[Any] = []
+        error_holder: list[BaseException] = []
+
+        def _worker_wrapper() -> None:
+            try:
+                res = func(op.cancel_event)
+                result_holder.append(res)
+                if not op.is_cancelled:
+                    op.status = "completed"
+            except BaseException as ex:
+                error_holder.append(ex)
+                if not op.is_cancelled:
+                    op.status = "failed"
+            finally:
+                self.unregister_operation(op.op_id)
+
+        future = loop.run_in_executor(None, _worker_wrapper)
+        try:
+            await asyncio.shield(future)
+            if error_holder:
+                raise error_holder[0]
+            return result_holder[0] if result_holder else None
+        except asyncio.CancelledError:
+            op.cancel()
+            raise

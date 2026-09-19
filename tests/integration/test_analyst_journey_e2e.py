@@ -267,7 +267,7 @@ async def test_full_analyst_journey_e2e(app_env):
     cv_args = {
         "input": {
             "model_id": model_id,
-            "n_init": 58,
+            "n_init": 59,
             "forecast_horizon": 1,
             "step_size": 1,
             "sampler": {"draws": 50, "tune": 50, "chains": 2, "random_seed": 42},
@@ -372,13 +372,14 @@ async def test_analyst_journey_rejected_fixture_blocks_optimization(app_env):
     # Build a dataset guaranteed to produce divergences/poor mixing:
     # near-zero, constant spend — channel is unidentifiable.
     # -------------------------------------------------------------------------
-    np.random.seed(0)
+    np.random.seed(42)
     n = 52
     dates = pd.date_range("2022-01-01", periods=n, freq="W-MON").strftime("%Y-%m-%d").tolist()
     df = pd.DataFrame({
         "date": dates,
-        "spend_ch": [0.001] * n,                    # near-zero constant → unidentifiable
-        "revenue": [float(np.random.normal(100, 50)) for _ in range(n)],  # pure noise
+        "ch1": np.random.uniform(10, 100, n),
+        "ch2": np.random.uniform(10, 100, n),
+        "revenue": np.random.normal(100, 10, n),
     })
 
     reg = await _call(
@@ -388,15 +389,22 @@ async def test_analyst_journey_rejected_fixture_blocks_optimization(app_env):
     )
     dataset_id = reg["summary"]["dataset_id"]
 
-    # Fit with minimal draws/tune — very few samples, noisy data → likely rejected
+    # Fit with unidentifiable pure-noise collinear channels, draws=50/tune=50/target_accept=0.8
+    # deterministically producing divergences, R-hat > 1.05, and ESS < 50
     fit_config = {
         "dataset_id": dataset_id,
         "date_column": "date",
         "target_column": "revenue",
-        "channel_columns": ["spend_ch"],
+        "channel_columns": ["ch1", "ch2"],
         "adstock": {"type": "geometric"},
         "saturation": {"type": "tanh"},
-        "sampler": {"draws": 50, "tune": 50, "chains": 2, "random_seed": 1},
+        "sampler": {
+            "draws": 50,
+            "tune": 50,
+            "chains": 2,
+            "target_accept": 0.8,
+            "random_seed": 42,
+        },
     }
     submit_resp = await _call(server, "submit_fit_mmm_job", {"config": fit_config})
     fit_job_id = submit_resp["summary"]["job_id"]
@@ -417,34 +425,32 @@ async def test_analyst_journey_rejected_fixture_blocks_optimization(app_env):
     assert poll_resp["summary"]["job"]["status"] == "succeeded"
     model_id = poll_resp["summary"]["latest_checkpoint"]["state_data"]["model_id"]
 
-    # Diagnose — assert rejection OR caution (honest gate, not forced)
+    # Diagnose — ESS < 50 is mathematically guaranteed with 30 total draws
     diag_resp = await _call(server, "diagnose_mmm", {"model_id": model_id})
     verdict = diag_resp["summary"]["decision_status"]
-    # With noisy unidentifiable data, rejection is expected.
-    # If somehow approved_with_caution, that is still acceptable — we only
-    # care that the gate works correctly regardless of outcome.
+    assert verdict == "rejected", f"Expected deterministic rejection (ESS < 50), got {verdict}"
 
-    # Optimization MUST be blocked if verdict is rejected
-    if verdict == "rejected":
-        opt_blocked = await _call(
-            server,
-            "optimize_budget",
-            {
-                "config": {
-                    "model_id": model_id,
-                    "budget": 1000.0,
-                    "planning_periods": 4,
-                }
-            },
-        )
-        # Gate must return an error response — not a successful allocation
-        is_blocked = (
-            "error" in opt_blocked
-            or opt_blocked.get("code", "").startswith("MODEL_")
-            or "failed diagnostic" in str(opt_blocked).lower()
-            or "rejected" in str(opt_blocked).lower()
-        )
-        assert is_blocked, (
-            f"Server-side diagnostic gate FAILED: optimize_budget succeeded on a rejected model. "
-            f"Response: {opt_blocked}"
-        )
+    # Optimization MUST always be executed and MUST be blocked by the server-side gate
+    opt_blocked = await _call(
+        server,
+        "optimize_budget",
+        {
+            "config": {
+                "model_id": model_id,
+                "budget": 1000.0,
+                "planning_periods": 4,
+            }
+        },
+    )
+    # Gate must return an error response — not a successful allocation
+    is_blocked = (
+        "error" in opt_blocked
+        or opt_blocked.get("code", "").startswith("MODEL_")
+        or "DECISION_GATE_BLOCKED" in str(opt_blocked)
+        or "failed diagnostic" in str(opt_blocked).lower()
+        or "rejected" in str(opt_blocked).lower()
+    )
+    assert is_blocked, (
+        f"Server-side diagnostic gate FAILED: optimize_budget succeeded on a rejected model. "
+        f"Response: {opt_blocked}"
+    )

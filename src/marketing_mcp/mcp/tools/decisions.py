@@ -8,6 +8,7 @@ from typing import Any
 from marketing_mcp.app import Application
 from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
+from marketing_mcp.jobs.operation_guard import ConcurrencyCancellationGuard
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.schemas.models import (
     BudgetOptimizationInput,
@@ -126,9 +127,18 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
         authorize_model(principal, model_rec, action="read")
 
-        loop = asyncio.get_running_loop()
-        async with app.operation_guard.track("optimize_budget", principal=principal, details={"model_id": config.model_id}) as op:
-            r = await loop.run_in_executor(None, lambda: app.decisions.optimize(config, cancel_event=op.cancel_event))
+        guard = getattr(app, "operation_guard", None)
+        if isinstance(guard, ConcurrencyCancellationGuard):
+            r = await guard.run_tracked_executor(
+                "optimize_budget",
+                lambda cancel_ev: app.decisions.optimize(config, cancel_event=cancel_ev),
+                principal=principal,
+                details={"model_id": config.model_id},
+                identity_key=f"opt_{config.model_id}",
+            )
+        else:
+            loop = asyncio.get_running_loop()
+            r = await loop.run_in_executor(None, lambda: app.decisions.optimize(config))
         return env(
             summary=r,
             warnings=r.get("warnings", []),
@@ -177,9 +187,18 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
             raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
         authorize_model(principal, model_rec, action="read")
 
-        loop = asyncio.get_running_loop()
-        async with app.operation_guard.track("optimize_flighting", principal=principal, details={"model_id": config.model_id}) as op:
-            r = await loop.run_in_executor(None, lambda: app.decisions.optimize_flighting(config, cancel_event=op.cancel_event))
+        guard = getattr(app, "operation_guard", None)
+        if isinstance(guard, ConcurrencyCancellationGuard):
+            r = await guard.run_tracked_executor(
+                "optimize_flighting",
+                lambda cancel_ev: app.decisions.optimize_flighting(config, cancel_event=cancel_ev),
+                principal=principal,
+                details={"model_id": config.model_id},
+                identity_key=f"flighting_{config.model_id}",
+            )
+        else:
+            loop = asyncio.get_running_loop()
+            r = await loop.run_in_executor(None, lambda: app.decisions.optimize_flighting(config))
         return env(
             summary={
                 "model_id": config.model_id,

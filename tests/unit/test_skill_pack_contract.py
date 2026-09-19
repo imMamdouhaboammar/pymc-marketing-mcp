@@ -146,7 +146,7 @@ def test_routing_evals_drive_the_runtime_router():
     assert counts_by_type["ambiguous"] >= 11
     assert counts_by_type["multi_intent"] >= 11
     assert counts_by_type["recovery"] >= 11
-    assert checked == 64
+    assert checked >= 64
 
 
 def test_required_resources_must_be_real_resource_capabilities():

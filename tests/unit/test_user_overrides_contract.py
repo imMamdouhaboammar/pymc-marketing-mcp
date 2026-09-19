@@ -139,3 +139,32 @@ class TestMCPToolsWithUserOverrides:
         resp = self._call(server, "validate_dataset", payload)
         assert "summary" in resp
         assert resp["summary"]["valid_for_modeling"] is True
+
+    def test_inspect_dataset_unknown_dim_override_raises_input_invalid(self, test_env):
+        app, server, dataset_id = test_env
+        payload = {
+            "dataset_id": dataset_id,
+            "user_overrides": {"dims": ["store_clustr_typo"]},
+        }
+        resp = self._call(server, "inspect_dataset", payload)
+        assert "error" in resp or "code" in resp
+        code = resp.get("code") or resp.get("error", {}).get("code")
+        assert code == "INPUT_INVALID"
+        assert "store_clustr_typo" in str(resp)
+
+    def test_validate_dataset_unknown_dim_param_raises_input_invalid(self, test_env):
+        app, server, dataset_id = test_env
+        payload = {
+            "dataset_id": dataset_id,
+            "date_column": "date",
+            "target_column": "revenue_usd",
+            "channel_columns": ["ad_spend"],
+            "dims": ["non_existent_market_dim"],
+        }
+        resp = self._call(server, "validate_dataset", payload)
+        assert "error" in resp or "code" in resp
+        code = resp.get("code") or resp.get("error", {}).get("code")
+        assert code == "INPUT_INVALID"
+        assert "non_existent_market_dim" in str(resp)
+
+

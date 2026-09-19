@@ -1,13 +1,18 @@
 {
   "schema_version": "1",
   "name": "pymc-job-resilience",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "domain": "jobs",
-  "summary": "Manage long-running MMM fitting jobs with bounded polling, persisted-state recovery, resume/cancel semantics, and no duplicate resubmission after disconnects.",
+  "summary": "Manage long-running asynchronous compute jobs across fitting, transformation, budget optimization, flighting, cross-validation, and prior sensitivity with bounded polling, persisted-state recovery, resume/cancel semantics, and no duplicate resubmission after disconnects.",
   "triggers": [
     "the MMM fit timed out",
     "recover the job after disconnect",
-    "resume this fitting job"
+    "resume this fitting job",
+    "the data transformation job timed out",
+    "recover budget optimization job",
+    "recover flighting job",
+    "recover cross-validation job",
+    "recover prior sensitivity job"
   ],
   "negative_triggers": [
     "fit a quick synchronous MMM",
@@ -42,6 +47,8 @@
   ],
   "continuations": [
     "pymc-diagnostics-gate",
+    "pymc-dataset-readiness",
+    "pymc-budget-optimization",
     "pymc-artifact-delivery"
   ],
   "maturity": "experimental",
@@ -49,6 +56,27 @@
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],
+  "deny": [
+    "rm -rf",
+    "sudo",
+    "chmod 777",
+    "ssh",
+    "> /dev/"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "deny": [
+          "rm -rf",
+          "sudo",
+          "chmod 777",
+          "ssh",
+          "> /dev/"
+        ]
+      }
+    ]
+  },
   "files": {
     "references": [],
     "examples": [],

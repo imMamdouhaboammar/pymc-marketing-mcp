@@ -142,6 +142,9 @@ class ModelingService:
             rec.updated_at = _utc()
             rec.config["provenance"] = versions
         except DomainError as e:
+            if e.code == "OPERATION_CANCELLED":
+                # Preserve the cancelled status already written; do not overwrite with failed.
+                raise
             rec.status = "failed"
             rec.failure = e.to_dict()["error"]
             rec.updated_at = _utc()

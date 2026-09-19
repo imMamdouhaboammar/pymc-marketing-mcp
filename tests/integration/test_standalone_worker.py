@@ -72,6 +72,7 @@ def test_standalone_worker_cli_executes_real_job_lifecycle(tmp_path: Path) -> No
     """Acceptance test verifying separate-process worker CLI handles compute jobs end-to-end."""
     import numpy as np
     import pandas as pd
+
     from marketing_mcp.app import Application
     from marketing_mcp.config import Settings
     from marketing_mcp.security.principal import Principal
@@ -220,7 +221,7 @@ def test_standalone_worker_cli_executes_real_job_lifecycle(tmp_path: Path) -> No
         job_type="cross_validate_mmm",
         payload={
             "model_id": model_id,
-            "n_init": 48,
+            "n_init": 50,
             "forecast_horizon": 2,
             "step_size": 2,
             "sampler": {"draws": 50, "tune": 50, "chains": 2, "random_seed": 42},

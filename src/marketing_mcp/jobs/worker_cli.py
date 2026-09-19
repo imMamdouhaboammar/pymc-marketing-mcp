@@ -22,25 +22,25 @@ from marketing_mcp.security.principal import Principal
 from marketing_mcp.storage.metadata import SQLiteMetadataStore
 
 
-def build_fit_mmm_handler(app: Application) -> Callable[[JobRecord], dict[str, Any]]:
+def build_fit_mmm_handler(app: Application) -> Callable[..., dict[str, Any]]:
     """Build the standalone fit handler using persisted job ownership."""
 
-    def fit_mmm(job: JobRecord) -> dict[str, Any]:
+    def fit_mmm(job: JobRecord, cancel_event: Any = None) -> dict[str, Any]:
         config = FitMMMInput.model_validate(job.payload)
         principal = Principal(
             subject=job.owner,
             auth_type="oauth" if job.tenant_id else "stdio",
             tenant_id=job.tenant_id,
         )
-        return app.models.fit(config, principal).model_dump()
+        return app.models.fit(config, principal, cancel_event=cancel_event).model_dump()
 
     return fit_mmm
 
 
-def build_transform_ad_export_handler(app: Application) -> Callable[[JobRecord], dict[str, Any]]:
+def build_transform_ad_export_handler(app: Application) -> Callable[..., dict[str, Any]]:
     """Build the standalone transform handler using persisted job ownership."""
 
-    def transform_ad_export(job: JobRecord) -> dict[str, Any]:
+    def transform_ad_export(job: JobRecord, cancel_event: Any = None) -> dict[str, Any]:
         from dataclasses import asdict
 
         principal = Principal(
@@ -57,6 +57,7 @@ def build_transform_ad_export_handler(app: Application) -> Callable[[JobRecord],
             dimension_columns=job.payload.get("dimension_columns"),
             frequency=job.payload.get("frequency", "D"),
             principal=principal,
+            cancel_event=cancel_event,
         )
         return {
             "transformed_dataset_id": registered.dataset_id,
@@ -74,47 +75,47 @@ def build_transform_ad_export_handler(app: Application) -> Callable[[JobRecord],
     return transform_ad_export
 
 
-def build_budget_optimization_handler(app: Application) -> Callable[[JobRecord], dict[str, Any]]:
+def build_budget_optimization_handler(app: Application) -> Callable[..., dict[str, Any]]:
     """Build the standalone budget optimization handler."""
 
-    def budget_optimize(job: JobRecord) -> dict[str, Any]:
+    def budget_optimize(job: JobRecord, cancel_event: Any = None) -> dict[str, Any]:
         config = BudgetOptimizationInput.model_validate(job.payload)
-        return app.decisions.optimize(config)
+        return app.decisions.optimize(config, cancel_event=cancel_event)
 
     return budget_optimize
 
 
-def build_flighting_optimization_handler(app: Application) -> Callable[[JobRecord], dict[str, Any]]:
+def build_flighting_optimization_handler(app: Application) -> Callable[..., dict[str, Any]]:
     """Build the standalone flighting optimization handler."""
 
-    def flighting_optimize(job: JobRecord) -> dict[str, Any]:
+    def flighting_optimize(job: JobRecord, cancel_event: Any = None) -> dict[str, Any]:
         config = FlightingOptimizationInput.model_validate(job.payload)
-        return app.decisions.optimize_flighting(config)
+        return app.decisions.optimize_flighting(config, cancel_event=cancel_event)
 
     return flighting_optimize
 
 
-def build_cross_validate_mmm_handler(app: Application) -> Callable[[JobRecord], dict[str, Any]]:
+def build_cross_validate_mmm_handler(app: Application) -> Callable[..., dict[str, Any]]:
     """Build the standalone cross validation handler."""
 
-    def cross_validate_mmm(job: JobRecord) -> dict[str, Any]:
+    def cross_validate_mmm(job: JobRecord, cancel_event: Any = None) -> dict[str, Any]:
         config = CrossValidateMMMInput.model_validate(job.payload)
-        return app.diagnostics.cross_validate(config)
+        return app.diagnostics.cross_validate(config, cancel_event=cancel_event)
 
     return cross_validate_mmm
 
 
-def build_prior_sensitivity_handler(app: Application) -> Callable[[JobRecord], dict[str, Any]]:
+def build_prior_sensitivity_handler(app: Application) -> Callable[..., dict[str, Any]]:
     """Build the standalone prior sensitivity handler."""
 
-    def prior_sensitivity(job: JobRecord) -> dict[str, Any]:
+    def prior_sensitivity(job: JobRecord, cancel_event: Any = None) -> dict[str, Any]:
         config = PriorSensitivityInput.model_validate(job.payload)
-        return app.diagnostics.prior_sensitivity(config)
+        return app.diagnostics.prior_sensitivity(config, cancel_event=cancel_event)
 
     return prior_sensitivity
 
 
-def build_default_handlers(app: Application) -> dict[str, Callable[[JobRecord], dict[str, Any]]]:
+def build_default_handlers(app: Application) -> dict[str, Callable[..., dict[str, Any]]]:
     """Build default handlers for all asynchronous background job types."""
     return {
         "fit_mmm": build_fit_mmm_handler(app),
@@ -136,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     from pathlib import Path
+
     from marketing_mcp.config import Settings
 
     settings_kwargs = {}
@@ -146,7 +148,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.artifact_dir:
         settings_kwargs["artifact_dir"] = Path(args.artifact_dir)
 
-    settings = Settings(**settings_kwargs) if settings_kwargs else Settings()
+    # Always start from environment configuration; CLI flags are selective overrides.
+    base_settings = Settings.from_env()
+    if settings_kwargs:
+        settings = base_settings.model_copy(update=settings_kwargs)
+    else:
+        settings = base_settings
     app = Application(settings)
     heartbeat_store = SQLiteMetadataStore(app.settings.metadata_db)
     heartbeat_repo = SQLiteJobRepository(heartbeat_store.conn)
