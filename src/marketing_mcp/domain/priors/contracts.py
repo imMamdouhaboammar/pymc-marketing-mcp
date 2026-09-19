@@ -15,6 +15,25 @@ EvidenceType = Literal[
     "diffuse_uninformative",
 ]
 
+EvidenceGrade = Literal[
+    "empirical_experiment",      # Caller-provided quality_score or SE-derived precision
+    "empirical_inconclusive",    # Experiment run but lift ≤ 0 or spend ≤ 0
+    "domain_spend_scale",        # Only spend magnitude known; no incrementality proof
+    "diffuse_uninformative",     # No experiment, no spend scale
+]
+
+IncrementalityStatus = Literal[
+    "positive_lift",
+    "non_positive_or_inconclusive",
+    "not_applicable",
+]
+
+ProvenanceType = Literal[
+    "caller_quality_score",     # Caller explicitly supplied evidence_quality_score
+    "empirical_precision",      # Derived from 1 / (1 + SE) when no quality_score provided
+    "policy_default",           # Policy-defined tier for domain/diffuse paths
+]
+
 
 class PriorAlternative(BaseModel):
     """An alternative candidate prior specification."""
@@ -29,6 +48,16 @@ class PriorRecommendation(BaseModel):
 
     Design invariant (T4): Recommendations are never applied silently.
     They require explicit user adoption into FitMMMInput.channel_priors.
+
+    Scientific provenance invariants:
+    - confidence is NEVER fabricated from a magic fallback float.
+      It is either the caller-supplied quality_score, or derived from
+      experimental precision 1/(1+SE), or documented as a policy-default tier.
+    - Non-positive experimental lift (Δy ≤ 0 or Δx ≤ 0) sets
+      incrementality_status = "non_positive_or_inconclusive" and disqualifies
+      the recommendation from producing an informative positive-ROAS prior.
+    - evidence_grade records whether the recommendation is backed by an
+      empirical experiment, domain spend scale, or pure diffusion.
     """
 
     channel: str = Field(description="Channel target for this recommendation")
@@ -40,10 +69,26 @@ class PriorRecommendation(BaseModel):
     )
     evidence_source: str = Field(description="Provenance or identifier of supporting evidence")
     evidence_type: EvidenceType = Field(description="Methodological category of evidence")
+    evidence_grade: EvidenceGrade = Field(
+        description="Scientific quality grade of the underlying evidence"
+    )
     confidence: float = Field(
         ge=0.0,
         le=1.0,
-        description="Confidence score (0.0=unsupported/diffuse, 1.0=gold-standard experiment)",
+        description=(
+            "Confidence score grounded in empirical precision or policy tier. "
+            "Never fabricated: see provenance_type for how this value was derived."
+        ),
+    )
+    provenance_type: ProvenanceType = Field(
+        description="How the confidence value was derived"
+    )
+    is_empirically_calibrated: bool = Field(
+        description="True only when the recommendation is backed by a positive-lift experiment"
+    )
+    incrementality_status: IncrementalityStatus = Field(
+        default="not_applicable",
+        description="Incrementality result of the backing experiment (if any)",
     )
     reason: str = Field(description="Statistical and commercial rationale for recommendation")
     assumptions: list[str] = Field(
@@ -79,7 +124,11 @@ class PriorRecommendationReport(BaseModel):
     )
     unsupported_channels: list[str] = Field(
         default_factory=list,
-        description="Channels with no empirical evidence where uninformative priors are suggested",
+        description="Channels with zero evidence (no experiment, no spend scale); diffuse prior",
+    )
+    domain_bounded_channels: list[str] = Field(
+        default_factory=list,
+        description="Channels with spend-scale bounds but no incrementality experiment",
     )
     provenance: dict[str, Any] = Field(
         default_factory=dict,
