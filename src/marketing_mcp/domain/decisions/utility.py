@@ -35,8 +35,7 @@ class UtilityObjective(Protocol):
     """
 
     @property
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
     def evaluate(
         self,
@@ -71,7 +70,10 @@ class ExpectedResponseObjective:
         return float(np.mean(posterior_samples))
 
     def metadata(self) -> dict[str, Any]:
-        return {"objective": self.name, "description": "Expected value of posterior response samples"}
+        return {
+            "objective": self.name,
+            "description": "Expected value of posterior response samples",
+        }
 
 
 @dataclass(frozen=True)
@@ -104,11 +106,62 @@ class ExpectedNetProfitObjective:
         }
 
 
+@dataclass(frozen=True)
+class LowerQuantileObjective:
+    """Lower-quantile (Value-at-Risk) posterior net profit utility (RFC 002).
+
+    Utility = Quantile_alpha(revenue * margin_rate - spend)
+
+    Parameters
+    ----------
+    quantile: float
+        Probability level alpha in (0, 1). Defaults to 0.10 (10th percentile),
+        representing conservative planning where 90% of posterior realizations
+        are expected to exceed this threshold.
+    name: str
+        Objective identifier, default "lower_quantile".
+
+    Scientific Semantics:
+    - Units: currency (same as net profit).
+    - Maximizing this utility rewards allocations with both high expected return
+      and lower posterior estimation variance (downside risk aversion).
+    - When posterior variance is zero, evaluates identically to expected_net_profit.
+    - Requires evaluated posterior draws; never fabricates certainty.
+    """
+
+    quantile: float = 0.10
+    name: str = "lower_quantile"
+
+    def __post_init__(self) -> None:
+        if not (0.0 < self.quantile < 1.0):
+            raise ValueError(f"quantile must be strictly between 0 and 1, got {self.quantile}")
+
+    def evaluate(
+        self,
+        posterior_samples: np.ndarray,
+        financial: FinancialAssumptions,
+        spend: float,
+    ) -> float:
+        margin = financial.effective_margin_rate()
+        rev_per = financial.revenue_per_outcome
+        revenue = posterior_samples * rev_per
+        net_profit = revenue * margin - spend
+        return float(np.quantile(net_profit, self.quantile))
+
+    def metadata(self) -> dict[str, Any]:
+        return {
+            "objective": self.name,
+            "quantile": self.quantile,
+            "description": f"Lower {self.quantile:.0%} quantile of posterior net profit (Value-at-Risk guarantee)",
+        }
+
+
 # Registry — add new objectives here only with scientific RFC + invariant tests
 _OBJECTIVE_REGISTRY: dict[str, UtilityObjective] = {
     "expected_response": ExpectedResponseObjective(),
     "expected_net_profit": ExpectedNetProfitObjective(),
-    # ponytail: target_roas and risk-aware objectives added when RFC + tests exist
+    "lower_quantile": LowerQuantileObjective(),
+    # ponytail: target_roas and other risk-aware objectives added when RFC + tests exist
 }
 
 
