@@ -9,7 +9,10 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
-    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup-init.sh \
+    && echo "7d0ea0f8eba7fa1ebfe998091cd7ec4501e33ec5ca6b884eb4d894d7da5170af  /tmp/rustup-init.sh" | sha256sum -c - \
+    && sh /tmp/rustup-init.sh -y --default-toolchain stable \
+    && rm /tmp/rustup-init.sh \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/root/.cargo/bin:${PATH}"
