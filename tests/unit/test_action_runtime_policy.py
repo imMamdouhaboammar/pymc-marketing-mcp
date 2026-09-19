@@ -12,10 +12,8 @@ USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)
 # actions are classified explicitly rather than mislabeled as Node actions.
 APPROVED_ACTIONS = {
     "actions/checkout": ("3d3c42e5aac5ba805825da76410c181273ba90b1", "node24"),
-    "actions/deploy-pages": ("368f82528645a54fb793d4d04e342629a3f51346", "node24"),
     "actions/download-artifact": ("3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c", "node24"),
     "actions/upload-artifact": ("043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", "node24"),
-    "actions/upload-pages-artifact": ("fc324d3547104276b827a68afc52ff2a11cc49c9", "composite"),
     "astral-sh/setup-uv": ("20cfd1bf945f4377ade1205e4dbc17946fc9a30d", "node24"),
     "docker/build-push-action": ("53b7df96c91f9c12dcc8a07bcb9ccacbed38856a", "node24"),
     "docker/setup-buildx-action": ("37fe631027851001ddb9b187196cc803df7f5f0e", "node24"),
@@ -38,7 +36,7 @@ def _active_uses() -> list[tuple[Path, str, str]]:
 def test_all_active_actions_use_reviewed_immutable_runtime_refs() -> None:
     uses = _active_uses()
 
-    assert len(uses) == 56
+    assert len(uses) == 54
     assert {action for _, action, _ in uses} == set(APPROVED_ACTIONS)
     for workflow, action, ref in uses:
         expected_ref, _kind = APPROVED_ACTIONS[action]
@@ -49,8 +47,8 @@ def test_all_active_actions_use_reviewed_immutable_runtime_refs() -> None:
 def test_runtime_inventory_distinguishes_node_composite_and_docker_actions() -> None:
     kinds = {action: kind for action, (_ref, kind) in APPROVED_ACTIONS.items()}
 
-    assert sum(kind == "node24" for kind in kinds.values()) == 8
-    assert sum(kind == "composite" for kind in kinds.values()) == 2
+    assert sum(kind == "node24" for kind in kinds.values()) == 7
+    assert sum(kind == "composite" for kind in kinds.values()) == 1
     assert sum(kind == "docker" for kind in kinds.values()) == 1
     assert "node20" not in kinds.values()
 
