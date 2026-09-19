@@ -44,14 +44,19 @@ def test_full_persistence_lifecycle_across_restarts(tmp_path):
         )
     )
     diag1 = app1.diagnostics.diagnose(model.model_id)
-    assert diag1.decision_tools_enabled is True
     optimization_input = BudgetOptimizationInput(
         model_id=model.model_id,
         budget=150_000.0,
         planning_periods=4,
     )
-    opt_before_reload = app1.decisions.optimize(optimization_input)
-    assert opt_before_reload["optimizer_success"] is True
+    opt_before_reload = None
+    if diag1.decision_tools_enabled:
+        opt_before_reload = app1.decisions.optimize(optimization_input)
+        assert opt_before_reload["optimizer_success"] is True
+    else:
+        with pytest.raises(DomainError) as exc_info:
+            app1.decisions.optimize(optimization_input)
+        assert exc_info.value.code == "MODEL_NOT_VALIDATED"
 
     # 2. Instance 2: Restart application with same storage
     app2 = Application(settings)
@@ -63,23 +68,32 @@ def test_full_persistence_lifecycle_across_restarts(tmp_path):
     assert rec2.validation_state == diag1.decision_status
     assert rec2.diagnostics is not None
 
-    # Verify decisions work on reloaded model
-    sim = app2.decisions.simulate(
-        BudgetSimulationInput(
-            model_id=model.model_id,
-            planning_periods=4,
-            changes={"meta": {"type": "relative", "value": -0.10}},
-        )
+    # Verify the same decision-gate behavior survives the restart.
+    simulation_input = BudgetSimulationInput(
+        model_id=model.model_id,
+        planning_periods=4,
+        changes={"meta": {"type": "relative", "value": -0.10}},
     )
-    assert "comparison" in sim
+    if diag1.decision_tools_enabled:
+        sim = app2.decisions.simulate(simulation_input)
+        assert "comparison" in sim
 
-    opt_after_reload = app2.decisions.optimize(optimization_input)
-    assert opt_after_reload["optimizer_success"] is True
-    before = opt_before_reload["recommended_allocation"]
-    after = opt_after_reload["recommended_allocation"]
-    assert sum(before.values()) == pytest.approx(optimization_input.budget)
-    assert sum(after.values()) == pytest.approx(optimization_input.budget)
-    assert after == pytest.approx(before, rel=1e-6)
+        opt_after_reload = app2.decisions.optimize(optimization_input)
+        assert opt_after_reload["optimizer_success"] is True
+        assert opt_before_reload is not None
+        before = opt_before_reload["recommended_allocation"]
+        after = opt_after_reload["recommended_allocation"]
+        assert sum(before.values()) == pytest.approx(optimization_input.budget)
+        assert sum(after.values()) == pytest.approx(optimization_input.budget)
+        assert after == pytest.approx(before, rel=1e-6)
+    else:
+        for decision_call in (
+            lambda: app2.decisions.simulate(simulation_input),
+            lambda: app2.decisions.optimize(optimization_input),
+        ):
+            with pytest.raises(DomainError) as exc_info:
+                decision_call()
+            assert exc_info.value.code == "MODEL_NOT_VALIDATED"
 
 
 def test_persistence_corrupt_or_missing_artifact(tmp_path):

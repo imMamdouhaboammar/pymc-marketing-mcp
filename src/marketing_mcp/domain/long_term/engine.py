@@ -1,4 +1,4 @@
-"""Bayesian VAR Long-Term Brand Effects prototype engine (T8 - Experimental)."""
+"""Deterministic ridge VARX long-term brand-effects prototype (T8 - Experimental)."""
 
 from __future__ import annotations
 
@@ -17,10 +17,11 @@ from marketing_mcp.domain.long_term.contracts import (
 from marketing_mcp.errors import DomainError
 
 
-class BayesianVARLongTermEngine(LongTermEffectsEngine):
-    """Bayesian VAR engine for estimating long-term brand equity multipliers.
+class DeterministicVARLongTermEngine(LongTermEffectsEngine):
+    """Deterministic ridge VARX prototype for descriptive long-term effects.
 
-    Marked as EXPERIMENTAL in platform capabilities.
+    This engine produces point estimates only. It does not perform posterior sampling
+    and must not be used as decision-grade Bayesian evidence.
     """
 
     def fit_var(
@@ -30,6 +31,8 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
         exogenous_channels: list[str],
         horizon: int = 12,
         tenant_id: str = "default",
+        *,
+        target_column: str | None = None,
     ) -> LongTermRollup:
         """Fit stationary VARX(1) model and compute impulse response rollups."""
         m_endo = len(endogenous_columns)
@@ -38,42 +41,78 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
             raise DomainError("INPUT_INVALID", "At least one endogenous variable is required")
         if k_exo < 1:
             raise DomainError("INPUT_INVALID", "At least one exogenous media channel is required")
+        if len(set(endogenous_columns)) != m_endo:
+            raise DomainError("INPUT_INVALID", "Endogenous columns must be unique")
+        if len(set(exogenous_channels)) != k_exo:
+            raise DomainError("INPUT_INVALID", "Exogenous channels must be unique")
+        overlap = sorted(set(endogenous_columns) & set(exogenous_channels))
+        if overlap:
+            raise DomainError(
+                "INPUT_INVALID",
+                "Endogenous and exogenous columns must be disjoint",
+                evidence={"overlapping_columns": overlap},
+            )
+
+        if target_column is None:
+            if m_endo != 1:
+                raise DomainError(
+                    "INPUT_INVALID",
+                    "target_column is required when multiple endogenous variables are provided",
+                    evidence={"endogenous_columns": endogenous_columns},
+                )
+            target_column = endogenous_columns[0]
+        elif target_column not in endogenous_columns:
+            raise DomainError(
+                "INPUT_INVALID",
+                "target_column must be one of the endogenous_columns",
+                evidence={
+                    "target_column": target_column,
+                    "endogenous_columns": endogenous_columns,
+                },
+            )
 
         # Extract numeric matrices
         for col in endogenous_columns + exogenous_channels:
             if col not in df.columns:
                 raise DomainError("INPUT_INVALID", f"Column '{col}' not found in dataset")
 
-        y_raw = df[endogenous_columns].apply(pd.to_numeric, errors="coerce").dropna().to_numpy(dtype=float)
-        x_raw = df[exogenous_channels].apply(pd.to_numeric, errors="coerce").dropna().to_numpy(dtype=float)
+        selected_columns = endogenous_columns + exogenous_channels
+        numeric = pd.DataFrame(
+            {col: pd.to_numeric(df[col], errors="coerce") for col in selected_columns},
+            index=df.index,
+        )
 
-        min_len = min(len(y_raw), len(x_raw))
-        if min_len < 16:
-            raise DomainError(
-                "DATASET_TOO_SHORT",
-                f"Dataset length ({min_len}) is too short for VAR identification (minimum 16 periods required)",
-            )
+        y = numeric[endogenous_columns].to_numpy(dtype=float)
+        x = numeric[exogenous_channels].to_numpy(dtype=float)
 
-        y = y_raw[:min_len]
-        x = x_raw[:min_len]
-
-        # Time series alignment for VAR(1): Y_t against Y_{t-1} and X_t
+        # Form VAR(1) transitions before filtering so rows with missing selected values
+        # cannot create synthetic transitions between non-adjacent observations.
         y_curr = y[1:]  # shape: (T-1, m_endo)
         y_lag = y[:-1]  # shape: (T-1, m_endo)
         x_curr = x[1:]  # shape: (T-1, k_exo)
+        complete_transition = ~np.isnan(np.hstack([y_curr, y_lag, x_curr])).any(axis=1)
+        y_curr = y_curr[complete_transition]
+        y_lag = y_lag[complete_transition]
+        x_curr = x_curr[complete_transition]
         t_obs = len(y_curr)
+        if t_obs < 15:
+            raise DomainError(
+                "DATASET_TOO_SHORT",
+                f"Dataset has {t_obs} complete adjacent transitions; "
+                "minimum 15 are required for VAR identification",
+            )
 
         # Regressors matrix Z = [Y_lag, X_curr, 1]
         ones = np.ones((t_obs, 1))
         z = np.hstack([y_lag, x_curr, ones])
 
-        # Ridge / Minnesota shrinkage regularization to ensure well-conditioned inversion
+        # Ridge regularization to ensure a well-conditioned deterministic solve.
         ridge_diag = np.ones(z.shape[1]) * 1e-4
-        # Slightly higher shrinkage on lag cross-terms
+        # Apply stronger shrinkage to all lag coefficients than exogenous/intercept terms.
         ridge_diag[:m_endo] = 1e-2
         reg_matrix = np.diag(ridge_diag)
 
-        # OLS / Bayesian posterior mode coefficients: Beta = (Z'Z + Lambda)^(-1) Z'Y
+        # Ridge-regularized least-squares coefficients: Beta = (Z'Z + Lambda)^(-1) Z'Y
         beta = np.linalg.solve(z.T @ z + reg_matrix, z.T @ y_curr)  # shape: (m_endo + k_exo + 1, m_endo)
 
         # Extract A (transition matrix) and B (exogenous impact matrix)
@@ -89,8 +128,8 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
         diagnostic_status = "pass" if max_eigenval < 0.95 else ("caution" if is_stationary else "rejected")
 
         # Compute Impulse Response Functions (IRFs) over horizon H
-        target_idx = m_endo - 1  # Assume last endogenous column is primary business KPI (revenue)
-        target_name = endogenous_columns[target_idx]
+        target_idx = endogenous_columns.index(target_column)
+        target_name = target_column
 
         irfs: dict[str, ImpulseResponseCurve] = {}
         channel_multipliers: dict[str, float] = {}
@@ -106,9 +145,20 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
                 current_impact = a_matrix @ current_impact
                 resp_h.append(float(current_impact[target_idx]))
 
-            initial_val = max(1e-6, abs(resp_h[0]))
+            initial_val = float(resp_h[0])
             cum_val = float(sum(resp_h))
-            mult = max(1.0, round(cum_val / initial_val, 3)) if is_stationary else 1.0
+            if abs(initial_val) < 1e-8:
+                raise DomainError(
+                    "LONG_TERM_MULTIPLIER_UNDEFINED",
+                    f"Channel '{ch}' has near-zero contemporaneous target impact; "
+                    "the cumulative-to-initial multiplier is undefined",
+                    evidence={"channel": ch, "initial_target_impact": initial_val},
+                    next_action=(
+                        "Choose a target/channel with non-zero contemporaneous impact, or use "
+                        "an analysis path that reports raw impulse responses without a ratio multiplier"
+                    ),
+                )
+            mult = round(cum_val / initial_val, 3)
 
             channel_multipliers[ch] = mult
             irfs[ch] = ImpulseResponseCurve(
@@ -132,8 +182,11 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
             diagnostic_status=diagnostic_status,
             provenance={
                 "fitted_at": now,
-                "engine": "BayesianVARLongTermEngine",
+                "engine": "DeterministicVARLongTermEngine",
+                "estimation_method": "ridge_regularized_least_squares",
+                "uncertainty_quantified": False,
                 "horizon": horizon,
+                "target_column": target_name,
                 "experimental": True,
             },
         )
@@ -143,22 +196,31 @@ class BayesianVARLongTermEngine(LongTermEffectsEngine):
         decision_result: dict[str, Any],
         rollup: LongTermRollup,
     ) -> dict[str, Any]:
-        """Attach long-term brand multipliers to an MMM decision result."""
+        """Refuse decision-grade rollup because this estimator has no posterior uncertainty."""
         if rollup.diagnostic_status == "rejected":
             raise DomainError(
                 "LONG_TERM_GATE_REJECTED",
                 f"Long-term VAR model has non-stationary explosive dynamics (max eigenvalue {rollup.max_eigenvalue} >= 1.0); refusing to roll up",
                 evidence={"max_eigenvalue": rollup.max_eigenvalue},
-                next_action="Review endogenous time series stationarity or regularize VAR lag priors",
+                next_action=(
+                    "Review endogenous time-series stationarity, lag specification, or deterministic "
+                    "ridge regularization before interpreting the response"
+                ),
             )
 
-        enriched = dict(decision_result)
-        prov = enriched.setdefault("provenance", {})
-        prov["long_term_effects"] = {
-            "var_model_id": rollup.model_id,
-            "status": rollup.diagnostic_status,
-            "channel_multipliers": rollup.channel_multipliers,
-            "max_eigenvalue": rollup.max_eigenvalue,
-            "experimental": True,
-        }
-        return enriched
+        raise DomainError(
+            "LONG_TERM_UNCERTAINTY_REQUIRED",
+            "The deterministic VARX prototype does not quantify posterior uncertainty; "
+            "refusing to attach its point estimates to decision-grade provenance",
+            evidence={
+                "model_id": rollup.model_id,
+                "diagnostic_status": rollup.diagnostic_status,
+                "estimation_method": "ridge_regularized_least_squares",
+                "uncertainty_quantified": False,
+                "experimental": True,
+            },
+            next_action=(
+                "Use a Bayesian long-term-effects implementation with posterior sampling, "
+                "uncertainty intervals, and diagnostics before decision rollup"
+            ),
+        )

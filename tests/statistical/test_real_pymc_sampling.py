@@ -54,10 +54,10 @@ def test_real_pymc_mmm_end_to_end_statistical_workflow(tmp_path):
         control_columns=["discount"],
         yearly_seasonality=2,
         sampler={
-            "draws": 200,
-            "tune": 200,
+            "draws": 400,
+            "tune": 400,
             "chains": 2,
-            "target_accept": 0.9,
+            "target_accept": 0.95,
             "random_seed": 42,
         },
     )

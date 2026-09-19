@@ -1,22 +1,29 @@
-"""Domain contracts for Response Cohort Ledger (T7).
+"""Domain contracts for Customer Acquisition and Media Response Cohort Ledgers (T7 & RFC 003).
 
-Tracks commercial outcome realizations by acquisition cohort, maturity curves,
-and observational lag. Reconciles cohort contributions with aggregate MMM target series.
+Distinguishes two fundamentally distinct cohort structures:
+1. Customer Acquisition Cohorts (CLV): tracks cohort retention, maturity curve,
+   and repeat transaction revenue over time from customer acquisition microdata.
+2. Media Source-Period Response Cohorts (MMM): tracks marketing spend deployed at
+   source period t, decomposing total response into immediate response (t+0) and
+   carryover responses (t+1..t+L) via fitted adstock decay weights.
 
-Key invariant: Never fakes individual customer-level microdata when only aggregate/cohort data exists.
+Key invariants:
+- Never fakes individual customer microdata when only aggregate data exists.
+- Never implements a second adstock system; consumes fitted posterior weights.
+- Enforces reconciliation between source-period cohort carryovers and calendar aggregate response.
 """
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 PeriodType = Literal["daily", "weekly", "monthly"]
 
 
-class CohortRecord(BaseModel):
-    """Realization history and maturity progression for an acquisition cohort."""
+class CustomerCohortRecord(BaseModel):
+    """Realization history and maturity progression for an acquisition cohort of customers."""
 
     cohort_id: str = Field(description="Unique cohort identifier, e.g. '2025-W01' or '2025-01'")
     acquisition_period: str = Field(description="Calendar period when cohort was acquired")
@@ -41,15 +48,21 @@ class CohortRecord(BaseModel):
     provenance: dict[str, Any] = Field(default_factory=dict)
 
 
-class ResponseCohortLedger(BaseModel):
-    """Tenant-scoped ledger of acquisition cohorts and maturity progressions."""
+# Backward-compatible alias for existing callers
+CohortRecord = CustomerCohortRecord
+
+
+class CustomerAcquisitionCohortLedger(BaseModel):
+    """Tenant-scoped ledger of customer acquisition cohorts and maturity progressions."""
 
     ledger_id: str = Field(description="Unique cohort ledger ID")
     tenant_id: str = Field(default="default", description="Tenant/organization identifier")
     project_id: str | None = Field(default=None, description="Optional project identifier")
     target_metric: str = Field(default="revenue", description="Outcome metric tracked in ledger")
     period_type: PeriodType = Field(default="weekly", description="Temporal granularity")
-    cohorts: list[CohortRecord] = Field(default_factory=list, description="Collection of cohort records")
+    cohorts: list[CustomerCohortRecord] = Field(
+        default_factory=list, description="Collection of customer cohort records"
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def total_cohort_revenue(self) -> float:
@@ -61,25 +74,11 @@ class ResponseCohortLedger(BaseModel):
         aggregate_series: dict[str, float],
         tolerance: float = 0.05,
     ) -> dict[str, Any]:
-        """Reconcile calendar-period aggregate outcomes against cohort contributions.
-
-        Parameters
-        ----------
-        aggregate_series:
-            Mapping of calendar period (e.g. '2025-01-06') to aggregate outcome observed.
-        tolerance:
-            Acceptable relative difference threshold (e.g. 5%).
-
-        Returns
-        -------
-        dict with reconciliation status, discrepancies, and coverage.
-        """
+        """Reconcile calendar-period aggregate outcomes against cohort contributions."""
         cohort_calendar_totals: dict[str, float] = {}
 
         for c in self.cohorts:
-            # Each subsequent period realized corresponds to an offset
             for offset, rev in enumerate(c.period_revenues):
-                # For simplified reconciliation, group by acquisition + offset key
                 key = f"{c.acquisition_period}+{offset}"
                 cohort_calendar_totals[key] = cohort_calendar_totals.get(key, 0.0) + rev
 
@@ -98,6 +97,174 @@ class ResponseCohortLedger(BaseModel):
             "is_reconciled": is_reconciled,
             "cohort_count": len(self.cohorts),
             "missing_cohort_periods": [
-                p for p in aggregate_series if not any(c.acquisition_period == p for c in self.cohorts)
+                p
+                for p in aggregate_series
+                if not any(c.acquisition_period == p for c in self.cohorts)
             ],
+        }
+
+
+# Backward-compatible alias
+ResponseCohortLedger = CustomerAcquisitionCohortLedger
+
+
+class MediaResponseCohortRecord(BaseModel):
+    """Media source-period response cohort (RFC 003).
+
+    Tracks marketing spend deployed at source period t on a specific channel,
+    decomposing its total outcome into immediate response (t+0) and carryover
+    responses (t+1..t+L) governed by fitted adstock decay weights.
+    """
+
+    cohort_id: str = Field(description="Unique cohort identifier, e.g. 'media_2025-W01_tv'")
+    source_period: str = Field(description="Calendar period when spend was deployed")
+    channel: str = Field(description="Media channel")
+    spend: float = Field(default=0.0, ge=0.0, description="Spend deployed in source period")
+    immediate_response: float = Field(
+        default=0.0, ge=0.0, description="Response realized at lag 0 (same period as spend)"
+    )
+    carryover_responses: list[float] = Field(
+        default_factory=list,
+        description="Carryover response realized at subsequent lags (t+1, t+2, ...)",
+    )
+    period_responses: list[float] = Field(
+        default_factory=list,
+        description="Complete response progression [immediate, carryover_1, carryover_2, ...]",
+    )
+    cumulative_response: float = Field(
+        default=0.0, ge=0.0, description="Total lifetime response generated across all lags"
+    )
+    adstock_decay_weights: list[float] = Field(
+        default_factory=list,
+        description="Normalized adstock weights used for temporal decomposition",
+    )
+    financial_valuation: dict[str, float] = Field(
+        default_factory=dict,
+        description="Financial valuation metrics (gross_revenue, net_profit, roas, discounted_npv)",
+    )
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _synchronize_responses(self) -> "MediaResponseCohortRecord":
+        if (
+            self.period_responses
+            and self.immediate_response == 0.0
+            and not self.carryover_responses
+        ):
+            self.immediate_response = float(self.period_responses[0])
+            self.carryover_responses = [float(x) for x in self.period_responses[1:]]
+            self.cumulative_response = float(sum(self.period_responses))
+        elif not self.period_responses and (
+            self.immediate_response > 0.0 or self.carryover_responses
+        ):
+            self.period_responses = [self.immediate_response, *self.carryover_responses]
+            self.cumulative_response = float(sum(self.period_responses))
+        elif self.period_responses:
+            self.cumulative_response = float(sum(self.period_responses))
+        return self
+
+    def evaluate_financials(
+        self,
+        revenue_per_outcome: float = 1.0,
+        margin_rate: float = 1.0,
+        discount_rate: float = 0.0,
+    ) -> dict[str, float]:
+        """Compute financial valuation of this media cohort."""
+        gross_revenue = round(self.cumulative_response * revenue_per_outcome, 2)
+        net_profit = round(gross_revenue * margin_rate - self.spend, 2)
+        roas = round(gross_revenue / self.spend, 4) if self.spend > 0 else 0.0
+
+        npv = (
+            sum(
+                (resp * revenue_per_outcome * margin_rate) / ((1.0 + discount_rate) ** idx)
+                for idx, resp in enumerate(self.period_responses)
+            )
+            - self.spend
+        )
+
+        valuation = {
+            "gross_revenue": gross_revenue,
+            "net_profit": net_profit,
+            "roas": roas,
+            "discounted_npv": round(npv, 2),
+        }
+        self.financial_valuation = valuation
+        return valuation
+
+
+class MediaResponseCohortLedger(BaseModel):
+    """Tenant-scoped ledger of media source-period response cohorts (RFC 003)."""
+
+    ledger_id: str = Field(description="Unique media cohort ledger ID")
+    tenant_id: str = Field(default="default", description="Tenant/organization identifier")
+    project_id: str | None = Field(default=None, description="Optional project identifier")
+    model_id: str | None = Field(default=None, description="Fitted MMM model ID")
+    target_metric: str = Field(default="response", description="Target metric name")
+    period_type: PeriodType = Field(default="weekly", description="Temporal granularity")
+    cohorts: list[MediaResponseCohortRecord] = Field(
+        default_factory=list, description="Collection of media response cohorts"
+    )
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def total_spend(self) -> float:
+        """Total spend deployed across all media cohorts."""
+        return sum(c.spend for c in self.cohorts)
+
+    def total_response(self) -> float:
+        """Total lifetime response across all media cohorts."""
+        return sum(c.cumulative_response for c in self.cohorts)
+
+    def total_immediate_response(self) -> float:
+        """Total immediate response (lag 0) across all media cohorts."""
+        return sum(c.immediate_response for c in self.cohorts)
+
+    def total_carryover_response(self) -> float:
+        """Total carryover response (lag >= 1) across all media cohorts."""
+        return sum(sum(c.carryover_responses) for c in self.cohorts)
+
+    def reconcile_to_calendar_response(
+        self,
+        calendar_responses: dict[str, float],
+        tolerance: float = 0.05,
+        period_order: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Reconcile source-period carryovers against authoritative calendar-period response.
+
+        For each calendar evaluation period T, sums contributions from all source cohorts
+        t where t + lag == T.
+        """
+        if period_order is None:
+            all_periods = set(calendar_responses.keys())
+            for c in self.cohorts:
+                all_periods.add(c.source_period)
+            period_order = sorted(all_periods)
+
+        period_idx = {p: i for i, p in enumerate(period_order)}
+        calendar_cohort_totals: dict[str, float] = {p: 0.0 for p in period_order}
+
+        for c in self.cohorts:
+            if c.source_period not in period_idx:
+                continue
+            src_i = period_idx[c.source_period]
+            for lag, resp in enumerate(c.period_responses):
+                cal_i = src_i + lag
+                if cal_i < len(period_order):
+                    cal_p = period_order[cal_i]
+                    calendar_cohort_totals[cal_p] += resp
+
+        total_cohort_sum = sum(calendar_cohort_totals.get(p, 0.0) for p in calendar_responses)
+        total_authoritative_sum = sum(calendar_responses.values()) if calendar_responses else 0.0
+
+        diff = abs(total_cohort_sum - total_authoritative_sum)
+        rel_diff = diff / max(1e-6, total_authoritative_sum) if total_authoritative_sum > 0 else 0.0
+        is_reconciled = rel_diff <= tolerance
+
+        return {
+            "total_cohort_calendar_sum": round(total_cohort_sum, 2),
+            "total_authoritative_sum": round(total_authoritative_sum, 2),
+            "absolute_discrepancy": round(diff, 2),
+            "relative_discrepancy_pct": round(rel_diff * 100, 2),
+            "is_reconciled": is_reconciled,
+            "cohort_count": len(self.cohorts),
+            "calendar_periods_evaluated": len(calendar_responses),
         }

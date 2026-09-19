@@ -1,10 +1,15 @@
-"""Unit tests for Response Cohort Ledger (T7).
+"""Unit tests for Customer Acquisition and Media Response Cohort Ledgers (T7 & RFC 003).
 
 Fast tests — zero sampling required.
 Requirements:
-- Aggregate totals reconcile to cohort sums within tolerance
+- Customer acquisition totals reconcile to cohort sums within tolerance
 - Missing cohort periods are explicitly identified
 - Observational lag and maturity curves computed accurately
+- Media source-period response cohorts decompose into immediate (t+0) and carryover (t+1..t+L)
+- Conservation of media response mass: immediate + sum(carryover) == cumulative
+- Media response reconciliation against calendar-period aggregate response
+- Financial valuation of media response cohorts (gross revenue, net profit, ROAS, NPV)
+- Semantic separation: CustomerCohortRecord vs MediaResponseCohortRecord
 - Tenant isolation
 - Zero faked customer records
 """
@@ -15,13 +20,20 @@ import pandas as pd
 import pytest
 
 from marketing_mcp.domain.cohorts import (
+    CohortRecord,
+    CustomerAcquisitionCohortLedger,
+    CustomerCohortRecord,
+    MediaResponseCohortLedger,
+    MediaResponseCohortRecord,
     ResponseCohortLedger,
     build_cohort_ledger,
+    build_media_response_cohort_ledger,
     extract_cohorts_from_transactions,
 )
+from marketing_mcp.domain.decisions.financial import FinancialAssumptions
 
 
-class TestResponseCohortLedger:
+class TestCustomerAcquisitionCohortLedger:
     def test_reconciliation_within_numerical_tolerance(self):
         cohort_data = [
             {
@@ -78,11 +90,13 @@ class TestResponseCohortLedger:
 
     def test_extract_cohorts_from_transactions(self):
         # 3 customers over 3 weeks
-        df = pd.DataFrame({
-            "customer_id": ["c1", "c1", "c2", "c3"],
-            "date": ["2025-01-06", "2025-01-13", "2025-01-06", "2025-01-13"],
-            "amount": [100.0, 50.0, 200.0, 300.0],
-        })
+        df = pd.DataFrame(
+            {
+                "customer_id": ["c1", "c1", "c2", "c3"],
+                "date": ["2025-01-06", "2025-01-13", "2025-01-06", "2025-01-13"],
+                "amount": [100.0, 50.0, 200.0, 300.0],
+            }
+        )
         ledger = extract_cohorts_from_transactions(
             df,
             customer_id_col="customer_id",
@@ -90,9 +104,158 @@ class TestResponseCohortLedger:
             value_col="amount",
             tenant_id="client_corp",
         )
-        assert isinstance(ledger, ResponseCohortLedger)
+        assert isinstance(ledger, CustomerAcquisitionCohortLedger)
+        assert isinstance(ledger, ResponseCohortLedger)  # alias
         assert ledger.tenant_id == "client_corp"
         assert len(ledger.cohorts) == 2
         # c1 and c2 acquired in first week: amount = 100 + 200 = 300 in t0, c1 spent 50 in t1
         # c3 acquired in second week: amount = 300
         assert ledger.total_cohort_revenue() == 650.0
+
+    def test_backward_compatible_aliases(self):
+        assert CustomerCohortRecord is CohortRecord
+        assert CustomerAcquisitionCohortLedger is ResponseCohortLedger
+
+
+class TestMediaResponseCohortLedger:
+    def test_media_cohort_decomposition_immediate_and_carryover(self):
+        spend_records = [
+            {
+                "source_period": "2025-W01",
+                "channel": "tv",
+                "spend": 10000.0,
+                "total_response": 2000.0,
+            }
+        ]
+        # Adstock weights: 50% lag 0, 30% lag 1, 20% lag 2
+        adstock_weights = {"tv": [0.5, 0.3, 0.2]}
+
+        ledger = build_media_response_cohort_ledger(
+            spend_records=spend_records,
+            adstock_weights=adstock_weights,
+            tenant_id="org_alpha",
+        )
+        assert isinstance(ledger, MediaResponseCohortLedger)
+
+        assert len(ledger.cohorts) == 1
+        cohort = ledger.cohorts[0]
+        assert isinstance(cohort, MediaResponseCohortRecord)
+        assert cohort.channel == "tv"
+        assert cohort.source_period == "2025-W01"
+        assert cohort.spend == 10000.0
+        # Immediate response (t+0): 2000 * 0.5 = 1000
+        assert cohort.immediate_response == pytest.approx(1000.0)
+        # Carryover responses (t+1, t+2): [600.0, 400.0]
+        assert cohort.carryover_responses == [pytest.approx(600.0), pytest.approx(400.0)]
+        assert cohort.period_responses == [
+            pytest.approx(1000.0),
+            pytest.approx(600.0),
+            pytest.approx(400.0),
+        ]
+        assert cohort.cumulative_response == pytest.approx(2000.0)
+
+    def test_conservation_of_response_mass(self):
+        spend_records = [
+            {"source_period": "2025-W01", "channel": "search", "spend": 5000.0},
+            {"source_period": "2025-W02", "channel": "search", "spend": 8000.0},
+        ]
+        adstock_weights = {"search": [0.7, 0.2, 0.1]}
+        # 1.5 responses per dollar
+        channel_rates = {"search": 1.5}
+
+        ledger = build_media_response_cohort_ledger(
+            spend_records=spend_records,
+            adstock_weights=adstock_weights,
+            channel_response_rates=channel_rates,
+        )
+
+        for c in ledger.cohorts:
+            assert c.immediate_response + sum(c.carryover_responses) == pytest.approx(
+                c.cumulative_response
+            )
+            assert sum(c.period_responses) == pytest.approx(c.cumulative_response)
+
+        assert ledger.total_spend() == pytest.approx(13000.0)
+        assert ledger.total_response() == pytest.approx(13000.0 * 1.5)
+        assert ledger.total_immediate_response() == pytest.approx(13000.0 * 1.5 * 0.7)
+        assert ledger.total_carryover_response() == pytest.approx(13000.0 * 1.5 * 0.3)
+
+    def test_reconcile_to_calendar_response(self):
+        # Two consecutive weeks of spend
+        # W01: spend produces 1000 total (600 at W01, 300 at W02, 100 at W03)
+        # W02: spend produces 2000 total (1200 at W02, 600 at W03, 200 at W04)
+        spend_records = [
+            {
+                "source_period": "2025-W01",
+                "channel": "meta",
+                "spend": 1000.0,
+                "total_response": 1000.0,
+            },
+            {
+                "source_period": "2025-W02",
+                "channel": "meta",
+                "spend": 2000.0,
+                "total_response": 2000.0,
+            },
+        ]
+        adstock_weights = {"meta": [0.6, 0.3, 0.1]}
+
+        ledger = build_media_response_cohort_ledger(spend_records, adstock_weights)
+
+        # Authoritative calendar aggregate:
+        # W01: 600 (W01 lag 0)
+        # W02: 300 (W01 lag 1) + 1200 (W02 lag 0) = 1500
+        # W03: 100 (W01 lag 2) + 600 (W02 lag 1) = 700
+        # W04: 200 (W02 lag 2) = 200
+        calendar_series = {
+            "2025-W01": 600.0,
+            "2025-W02": 1500.0,
+            "2025-W03": 700.0,
+            "2025-W04": 200.0,
+        }
+
+        recon = ledger.reconcile_to_calendar_response(calendar_series, tolerance=0.01)
+        assert recon["is_reconciled"] is True
+        assert recon["absolute_discrepancy"] == pytest.approx(0.0)
+        assert recon["total_authoritative_sum"] == pytest.approx(3000.0)
+        assert recon["total_cohort_calendar_sum"] == pytest.approx(3000.0)
+
+    def test_financial_valuation_with_assumptions(self):
+        spend_records = [
+            {
+                "source_period": "2025-W01",
+                "channel": "tv",
+                "spend": 10000.0,
+                "total_response": 500.0,
+            }
+        ]
+        adstock_weights = {"tv": [0.5, 0.5]}  # 250 at t0, 250 at t1
+        # revenue_per_outcome = 50.0 (each response unit is $50)
+        # gross margin = 0.60
+        # discount rate = 0.10 (10% periodic discount)
+        fa = FinancialAssumptions(
+            revenue_per_outcome=50.0,
+            gross_margin_rate=0.60,
+            discount_rate=0.10,
+        )
+
+        ledger = build_media_response_cohort_ledger(
+            spend_records=spend_records,
+            adstock_weights=adstock_weights,
+            financial=fa,
+        )
+
+        cohort = ledger.cohorts[0]
+        # Total response = 500
+        # Gross revenue = 500 * 50 = $25,000
+        # Net profit = 25,000 * 0.60 - 10,000 = 15,000 - 10,000 = $5,000
+        # ROAS = 25,000 / 10,000 = 2.50
+        # NPV:
+        # t0: (250 * 50 * 0.6) / (1.0)^0 = 7500
+        # t1: (250 * 50 * 0.6) / (1.1)^1 = 7500 / 1.1 = 6818.18
+        # NPV = 7500 + 6818.18 - 10000 = 4318.18
+        val = cohort.financial_valuation
+        assert val["gross_revenue"] == pytest.approx(25000.0)
+        assert val["net_profit"] == pytest.approx(5000.0)
+        assert val["roas"] == pytest.approx(2.50)
+        assert val["discounted_npv"] == pytest.approx(4318.18, rel=1e-2)

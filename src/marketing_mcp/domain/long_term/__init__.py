@@ -5,11 +5,11 @@ from marketing_mcp.domain.long_term.contracts import (
     LongTermEffectsEngine,
     LongTermRollup,
 )
-from marketing_mcp.domain.long_term.engine import BayesianVARLongTermEngine
+from marketing_mcp.domain.long_term.engine import DeterministicVARLongTermEngine
 
 __all__ = [
     "ImpulseResponseCurve",
     "LongTermEffectsEngine",
     "LongTermRollup",
-    "BayesianVARLongTermEngine",
+    "DeterministicVARLongTermEngine",
 ]

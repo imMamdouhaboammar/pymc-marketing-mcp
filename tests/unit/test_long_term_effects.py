@@ -1,12 +1,13 @@
-"""Unit tests for Bayesian VAR Long-Term Brand Effects prototype (T8).
+"""Unit tests for the deterministic VARX long-term-effects prototype (T8).
 
 Fast tests — zero sampling required.
 Requirements tested:
-- Synthetic ground-truth recovery of positive carryover & multiplier
+- Synthetic ground-truth recovery of positive and damped carryover multipliers
+- Lag-before-filter time alignment so missing values cannot create synthetic transitions
 - Diagnostic eigenvalue threshold enforcement
-- Decision rollup enrichment
+- Deterministic point estimates blocked from decision-grade rollup
 - Non-stationary explosive models blocked by decision gate
-- Tenant isolation
+- Honest estimator provenance
 """
 
 from __future__ import annotations
@@ -15,8 +16,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import marketing_mcp.domain.long_term as long_term
 from marketing_mcp.domain.long_term import (
-    BayesianVARLongTermEngine,
+    DeterministicVARLongTermEngine,
     LongTermEffectsEngine,
     LongTermRollup,
 )
@@ -25,7 +27,7 @@ from marketing_mcp.errors import DomainError
 
 @pytest.fixture
 def engine():
-    return BayesianVARLongTermEngine()
+    return DeterministicVARLongTermEngine()
 
 
 @pytest.fixture
@@ -52,7 +54,12 @@ def synthetic_var_data():
     })
 
 
-class TestBayesianVARLongTermEngine:
+def test_engine_export_name_matches_deterministic_estimator():
+    assert hasattr(long_term, "DeterministicVARLongTermEngine")
+    assert not hasattr(long_term, "BayesianVARLongTermEngine")
+
+
+class TestDeterministicVARLongTermEngine:
     def test_implements_protocol(self, engine):
         assert isinstance(engine, LongTermEffectsEngine)
 
@@ -61,6 +68,7 @@ class TestBayesianVARLongTermEngine:
             df=synthetic_var_data,
             endogenous_columns=["brand_equity", "sales"],
             exogenous_channels=["tv_spend"],
+            target_column="sales",
             horizon=12,
             tenant_id="tenant_brand",
         )
@@ -71,10 +79,12 @@ class TestBayesianVARLongTermEngine:
         assert rollup.max_eigenvalue < 1.0
         assert rollup.diagnostic_status in ("pass", "caution")
 
-        # Upper funnel TV should exhibit a long-run multiplier > 1.0 due to brand persistence
+        # Analytic finite-horizon multiplier for the noise-free DGP is 2 - 0.7**12.
         assert "tv_spend" in rollup.channel_multipliers
         mult = rollup.channel_multipliers["tv_spend"]
-        assert mult >= 1.0
+        assert mult == pytest.approx(2 - 0.7**12, abs=0.25)
+        assert rollup.provenance["estimation_method"] == "ridge_regularized_least_squares"
+        assert rollup.provenance["uncertainty_quantified"] is False
 
         # Detailed IRF exists
         assert "tv_spend" in rollup.irfs
@@ -82,11 +92,120 @@ class TestBayesianVARLongTermEngine:
         assert len(irf.horizons) == 13  # 0 to 12
         assert len(irf.responses) == 13
 
-    def test_decision_gate_enriches_valid_decision(self, engine, synthetic_var_data):
+    def test_multivariate_fit_requires_explicit_target_column(self, engine, synthetic_var_data):
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=synthetic_var_data,
+                endogenous_columns=["brand_equity", "sales"],
+                exogenous_channels=["tv_spend"],
+            )
+
+        assert exc_info.value.code == "INPUT_INVALID"
+        assert "target_column" in str(exc_info.value)
+
+    def test_legacy_positional_horizon_and_tenant_remain_compatible(self, engine):
+        rng = np.random.default_rng(123)
+        n = 40
+        media = rng.normal(0.0, 1.0, n)
+        target = np.zeros(n)
+        for t in range(1, n):
+            target[t] = 0.5 * target[t - 1] + 0.8 * media[t]
+
+        rollup = engine.fit_var(
+            pd.DataFrame({"media": media, "target": target}),
+            ["target"],
+            ["media"],
+            4,
+            "legacy-tenant",
+        )
+
+        assert rollup.tenant_id == "legacy-tenant"
+        assert rollup.provenance["horizon"] == 4
+        assert rollup.irfs["media"].horizons == [0, 1, 2, 3, 4]
+
+    def test_explicit_target_is_invariant_to_endogenous_column_order(self, engine, synthetic_var_data):
+        first = engine.fit_var(
+            df=synthetic_var_data,
+            endogenous_columns=["brand_equity", "sales"],
+            exogenous_channels=["tv_spend"],
+            target_column="sales",
+            horizon=6,
+        )
+        reordered = engine.fit_var(
+            df=synthetic_var_data,
+            endogenous_columns=["sales", "brand_equity"],
+            exogenous_channels=["tv_spend"],
+            target_column="sales",
+            horizon=6,
+        )
+
+        assert first.irfs["tv_spend"].target == "sales"
+        assert reordered.irfs["tv_spend"].target == "sales"
+        assert first.channel_multipliers["tv_spend"] == pytest.approx(
+            reordered.channel_multipliers["tv_spend"], abs=1e-3
+        )
+
+    def test_multiplier_preserves_damped_negative_carryover_below_one(self, engine):
+        rng = np.random.default_rng(7)
+        n = 120
+        media = rng.normal(0.0, 1.0, n)
+        target = np.zeros(n)
+        for t in range(1, n):
+            target[t] = -0.5 * target[t - 1] + 0.8 * media[t] + rng.normal(0.0, 0.01)
+
+        rollup = engine.fit_var(
+            df=pd.DataFrame({"media": media, "target": target}),
+            endogenous_columns=["target"],
+            exogenous_channels=["media"],
+            horizon=12,
+        )
+
+        # True finite-horizon multiplier is sum((-0.5) ** h, h=0..12) ~= 2/3.
+        assert rollup.channel_multipliers["media"] == pytest.approx(
+            sum((-0.5) ** h for h in range(13)),
+            abs=0.08,
+        )
+
+    def test_near_zero_initial_effect_rejects_undefined_multiplier(self, engine):
+        rng = np.random.default_rng(9)
+        df = pd.DataFrame(
+            {
+                "media": rng.normal(0.0, 1.0, 40),
+                "target": np.zeros(40),
+            }
+        )
+
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=df,
+                endogenous_columns=["target"],
+                exogenous_channels=["media"],
+                horizon=4,
+            )
+
+        assert exc_info.value.code == "LONG_TERM_MULTIPLIER_UNDEFINED"
+
+    def test_near_zero_initial_effect_rejects_even_when_var_is_explosive(self, engine):
+        n = 40
+        target = 1.2 ** np.arange(n, dtype=float)
+        df = pd.DataFrame({"media": np.zeros(n), "target": target})
+
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=df,
+                endogenous_columns=["target"],
+                exogenous_channels=["media"],
+                horizon=4,
+            )
+
+        assert exc_info.value.code == "LONG_TERM_MULTIPLIER_UNDEFINED"
+
+    def test_deterministic_rollup_cannot_become_decision_evidence(self, engine, synthetic_var_data):
         rollup = engine.fit_var(
             df=synthetic_var_data,
             endogenous_columns=["brand_equity", "sales"],
             exogenous_channels=["tv_spend"],
+            target_column="sales",
         )
 
         base_decision = {
@@ -94,12 +213,100 @@ class TestBayesianVARLongTermEngine:
             "recommended_allocation": {"tv_spend": 20000.0},
             "provenance": {"base": "mmm"},
         }
-        enriched = engine.rollup_into_decision(base_decision, rollup)
-        prov = enriched["provenance"]
-        assert "long_term_effects" in prov
-        assert prov["long_term_effects"]["status"] == rollup.diagnostic_status
-        assert prov["long_term_effects"]["channel_multipliers"] == rollup.channel_multipliers
-        assert prov["long_term_effects"]["experimental"] is True
+        with pytest.raises(DomainError) as exc_info:
+            engine.rollup_into_decision(base_decision, rollup)
+
+        assert exc_info.value.code == "LONG_TERM_UNCERTAINTY_REQUIRED"
+
+    @pytest.mark.parametrize(
+        ("endogenous_columns", "exogenous_channels"),
+        [
+            (["brand_equity", "brand_equity"], ["tv_spend"]),
+            (["brand_equity", "sales"], ["tv_spend", "tv_spend"]),
+            (["brand_equity", "sales"], ["sales"]),
+        ],
+    )
+    def test_rejects_duplicate_or_overlapping_varx_roles(
+        self,
+        engine,
+        synthetic_var_data,
+        endogenous_columns,
+        exogenous_channels,
+    ):
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=synthetic_var_data,
+                endogenous_columns=endogenous_columns,
+                exogenous_channels=exogenous_channels,
+            )
+
+        assert exc_info.value.code == "INPUT_INVALID"
+
+    @pytest.mark.parametrize("missing_column", ["target", "media"])
+    def test_missing_selected_value_does_not_bridge_non_adjacent_periods(
+        self, engine, missing_column
+    ):
+        rng = np.random.default_rng(2)
+        n = 40
+        media = rng.normal(0.0, 1.0, n)
+        target = np.zeros(n)
+        for t in range(1, n):
+            target[t] = 0.8 * target[t - 1] + 1.2 * media[t]
+
+        dirty = pd.DataFrame({"media": media, "target": target})
+        dirty.loc[30, missing_column] = np.nan
+
+        rollup = engine.fit_var(
+            df=dirty,
+            endogenous_columns=["target"],
+            exogenous_channels=["media"],
+            horizon=4,
+        )
+
+        assert rollup.max_eigenvalue == pytest.approx(0.8, abs=0.01)
+        assert rollup.channel_multipliers["media"] == pytest.approx(
+            sum(0.8**h for h in range(5)),
+            abs=0.05,
+        )
+
+    def test_minimum_sample_check_counts_complete_adjacent_transitions(self, engine):
+        media = np.linspace(0.1, 1.7, 17)
+        target = np.zeros(17)
+        for t in range(1, 17):
+            target[t] = 0.5 * target[t - 1] + media[t]
+
+        dirty = pd.DataFrame({"media": media, "target": target})
+        dirty.loc[8, "target"] = np.nan
+
+        with pytest.raises(DomainError) as exc_info:
+            engine.fit_var(
+                df=dirty,
+                endogenous_columns=["target"],
+                exogenous_channels=["media"],
+            )
+
+        assert exc_info.value.code == "DATASET_TOO_SHORT"
+
+    def test_explosive_fit_reports_actual_finite_horizon_multiplier(self, engine):
+        rng = np.random.default_rng(17)
+        n = 50
+        media = rng.normal(0.0, 1.0, n)
+        target = np.zeros(n)
+        for t in range(1, n):
+            target[t] = 1.08 * target[t - 1] + 0.8 * media[t]
+
+        rollup = engine.fit_var(
+            df=pd.DataFrame({"media": media, "target": target}),
+            endogenous_columns=["target"],
+            exogenous_channels=["media"],
+            horizon=4,
+        )
+
+        assert rollup.is_stationary is False
+        assert rollup.diagnostic_status == "rejected"
+        assert rollup.channel_multipliers["media"] == pytest.approx(
+            sum(1.08**h for h in range(5)), abs=0.02
+        )
 
     def test_explosive_non_stationary_model_is_blocked_by_gate(self, engine):
         """Synthetic explosive model with eigenvalue >= 1.0 must fail decision gate."""
@@ -117,3 +324,4 @@ class TestBayesianVARLongTermEngine:
         with pytest.raises(DomainError) as exc_info:
             engine.rollup_into_decision(decision, explosive_rollup)
         assert exc_info.value.code == "LONG_TERM_GATE_REJECTED"
+        assert "prior" not in exc_info.value.next_action.lower()

@@ -15,7 +15,7 @@ from marketing_mcp.schemas.models import (
 def test_real_multidimensional_mmm_panel_sampling(tmp_path):
     """Verify real Bayesian sampling on a rectangular panel with Riyadh, Jeddah, Dammam."""
     df, _truth = generate_synthetic_multidimensional_mmm(
-        n=52, geos=("Riyadh", "Jeddah", "Dammam"), seed=42, return_truth=True
+        n=104, geos=("Riyadh", "Jeddah", "Dammam"), seed=42, return_truth=True
     )
     csv_path = tmp_path / "panel_mmm.csv"
     df.to_csv(csv_path, index=False)
@@ -30,7 +30,7 @@ def test_real_multidimensional_mmm_panel_sampling(tmp_path):
     )
 
     reg = app.datasets.register_file(csv_path)
-    assert reg.rows == 52 * 3
+    assert reg.rows == 104 * 3
 
     # Validate rectangular panel
     val = app.datasets.validate(
@@ -52,7 +52,7 @@ def test_real_multidimensional_mmm_panel_sampling(tmp_path):
         control_columns=["discount"],
         dims=["geo"],
         adstock={"l_max": 4},
-        sampler={"draws": 200, "tune": 200, "chains": 2, "target_accept": 0.9, "random_seed": 42},
+        sampler={"draws": 400, "tune": 400, "chains": 2, "target_accept": 0.95, "random_seed": 42},
     )
     model_record = app.models.fit(fit_input)
     assert model_record.status == "completed"
