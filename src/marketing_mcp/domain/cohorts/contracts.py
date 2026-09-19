@@ -32,6 +32,8 @@ def _period_ordinal(period: str, period_type: PeriodType) -> int:
 
     try:
         if period_type == "daily":
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", period):
+                raise ValueError
             return date.fromisoformat(period).toordinal()
         if period_type == "weekly":
             match = re.fullmatch(r"(\d{4})-W(\d{2})", period)
