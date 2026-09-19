@@ -60,7 +60,7 @@ class ModelingService:
                 tenant_id=tenant_id,
             )
 
-    def fit(self, input: FitMMMInput, principal: Any = None) -> ModelRecord:
+    def fit(self, input: FitMMMInput, principal: Any = None, cancel_event: Any = None) -> ModelRecord:
         validation = self.datasets.validate(
             input.dataset_id,
             input.date_column,
@@ -116,6 +116,12 @@ class ModelingService:
         )
         self.metadata.put_model(rec.model_dump())
 
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            rec.status = "cancelled"
+            rec.updated_at = _utc()
+            self.metadata.put_model(rec.model_dump())
+            raise DomainError("OPERATION_CANCELLED", "Model fitting was cancelled by client")
+
         try:
             artifact_ref = self._fit_to_blob(
                 adapter,
@@ -124,12 +130,21 @@ class ModelingService:
                 owner=owner,
                 tenant_id=tenant_id,
             )
+            if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+                rec.status = "cancelled"
+                rec.updated_at = _utc()
+                self.metadata.put_model(rec.model_dump())
+                raise DomainError("OPERATION_CANCELLED", "Model fitting was cancelled by client")
+
             rec.status = "completed"
             rec.artifact_path = artifact_ref.uri
             rec.artifact_ref = asdict(artifact_ref)
             rec.updated_at = _utc()
             rec.config["provenance"] = versions
         except DomainError as e:
+            if e.code == "OPERATION_CANCELLED":
+                # Preserve the cancelled status already written; do not overwrite with failed.
+                raise
             rec.status = "failed"
             rec.failure = e.to_dict()["error"]
             rec.updated_at = _utc()

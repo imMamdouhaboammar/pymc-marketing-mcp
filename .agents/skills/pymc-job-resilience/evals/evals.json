@@ -30,15 +30,50 @@
       "type": "recovery",
       "query": "The client disconnected after submit_fit_mmm_job; recover the existing execution state before considering a new submission.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-transform-recovery",
+      "type": "recovery",
+      "query": "The client disconnected during submit_transform_ad_export_job; check job status and recover state before transforming again.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-budget-opt-recovery",
+      "type": "recovery",
+      "query": "The long budget optimization job timed out on HTTP; poll progress and recover execution state.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-flighting-recovery",
+      "type": "recovery",
+      "query": "Recover the disconnected submit_flighting_optimization_job and resume if a checkpoint exists.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-cv-recovery",
+      "type": "recovery",
+      "query": "The asynchronous cross-validation job was interrupted; inspect progress with poll_job_progress.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-prior-sensitivity-recovery",
+      "type": "recovery",
+      "query": "Recover execution state for submit_prior_sensitivity_job after a network disconnect.",
+      "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
     }
   ],
   "tool_traces": [
     {
-      "id": "recover-before-resubmit",
+      "id": "recover-fit-before-resume",
       "expected_valid": true,
+      "max_consecutive_polls": 2,
       "steps": [
         {
-          "tool": "submit_fit_mmm_job"
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
         },
         {
           "tool": "poll_job_progress"
@@ -47,13 +82,403 @@
           "event": "disconnect"
         },
         {
-          "tool": "recover_execution_state"
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
         },
         {
-          "tool": "resume_job"
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1"
+          }
         }
-      ],
-      "max_consecutive_polls": 2
+      ]
+    },
+    {
+      "id": "recover-transform-before-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_transform_ad_export_job",
+          "result": {
+            "job_id": "job-transform-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-transform-1",
+            "job_type": "transform_ad_export",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-transform-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-transform-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "recover-budget-optimization-before-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_budget_optimization_job",
+          "result": {
+            "job_id": "job-budget-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-budget-1",
+            "job_type": "budget_optimize",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-budget-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-budget-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "recover-flighting-optimization-before-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_flighting_optimization_job",
+          "result": {
+            "job_id": "job-flighting-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-flighting-1",
+            "job_type": "flighting_optimize",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-flighting-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-flighting-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "recover-cross-validation-before-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_cross_validate_mmm_job",
+          "result": {
+            "job_id": "job-cv-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-cv-1",
+            "job_type": "cross_validate_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-cv-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-cv-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "recover-prior-sensitivity-before-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_prior_sensitivity_job",
+          "result": {
+            "job_id": "job-prior-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-prior-1",
+            "job_type": "prior_sensitivity",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-prior-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-prior-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "recover-usable-result-continues-without-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "succeeded",
+            "can_resume": false,
+            "has_usable_result": true,
+            "recommended_action": "diagnose_mmm"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "diagnose_mmm",
+          "result": "approved"
+        },
+        {
+          "tool": "optimize_budget"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-without-recovery",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-after-nonresumable-recovery",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_fit_mmm_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-when-usable-result-exists",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "succeeded",
+            "can_resume": false,
+            "has_usable_result": true,
+            "recommended_action": "diagnose_mmm"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-consumed-authorization",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1"
+          }
+        }
+      ]
     },
     {
       "id": "invalid-unbounded-polling",
@@ -76,13 +501,21 @@
       "expected_valid": false,
       "steps": [
         {
-          "tool": "submit_fit_mmm_job"
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
         },
         {
           "event": "disconnect"
         },
         {
-          "tool": "submit_fit_mmm_job"
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
         }
       ]
     },
@@ -91,7 +524,11 @@
       "expected_valid": false,
       "steps": [
         {
-          "tool": "submit_fit_mmm_job"
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
         },
         {
           "event": "disconnect"
@@ -99,14 +536,23 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
             "status": "failed",
             "can_resume": true,
             "has_usable_result": false,
             "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
           }
         },
         {
-          "tool": "submit_fit_mmm_job"
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
         }
       ]
     },
@@ -115,7 +561,11 @@
       "expected_valid": false,
       "steps": [
         {
-          "tool": "submit_fit_mmm_job"
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
         },
         {
           "event": "disconnect"
@@ -123,14 +573,23 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
             "status": "running",
             "can_resume": false,
             "has_usable_result": false,
             "recommended_action": "poll_job_progress"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
           }
         },
         {
-          "tool": "submit_fit_mmm_job"
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
         }
       ]
     },
@@ -139,7 +598,11 @@
       "expected_valid": true,
       "steps": [
         {
-          "tool": "submit_fit_mmm_job"
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
         },
         {
           "event": "disconnect"
@@ -147,14 +610,634 @@
         {
           "tool": "recover_execution_state",
           "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
             "status": "failed",
             "can_resume": false,
             "has_usable_result": false,
-            "recommended_action": "poll_job_progress"
+            "recommended_action": "submit_fit_mmm_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-mismatched-job-id",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-different-2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-mismatched-job-type",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "budget_optimize",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-unsupported-argument",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resubmit-budget-opt-before-recovery",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_budget_optimization_job",
+          "result": {
+            "job_id": "job-budget-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "submit_budget_optimization_job",
+          "result": {
+            "job_id": "job-budget-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "valid-resubmit-budget-opt-after-terminal-unrecoverable-state",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_budget_optimization_job",
+          "result": {
+            "job_id": "job-budget-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-budget-1",
+            "job_type": "budget_optimize",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_budget_optimization_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-budget-1"
+          }
+        },
+        {
+          "tool": "submit_budget_optimization_job",
+          "result": {
+            "job_id": "job-budget-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "valid-resubmit-transform-ad-export-after-terminal-unrecoverable",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_transform_ad_export_job",
+          "result": {
+            "job_id": "job-transform-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-transform-1",
+            "job_type": "transform_ad_export",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_transform_ad_export_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-transform-1"
+          }
+        },
+        {
+          "tool": "submit_transform_ad_export_job",
+          "result": {
+            "job_id": "job-transform-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "valid-resubmit-flighting-opt-after-terminal-unrecoverable",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_flighting_optimization_job",
+          "result": {
+            "job_id": "job-flighting-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-flighting-1",
+            "job_type": "flighting_optimize",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_flighting_optimization_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-flighting-1"
+          }
+        },
+        {
+          "tool": "submit_flighting_optimization_job",
+          "result": {
+            "job_id": "job-flighting-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "valid-resubmit-cv-after-terminal-unrecoverable",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_cross_validate_mmm_job",
+          "result": {
+            "job_id": "job-cv-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-cv-1",
+            "job_type": "cross_validate_mmm",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_cross_validate_mmm_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-cv-1"
+          }
+        },
+        {
+          "tool": "submit_cross_validate_mmm_job",
+          "result": {
+            "job_id": "job-cv-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "valid-resubmit-prior-sensitivity-after-terminal-unrecoverable",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_prior_sensitivity_job",
+          "result": {
+            "job_id": "job-prior-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-prior-1",
+            "job_type": "prior_sensitivity",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_prior_sensitivity_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-prior-1"
+          }
+        },
+        {
+          "tool": "submit_prior_sensitivity_job",
+          "result": {
+            "job_id": "job-prior-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-cross-family-resubmit-budget-to-prior",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_budget_optimization_job",
+          "result": {
+            "job_id": "job-budget-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-budget-1",
+            "job_type": "budget_optimize",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_budget_optimization_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-budget-1"
+          }
+        },
+        {
+          "tool": "submit_prior_sensitivity_job",
+          "result": {
+            "job_id": "job-prior-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-cross-family-resubmit-fit-to-transform",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_fit_mmm_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          }
+        },
+        {
+          "tool": "submit_transform_ad_export_job",
+          "result": {
+            "job_id": "job-transform-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-cross-family-resubmit-flighting-to-cv",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_flighting_optimization_job",
+          "result": {
+            "job_id": "job-flighting-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "job_id": "job-flighting-1",
+            "job_type": "flighting_optimize",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_flighting_optimization_job"
+          },
+          "arguments": {
+            "job_id_or_key": "job-flighting-1"
+          }
+        },
+        {
+          "tool": "submit_cross_validate_mmm_job",
+          "result": {
+            "job_id": "job-cv-1",
+            "status": "submitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-different-recovered-job-id",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          },
+          "result": {
+            "job_id": "job-fit-diff-2",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-diff-2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "invalid-resubmit-different-recovered-job-id",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          },
+          "result": {
+            "job_id": "job-fit-diff-2",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_fit_mmm_job"
           }
         },
         {
           "tool": "submit_fit_mmm_job"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resubmit-missing-recovered-job-id",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          },
+          "result": {
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_fit_mmm_job"
+          }
+        },
+        {
+          "tool": "submit_fit_mmm_job"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resubmit-unknown-recovered-job-type",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          },
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "unknown_future_job",
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_fit_mmm_job"
+          }
+        },
+        {
+          "tool": "submit_fit_mmm_job"
+        }
+      ]
+    },
+    {
+      "id": "valid-recovery-cycle-then-unrelated-async-workflow",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job",
+          "result": {
+            "job_id": "job-fit-1",
+            "status": "submitted"
+          }
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "arguments": {
+            "job_id_or_key": "job-fit-1"
+          },
+          "result": {
+            "job_id": "job-fit-1",
+            "job_type": "fit_mmm",
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "resume_job",
+          "arguments": {
+            "job_id": "job-fit-1"
+          }
+        },
+        {
+          "tool": "diagnose_mmm",
+          "result": {
+            "decision_status": "approved"
+          }
+        },
+        {
+          "tool": "submit_cross_validate_mmm_job",
+          "result": {
+            "job_id": "job-cv-1",
+            "status": "submitted"
+          }
         }
       ]
     }

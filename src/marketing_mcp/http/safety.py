@@ -83,9 +83,31 @@ class RequestSafetyMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 pass
 
-        # 2. Rate limiting check (keyed by client IP or authorization subject)
-        client_ip = request.client.host if request.client else "unknown"
-        if not self.rate_limiter.check(client_ip, max_requests=self.requests_per_minute, window_seconds=60):
+        # 2. Rate limiting check (keyed by authenticated principal, auth token hash, or client IP)
+        rate_key: str
+        if hasattr(request.state, "auth") and request.state.auth and getattr(request.state.auth, "authenticated", False):
+            auth = request.state.auth
+            tenant = getattr(auth, "tenant_id", None)
+            client = getattr(auth, "client_id", "unknown")
+            rate_key = f"tenant:{tenant}:{client}" if tenant else f"auth:{client}"
+        elif hasattr(request.state, "principal") and request.state.principal:
+            p = request.state.principal
+            rate_key = (
+                f"tenant:{p.tenant_id}:{p.subject}"
+                if getattr(p, "tenant_id", None)
+                else f"user:{getattr(p, 'subject', 'unknown')}"
+            )
+        elif request.headers.get("authorization"):
+            import hashlib
+
+            auth_val = request.headers.get("authorization", "")
+            rate_key = f"auth:{hashlib.sha256(auth_val.encode('utf-8')).hexdigest()[:16]}"
+        elif request.client:
+            rate_key = f"ip:{request.client.host}"
+        else:
+            rate_key = "ip:unknown"
+
+        if not self.rate_limiter.check(rate_key, max_requests=self.requests_per_minute, window_seconds=60):
             return JSONResponse(
                 {
                     "error": {

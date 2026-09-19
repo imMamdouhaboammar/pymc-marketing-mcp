@@ -13,7 +13,7 @@ from marketing_mcp.jobs.executor import EnqueueOnlyJobExecutor
 from marketing_mcp.jobs.models import JobRecord, JobStatus
 from marketing_mcp.jobs.process_worker import ProcessJobWorker
 from marketing_mcp.jobs.repository import SQLiteJobRepository
-from marketing_mcp.jobs.worker_cli import build_fit_mmm_handler
+from marketing_mcp.jobs.worker_cli import build_default_handlers, build_fit_mmm_handler
 from marketing_mcp.persistence import SQLitePersistenceBackend
 from marketing_mcp.storage.migrations import MigrationRunner
 
@@ -241,3 +241,234 @@ def test_production_profile_composes_enqueue_only_api(tmp_path) -> None:
         assert isinstance(app.jobs.executor, EnqueueOnlyJobExecutor)
     finally:
         persistence.close()
+
+
+def test_build_default_handlers_covers_all_async_jobs() -> None:
+    app = MagicMock()
+    handlers = build_default_handlers(app)
+    expected_job_types = {
+        "fit_mmm",
+        "transform_ad_export",
+        "budget_optimize",
+        "flighting_optimize",
+        "cross_validate_mmm",
+        "prior_sensitivity",
+    }
+    assert set(handlers.keys()) == expected_job_types
+
+    # Test budget_optimize handler
+    app.decisions.optimize.return_value = {"optimal_spend": {"tv": 1000.0}}
+    budget_job = JobRecord(
+        job_id="job-b1",
+        job_type="budget_optimize",
+        status=JobStatus.RUNNING,
+        owner="analyst",
+        tenant_id="tenant-1",
+        payload={
+            "model_id": "model-1",
+            "budget": 5000.0,
+            "constraints": {"tv": {"min": 100.0, "max": 2000.0}},
+        },
+    )
+    b_res = handlers["budget_optimize"](budget_job)
+    assert b_res == {"optimal_spend": {"tv": 1000.0}}
+    assert app.decisions.optimize.call_args[0][0].model_id == "model-1"
+
+    # Test flighting_optimize handler
+    app.decisions.optimize_flighting.return_value = {"flighting": []}
+    flight_job = JobRecord(
+        job_id="job-f1",
+        job_type="flighting_optimize",
+        status=JobStatus.RUNNING,
+        owner="analyst",
+        tenant_id="tenant-1",
+        payload={
+            "model_id": "model-1",
+            "total_budget": 10000.0,
+        },
+    )
+    f_res = handlers["flighting_optimize"](flight_job)
+    assert f_res == {"flighting": []}
+    assert app.decisions.optimize_flighting.call_args[0][0].model_id == "model-1"
+
+    # Test cross_validate_mmm handler
+    app.diagnostics.cross_validate.return_value = {"folds": []}
+    cv_job = JobRecord(
+        job_id="job-cv1",
+        job_type="cross_validate_mmm",
+        status=JobStatus.RUNNING,
+        owner="analyst",
+        tenant_id="tenant-1",
+        payload={
+            "model_id": "model-1",
+        },
+    )
+    cv_res = handlers["cross_validate_mmm"](cv_job)
+    assert cv_res == {"folds": []}
+    assert app.diagnostics.cross_validate.call_args[0][0].model_id == "model-1"
+
+    # Test prior_sensitivity handler
+    app.diagnostics.prior_sensitivity.return_value = {"sensitivity": {}}
+    ps_job = JobRecord(
+        job_id="job-ps1",
+        job_type="prior_sensitivity",
+        status=JobStatus.RUNNING,
+        owner="analyst",
+        tenant_id="tenant-1",
+        payload={
+            "model_id": "model-1",
+        },
+    )
+    ps_res = handlers["prior_sensitivity"](ps_job)
+    assert ps_res == {"sensitivity": {}}
+    assert app.diagnostics.prior_sensitivity.call_args[0][0].model_id == "model-1"
+
+
+def test_worker_cli_merges_env_and_cli_flags(monkeypatch, tmp_path):
+    """P1 Item 3: Standalone worker CLI loads Settings.from_env() first,
+    applying CLI flags as partial overrides without resetting other env settings.
+    """
+    monkeypatch.setenv("MARKETING_MCP_MAX_DATASET_MB", "250")
+    monkeypatch.setenv("MARKETING_MCP_RATE_LIMIT_PER_MINUTE", "45")
+    db_path = tmp_path / "cli_test.db"
+
+    from marketing_mcp.jobs import worker_cli
+
+    ret = worker_cli.main(["--db", str(db_path), "--once"])
+    assert ret == 0
+
+    base = Settings.from_env()
+    assert base.max_dataset_mb == 250
+    assert base.rate_limit_per_minute == 45
+
+
+def test_process_worker_cancellation_propagation(tmp_path):
+    """P1 Item 4: When a running job transitions to CANCELLING or CANCELLED,
+    worker heartbeat sets cancel_event, stopping compute promptly,
+    and the final job status is marked CANCELLED and never overwritten to RUNNING or FAILED.
+    """
+    import threading
+
+    db_path = tmp_path / "cancel_worker.db"
+    repo = _repo(db_path)
+    repo.create_job(
+        JobRecord(
+            job_id="job-cancel-prop",
+            job_type="test_cancel",
+            status=JobStatus.QUEUED,
+            payload={},
+        )
+    )
+
+    observed_cancelled = False
+
+    def cancelling_handler(j, cancel_event=None):
+        nonlocal observed_cancelled
+        for _ in range(50):
+            if cancel_event and cancel_event.is_set():
+                observed_cancelled = True
+                raise DomainError("OPERATION_CANCELLED", "Aborted by client")
+            time.sleep(0.05)
+        return {"done": True}
+
+    heartbeat_conn = sqlite3.connect(db_path, check_same_thread=False)
+    heartbeat_conn.row_factory = sqlite3.Row
+    heartbeat_repo = SQLiteJobRepository(heartbeat_conn)
+
+    worker = ProcessJobWorker(
+        repo,
+        handlers={"test_cancel": cancelling_handler},
+        worker_id="worker-cancel-test",
+        lease_seconds=2,
+        heartbeat_repository=heartbeat_repo,
+    )
+
+    def trigger_cancellation():
+        time.sleep(0.15)
+        update_conn = sqlite3.connect(db_path, check_same_thread=False)
+        update_conn.row_factory = sqlite3.Row
+        update_repo = SQLiteJobRepository(update_conn)
+        update_repo.update_job("job-cancel-prop", status=JobStatus.CANCELLING)
+        update_conn.close()
+
+    t = threading.Thread(target=trigger_cancellation, daemon=True)
+    t.start()
+
+    did_work = worker.execute_next_job()
+    t.join()
+
+    assert did_work is True
+    assert observed_cancelled is True
+
+    final_job = repo.get_job("job-cancel-prop")
+    assert final_job.status == JobStatus.CANCELLED
+
+
+def test_worker_handler_type_error_executed_exactly_once(tmp_path) -> None:
+    """Verify that an internal TypeError inside a 2-arg handler does not re-invoke the handler."""
+    db_path = tmp_path / "type_err_worker.db"
+    repo = _repo(db_path)
+    repo.create_job(
+        JobRecord(
+            job_id="job-type-err",
+            job_type="test_type_err",
+            status=JobStatus.QUEUED,
+            payload={},
+        )
+    )
+
+    invocation_count = 0
+
+    def two_arg_handler(job, cancel_event=None):
+        nonlocal invocation_count
+        invocation_count += 1
+        # Intentionally raise an internal TypeError
+        raise TypeError("internal calculation invalid type error")
+
+    worker = ProcessJobWorker(
+        repo,
+        handlers={"test_type_err": two_arg_handler},
+        worker_id="worker-type-err",
+    )
+
+    did_work = worker.execute_next_job()
+    assert did_work is True
+    assert invocation_count == 1, f"Expected exactly 1 invocation, got {invocation_count}"
+
+    final_job = repo.get_job("job-type-err")
+    assert final_job.status == JobStatus.FAILED
+    assert "internal calculation invalid type error" in str(final_job.error)
+
+
+def test_worker_handler_positional_only_cancel_event(tmp_path) -> None:
+    """Verify that a handler with positional-only cancel_event receives cancel_event positionally."""
+    db_path = tmp_path / "pos_only_worker.db"
+    repo = _repo(db_path)
+    repo.create_job(
+        JobRecord(
+            job_id="job-pos-only",
+            job_type="test_pos_only",
+            status=JobStatus.QUEUED,
+            payload={},
+        )
+    )
+
+    received_event = None
+
+    def pos_only_handler(job, cancel_event, /):
+        nonlocal received_event
+        received_event = cancel_event
+        return {"success": True}
+
+    worker = ProcessJobWorker(
+        repo,
+        handlers={"test_pos_only": pos_only_handler},
+        worker_id="worker-pos-only",
+    )
+
+    did_work = worker.execute_next_job()
+    assert did_work is True
+    assert received_event is not None
+    final_job = repo.get_job("job-pos-only")
+    assert final_job.status == JobStatus.SUCCEEDED
+    assert final_job.result == {"success": True}

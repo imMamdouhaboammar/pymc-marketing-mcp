@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from marketing_mcp.errors import DomainError
 from marketing_mcp.intelligence.contracts.issues import IntelligenceIssue, IssueCode, IssueSeverity
 
 
@@ -54,7 +55,16 @@ def analyze_market_structure(
                     )
         return MarketStructureReport(market_count=1, recommended_strategy="pooled_global")
 
-    # Dims provided: evaluate sufficiency
+    # Dims provided: validate existence and evaluate sufficiency
+    invalid_dims = [d for d in dims if d not in df.columns]
+    if invalid_dims:
+        raise DomainError(
+            "INPUT_INVALID",
+            f"Specified dimension column(s) do not exist in dataset: {invalid_dims}",
+            evidence={"unknown_columns": invalid_dims, "available_columns": list(df.columns)},
+            next_action="Provide dimension columns that exist in the dataset.",
+        )
+
     primary_dim = dims[0]
     uniques = df[primary_dim].dropna().unique()
     market_count = len(uniques)

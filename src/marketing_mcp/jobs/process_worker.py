@@ -21,7 +21,7 @@ class ProcessJobWorker:
     def __init__(
         self,
         repository: JobRepository,
-        handlers: dict[str, Callable[[JobRecord], dict[str, Any]]] | None = None,
+        handlers: dict[str, Callable[..., dict[str, Any]]] | None = None,
         *,
         worker_id: str | None = None,
         lease_seconds: int = 60,
@@ -35,7 +35,7 @@ class ProcessJobWorker:
         self.heartbeat_repository = heartbeat_repository
         self.heartbeat_interval = heartbeat_interval or max(1.0, lease_seconds / 3)
 
-    def register_handler(self, job_type: str, handler: Callable[[JobRecord], dict[str, Any]]) -> None:
+    def register_handler(self, job_type: str, handler: Callable[..., dict[str, Any]]) -> None:
         self.handlers[job_type] = handler
 
     def _finish(
@@ -55,16 +55,23 @@ class ProcessJobWorker:
             error=error,
         )
 
-    def _start_heartbeat(self, job: JobRecord) -> tuple[Event, Event, Thread | None]:
+    def _start_heartbeat(self, job: JobRecord) -> tuple[Event, Event, Event, Thread | None]:
         stop = Event()
         lost = Event()
+        cancel_event = Event()
         heartbeat_repository = self.heartbeat_repository
         if heartbeat_repository is None:
-            return stop, lost, None
+            return stop, lost, cancel_event, None
 
         def heartbeat() -> None:
             while not stop.wait(self.heartbeat_interval):
                 try:
+                    # Periodically monitor persisted job state for cancellation
+                    current = heartbeat_repository.get_job(job.job_id)
+                    if current and current.status in (JobStatus.CANCELLING, JobStatus.CANCELLED):
+                        cancel_event.set()
+                        return
+
                     renewed = heartbeat_repository.renew_lease(
                         job.job_id,
                         worker_id=self.worker_id,
@@ -76,12 +83,16 @@ class ProcessJobWorker:
                     lost.set()
                     return
                 if not renewed:
-                    lost.set()
+                    current = heartbeat_repository.get_job(job.job_id)
+                    if current and current.status in (JobStatus.CANCELLING, JobStatus.CANCELLED):
+                        cancel_event.set()
+                    else:
+                        lost.set()
                     return
 
         thread = Thread(target=heartbeat, name=f"heartbeat-{job.job_id}", daemon=True)
         thread.start()
-        return stop, lost, thread
+        return stop, lost, cancel_event, thread
 
     @staticmethod
     def _stop_heartbeat(stop: Event, thread: Thread | None) -> None:
@@ -110,15 +121,50 @@ class ProcessJobWorker:
             )
             return True
 
-        stop, lease_lost, heartbeat = self._start_heartbeat(job)
+        stop, lease_lost, cancel_event, heartbeat = self._start_heartbeat(job)
         try:
-            result = handler(job)
+            import inspect
+
+            sig = inspect.signature(handler)
+            params = list(sig.parameters.values())
+            cancel_param = sig.parameters.get("cancel_event")
+            has_cancel_kw = cancel_param is not None and cancel_param.kind in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+            has_two_pos = (
+                len(
+                    [
+                        p
+                        for p in params
+                        if p.kind
+                        in (
+                            inspect.Parameter.POSITIONAL_ONLY,
+                            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                        )
+                    ]
+                )
+                >= 2
+            )
+            has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params)
+
+            if has_cancel_kw:
+                result = handler(job, cancel_event=cancel_event)
+            elif has_two_pos or has_varargs:
+                result = handler(job, cancel_event)
+            else:
+                result = handler(job)
         except Exception as exc:
             self._stop_heartbeat(stop, heartbeat)
             logger.exception("Worker execution failed for job %s", job.job_id)
             try:
                 current = self.repository.get_job(job.job_id)
-                if current.status is JobStatus.CANCELLING:
+                is_cancelled = (
+                    current.status in (JobStatus.CANCELLING, JobStatus.CANCELLED)
+                    or cancel_event.is_set()
+                    or getattr(exc, "code", None) == "OPERATION_CANCELLED"
+                )
+                if is_cancelled:
                     self._finish(job, JobStatus.CANCELLED)
                 elif not lease_lost.is_set():
                     self._finish(
@@ -136,7 +182,10 @@ class ProcessJobWorker:
             return True
         try:
             current = self.repository.get_job(job.job_id)
-            if current.status is JobStatus.CANCELLING:
+            if (
+                current.status in (JobStatus.CANCELLING, JobStatus.CANCELLED)
+                or cancel_event.is_set()
+            ):
                 self._finish(job, JobStatus.CANCELLED)
             else:
                 self._finish(job, JobStatus.SUCCEEDED, result=result)

@@ -85,6 +85,13 @@
       "title": "Continuations",
       "type": "array"
     },
+    "deny": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Deny",
+      "type": "array"
+    },
     "deprecated_tools": {
       "items": {
         "type": "string"
@@ -119,6 +126,11 @@
       },
       "title": "Gates",
       "type": "array"
+    },
+    "hooks": {
+      "additionalProperties": true,
+      "title": "Hooks",
+      "type": "object"
     },
     "maturity": {
       "default": "stable",

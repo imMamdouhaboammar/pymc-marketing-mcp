@@ -49,7 +49,7 @@ def test_precached_tools_and_resources_sub_millisecond_handshake(platform_client
     assert t_tools < 0.001, f"tools/list took {t_tools*1000:.3f}ms, expected < 1.0ms"
     assert t_resources < 0.001, f"resources/list took {t_resources*1000:.3f}ms, expected < 1.0ms"
 
-    assert len(tools) == 45, f"Expected 45 tools, got {len(tools)}"
+    assert len(tools) == 50, f"Expected 50 tools, got {len(tools)}"
     assert len(resources) == 14, f"Expected 14 resources, got {len(resources)}"
 
 

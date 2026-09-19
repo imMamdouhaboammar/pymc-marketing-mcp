@@ -10,7 +10,14 @@ from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
 from marketing_mcp.jobs.models import JobStatus
 from marketing_mcp.mcp.envelope import env
-from marketing_mcp.schemas.models import FitMMMInput
+from marketing_mcp.schemas.models import (
+    BudgetOptimizationInput,
+    CrossValidateMMMInput,
+    FitMMMInput,
+    FlightingOptimizationInput,
+    PriorSensitivityInput,
+)
+from marketing_mcp.security.ownership import authorize_dataset, authorize_model
 from marketing_mcp.security.policy import require_scope, scopes_for_tool
 
 
@@ -43,7 +50,7 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
             target_column=config.target_column,
             channel_columns=config.channel_columns,
             control_columns=config.control_columns or [],
-            dims=None,
+            dims=config.dims or [],
         )
         if not val_res.valid_for_modeling:
             err_findings = [f.message for f in val_res.findings if f.severity == "error"]
@@ -90,7 +97,7 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
                 raise asyncio.CancelledError()
             app.jobs.record_checkpoint(
                 job.job_id,
-                "diagnostics_completed",
+                "fit_completed",
                 progress_percent=100.0,
                 state_data={"model_id": res.model_id, "result": res_dict},
             )
@@ -129,6 +136,287 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
             job_type="fit_mmm",
             payload=payload_dict,
             runner_fn=_fit_runner,
+            principal=principal,
+            idempotency_key=idempotency_key,
+        )
+        return env(
+            summary=job_rec.to_dict(),
+            next_actions=["poll_job_progress", "get_job_status"],
+        )
+
+    @mcp.tool(
+        name="submit_transform_ad_export_job",
+        description="Submit an asynchronous job to transform raw long-form advertising exports into wide-form modeling format without blocking.",
+    )
+    @mcp_error_boundary("submit_transform_ad_export_job", "jobs", "submission")
+    async def submit_transform_ad_export_job(
+        dataset_id: str,
+        date_column: str,
+        channel_column: str,
+        spend_column: str,
+        target_columns: list[str],
+        dimension_columns: list[str] | None = None,
+        frequency: str = "D",
+        idempotency_key: str | None = None,
+    ):
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("submit_transform_ad_export_job")[0])
+        t_id = principal.tenant_id if principal and principal.auth_type != "stdio" else None
+        dataset = app.metadata.get_dataset(dataset_id, tenant_id=t_id)
+        if not dataset:
+            raise DomainError("DATASET_NOT_FOUND", f"Dataset '{dataset_id}' was not found")
+        authorize_dataset(principal, dataset, action="read")
+
+        payload = {
+            "dataset_id": dataset_id,
+            "date_column": date_column,
+            "channel_column": channel_column,
+            "spend_column": spend_column,
+            "target_columns": target_columns,
+            "dimension_columns": dimension_columns,
+            "frequency": frequency,
+        }
+
+        async def _transform_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
+            loop = asyncio.get_running_loop()
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(job.job_id, "transformation_initialized", progress_percent=20.0)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            registered, provenance, plan = await loop.run_in_executor(
+                None,
+                lambda: app.datasets.transform_long_form(
+                    dataset_id=dataset_id,
+                    date_column=date_column,
+                    channel_column=channel_column,
+                    spend_column=spend_column,
+                    target_columns=target_columns,
+                    dimension_columns=dimension_columns,
+                    frequency=frequency,
+                    principal=principal,
+                ),
+            )
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            from dataclasses import asdict
+
+            res_dict = {
+                "transformed_dataset_id": registered.dataset_id,
+                "input_dataset_id": dataset_id,
+                "rows": registered.rows,
+                "format": registered.format,
+                "spend_reconciled": provenance.spend_reconciled,
+                "spend_delta": provenance.spend_delta,
+                "calendar_frequency": plan.frequency,
+                "inserted_periods": provenance.inserted_periods,
+                "provenance": asdict(provenance),
+                "transformation_plan": asdict(plan),
+            }
+            app.jobs.record_checkpoint(
+                job.job_id,
+                "transformation_completed",
+                progress_percent=100.0,
+                state_data={"result": res_dict},
+            )
+            return res_dict
+
+        job_rec = app.jobs.submit_job(
+            job_type="transform_ad_export",
+            payload=payload,
+            runner_fn=_transform_runner,
+            principal=principal,
+            idempotency_key=idempotency_key,
+        )
+        return env(
+            summary=job_rec.to_dict(),
+            next_actions=["poll_job_progress", "get_job_status"],
+        )
+
+    @mcp.tool(
+        name="submit_budget_optimization_job",
+        description="Submit an asynchronous budget optimization job under channel/cell constraints without blocking the event loop.",
+    )
+    @mcp_error_boundary("submit_budget_optimization_job", "jobs", "submission")
+    async def submit_budget_optimization_job(
+        config: BudgetOptimizationInput,
+        idempotency_key: str | None = None,
+    ):
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("submit_budget_optimization_job")[0])
+        model_rec = app.metadata.get_model(config.model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
+
+        payload_dict = config.model_dump()
+
+        async def _opt_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
+            loop = asyncio.get_running_loop()
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(job.job_id, "optimization_initialized", progress_percent=20.0)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            res = await loop.run_in_executor(None, app.decisions.optimize, config)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(
+                job.job_id,
+                "optimization_completed",
+                progress_percent=100.0,
+                state_data={"result": res},
+            )
+            return res
+
+        job_rec = app.jobs.submit_job(
+            job_type="budget_optimize",
+            payload=payload_dict,
+            runner_fn=_opt_runner,
+            principal=principal,
+            idempotency_key=idempotency_key,
+        )
+        return env(
+            summary=job_rec.to_dict(),
+            next_actions=["poll_job_progress", "get_job_status"],
+        )
+
+    @mcp.tool(
+        name="submit_flighting_optimization_job",
+        description="Submit an asynchronous dynamic media flighting optimization job over a planning horizon.",
+    )
+    @mcp_error_boundary("submit_flighting_optimization_job", "jobs", "submission")
+    async def submit_flighting_optimization_job(
+        config: FlightingOptimizationInput,
+        idempotency_key: str | None = None,
+    ):
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("submit_flighting_optimization_job")[0])
+        model_rec = app.metadata.get_model(config.model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{config.model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
+
+        payload_dict = config.model_dump()
+
+        async def _flight_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
+            loop = asyncio.get_running_loop()
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(job.job_id, "flighting_initialized", progress_percent=20.0)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            res = await loop.run_in_executor(None, app.decisions.optimize_flighting, config)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(
+                job.job_id,
+                "optimization_completed",
+                progress_percent=100.0,
+                state_data={"result": res},
+            )
+            return res
+
+        job_rec = app.jobs.submit_job(
+            job_type="flighting_optimize",
+            payload=payload_dict,
+            runner_fn=_flight_runner,
+            principal=principal,
+            idempotency_key=idempotency_key,
+        )
+        return env(
+            summary=job_rec.to_dict(),
+            next_actions=["poll_job_progress", "get_job_status"],
+        )
+
+    @mcp.tool(
+        name="submit_cross_validate_mmm_job",
+        description="Submit an asynchronous Time-Slice Cross-Validation job across multiple temporal folds.",
+    )
+    @mcp_error_boundary("submit_cross_validate_mmm_job", "jobs", "submission")
+    async def submit_cross_validate_mmm_job(
+        input: CrossValidateMMMInput,
+        idempotency_key: str | None = None,
+    ):
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("submit_cross_validate_mmm_job")[0])
+        model_rec = app.metadata.get_model(input.model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
+
+        payload_dict = input.model_dump()
+
+        async def _cv_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
+            loop = asyncio.get_running_loop()
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(job.job_id, "cv_initialized", progress_percent=15.0)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            res = await loop.run_in_executor(None, lambda: app.diagnostics.cross_validate(input, cancel_event=cancel_event))
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(
+                job.job_id,
+                "cv_completed",
+                progress_percent=100.0,
+                state_data={"result": res},
+            )
+            return res
+
+        job_rec = app.jobs.submit_job(
+            job_type="cross_validate_mmm",
+            payload=payload_dict,
+            runner_fn=_cv_runner,
+            principal=principal,
+            idempotency_key=idempotency_key,
+        )
+        return env(
+            summary=job_rec.to_dict(),
+            next_actions=["poll_job_progress", "get_job_status"],
+        )
+
+    @mcp.tool(
+        name="submit_prior_sensitivity_job",
+        description="Submit an asynchronous prior sensitivity evaluation job exploring channel rank order stability.",
+    )
+    @mcp_error_boundary("submit_prior_sensitivity_job", "jobs", "submission")
+    async def submit_prior_sensitivity_job(
+        input: PriorSensitivityInput,
+        idempotency_key: str | None = None,
+    ):
+        principal = resolve_context().principal
+        require_scope(principal, scopes_for_tool("submit_prior_sensitivity_job")[0])
+        model_rec = app.metadata.get_model(input.model_id)
+        if not model_rec:
+            raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
+        authorize_model(principal, model_rec, action="read")
+
+        payload_dict = input.model_dump()
+
+        async def _ps_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
+            loop = asyncio.get_running_loop()
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(job.job_id, "sensitivity_initialized", progress_percent=20.0)
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            res = await loop.run_in_executor(None, lambda: app.diagnostics.prior_sensitivity(input, cancel_event=cancel_event))
+            if cancel_event.is_set():
+                raise asyncio.CancelledError()
+            app.jobs.record_checkpoint(
+                job.job_id,
+                "sensitivity_completed",
+                progress_percent=100.0,
+                state_data={"result": res},
+            )
+            return res
+
+        job_rec = app.jobs.submit_job(
+            job_type="prior_sensitivity",
+            payload=payload_dict,
+            runner_fn=_ps_runner,
             principal=principal,
             idempotency_key=idempotency_key,
         )
@@ -204,26 +492,99 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
         principal = resolve_context().principal
         require_scope(principal, scopes_for_tool("resume_job")[0])
         rec = app.jobs.get_job(job_id, principal=principal)
-        config = FitMMMInput(**rec.payload)
 
         async def _resume_runner(job, cancel_event: asyncio.Event) -> dict[str, Any]:
             loop = asyncio.get_running_loop()
             if cancel_event.is_set():
                 raise asyncio.CancelledError()
-            app.jobs.record_checkpoint(job.job_id, "sampling_initialized", progress_percent=30.0)
-            if cancel_event.is_set():
-                raise asyncio.CancelledError()
-            res = await loop.run_in_executor(None, app.models.fit, config, principal)
-            if cancel_event.is_set():
-                raise asyncio.CancelledError()
-            res_dict = res.model_dump()
-            app.jobs.record_checkpoint(
-                job.job_id,
-                "posterior_saved",
-                progress_percent=90.0,
-                state_data={"model_id": res.model_id, "result": res_dict},
-            )
-            return res_dict
+            latest_cp = app.jobs.repo.get_latest_checkpoint(job.job_id)
+            if latest_cp and latest_cp.state_data and "result" in latest_cp.state_data:
+                return latest_cp.state_data["result"]
+            jtype = rec.job_type
+            if jtype in ("fit_mmm", "mmm.fit"):
+                config = FitMMMInput(**rec.payload)
+                app.jobs.record_checkpoint(job.job_id, "sampling_initialized", progress_percent=30.0)
+                if cancel_event.is_set():
+                    raise asyncio.CancelledError()
+                res = await loop.run_in_executor(None, app.models.fit, config, principal)
+                if cancel_event.is_set():
+                    raise asyncio.CancelledError()
+                res_dict = res.model_dump()
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "fit_completed",
+                    progress_percent=100.0,
+                    state_data={"model_id": res.model_id, "result": res_dict},
+                )
+                return res_dict
+            elif jtype in ("budget_optimize", "mmm.budget_optimize"):
+                config = BudgetOptimizationInput(**rec.payload)
+                res = await loop.run_in_executor(None, app.decisions.optimize, config)
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "optimization_completed",
+                    progress_percent=100.0,
+                    state_data={"result": res},
+                )
+                return res
+            elif jtype in ("flighting_optimize", "mmm.flighting_optimize"):
+                config = FlightingOptimizationInput(**rec.payload)
+                res = await loop.run_in_executor(None, app.decisions.optimize_flighting, config)
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "optimization_completed",
+                    progress_percent=100.0,
+                    state_data={"result": res},
+                )
+                return res
+            elif jtype in ("cross_validate_mmm", "mmm.cross_validate"):
+                config = CrossValidateMMMInput(**rec.payload)
+                res = await loop.run_in_executor(None, app.diagnostics.cross_validate, config)
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "cv_completed",
+                    progress_percent=100.0,
+                    state_data={"result": res},
+                )
+                return res
+            elif jtype in ("prior_sensitivity", "mmm.prior_sensitivity"):
+                config = PriorSensitivityInput(**rec.payload)
+                res = await loop.run_in_executor(None, app.diagnostics.prior_sensitivity, config)
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "sensitivity_completed",
+                    progress_percent=100.0,
+                    state_data={"result": res},
+                )
+                return res
+            elif jtype in ("transform_ad_export", "dataset.transform_ad_export"):
+                registered, provenance, plan = await loop.run_in_executor(
+                    None,
+                    lambda: app.datasets.transform_long_form(**rec.payload, principal=principal),
+                )
+                from dataclasses import asdict
+
+                res_dict = {
+                    "transformed_dataset_id": registered.dataset_id,
+                    "input_dataset_id": rec.payload.get("dataset_id"),
+                    "rows": registered.rows,
+                    "format": registered.format,
+                    "spend_reconciled": provenance.spend_reconciled,
+                    "spend_delta": provenance.spend_delta,
+                    "calendar_frequency": plan.frequency,
+                    "inserted_periods": provenance.inserted_periods,
+                    "provenance": asdict(provenance),
+                    "transformation_plan": asdict(plan),
+                }
+                app.jobs.record_checkpoint(
+                    job.job_id,
+                    "transformation_completed",
+                    progress_percent=100.0,
+                    state_data={"result": res_dict},
+                )
+                return res_dict
+            else:
+                raise DomainError("JOB_NOT_RESUMABLE", f"Job type '{jtype}' cannot be resumed")
 
         resumed = app.jobs.resume_job(job_id, _resume_runner, principal=principal)
         return env(

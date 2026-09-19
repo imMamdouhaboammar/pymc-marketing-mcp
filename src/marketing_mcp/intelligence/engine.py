@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from marketing_mcp.errors import DomainError
 from marketing_mcp.intelligence.contracts.contract import (
     ClarificationRequest,
     ModelingContract,
@@ -52,11 +53,29 @@ class MarketingDataIntelligenceEngine:
         dims: list[str] | None = None,
     ) -> SemanticDatasetContract:
         """Runs comprehensive structural, semantic, statistical, and suitability profiling."""
-        user_overrides = user_overrides or {}
-        dims = dims or []
+        from marketing_mcp.schemas.overrides import normalize_user_overrides
+        user_overrides = normalize_user_overrides(user_overrides)
+        override_dims = [
+            col
+            for col, spec in user_overrides.items()
+            if isinstance(spec, dict) and spec.get("role") == SemanticRole.DIMENSION
+        ]
+        dims = list(dict.fromkeys([*(dims or []), *override_dims]))
+
+        # Validate that all user_overrides columns and dims exist in df.columns
+        unknown_override_cols = [col for col in user_overrides if col not in df.columns]
+        unknown_dims = [d for d in dims if d not in df.columns]
+        all_unknown = list(dict.fromkeys(unknown_override_cols + unknown_dims))
+        if all_unknown:
+            raise DomainError(
+                "INPUT_INVALID",
+                f"Specified override or dimension column(s) do not exist in dataset: {all_unknown}",
+                evidence={"unknown_columns": all_unknown, "available_columns": list(df.columns)},
+                next_action="Check column spelling against available columns in the dataset.",
+            )
 
         # 1. Structural profiling
-        date_override = next((col for col, ov in user_overrides.items() if ov.get("role") == SemanticRole.DATE), None)
+        date_override = next((col for col, ov in user_overrides.items() if isinstance(ov, dict) and ov.get("role") == SemanticRole.DATE), None)
         structural = profile_structure(df, date_column=date_override)
 
         # 2. Semantic role inference

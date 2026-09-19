@@ -25,7 +25,7 @@ class JobService:
         self,
         job_type: str,
         payload: dict[str, Any],
-        runner_fn: Callable[..., Coroutine[Any, Any, dict[str, Any]]],
+        runner_fn: Callable[..., Coroutine[Any, Any, dict[str, Any]]] | None = None,
         principal: Principal | None = None,
         idempotency_key: str | None = None,
     ) -> JobRecord:
@@ -49,7 +49,8 @@ class JobService:
             payload=payload,
         )
         created = self.repo.create_job(record)
-        self.executor.submit(created, runner_fn)
+        if runner_fn is not None:
+            self.executor.submit(created, runner_fn)
         return created
 
     def get_job(self, job_id: str, principal: Principal | None = None) -> JobRecord:
@@ -145,9 +146,41 @@ class JobService:
         latest_cp = checkpoints[-1] if checkpoints else None
 
         can_resume = job.status in (JobStatus.FAILED, JobStatus.CANCELLED) and bool(checkpoints)
-        has_usable_result = job.status == JobStatus.SUCCEEDED or (
-            latest_cp and latest_cp.stage in ("posterior_saved", "diagnostics_completed")
+        has_usable_result = job.status == JobStatus.SUCCEEDED or bool(
+            latest_cp
+            and latest_cp.stage
+            in (
+                "posterior_saved",
+                "fit_completed",
+                "diagnostics_completed",
+                "optimization_completed",
+                "cv_completed",
+                "sensitivity_completed",
+                "transformation_completed",
+            )
         )
+
+        recommended_action = "poll_job_progress"
+        if has_usable_result:
+            if job.job_type in ("fit_mmm", "mmm.fit"):
+                recommended_action = "diagnose_mmm"
+            elif job.job_type in ("cross_validate_mmm", "mmm.cross_validate"):
+                recommended_action = "diagnose_mmm"
+            elif job.job_type in ("prior_sensitivity", "mmm.prior_sensitivity"):
+                recommended_action = "recommend_next_measurement"
+            elif job.job_type in (
+                "budget_optimize",
+                "mmm.budget_optimize",
+                "flighting_optimize",
+                "mmm.flighting_optimize",
+            ):
+                recommended_action = "simulate_budget"
+            elif job.job_type in ("transform_ad_export", "dataset.transform_ad_export"):
+                recommended_action = "inspect_dataset"
+            else:
+                recommended_action = "get_model_status"
+        elif can_resume:
+            recommended_action = "resume_job"
 
         return {
             "job_id": job.job_id,
@@ -159,11 +192,7 @@ class JobService:
             "latest_checkpoint": latest_cp.to_dict() if latest_cp else None,
             "result": job.result,
             "error": job.error,
-            "recommended_action": (
-                "get_model_status"
-                if has_usable_result
-                else ("resume_job" if can_resume else "poll_job_progress")
-            ),
+            "recommended_action": recommended_action,
         }
 
     def resume_job(
@@ -172,7 +201,13 @@ class JobService:
         runner_fn: Callable[..., Coroutine[Any, Any, dict[str, Any]]],
         principal: Principal | None = None,
     ) -> JobRecord:
-        """Resume an interrupted or failed job from its last recorded checkpoint."""
+        """Resume or retry an interrupted or failed job.
+
+        If a completed result checkpoint already exists in the repository, the job
+        is marked SUCCEEDED with that result without re-executing computation.
+        Otherwise, execution restarts/retries the uncompleted stage with persisted
+        configuration and ownership. (Does not support intra-MCMC step resumption).
+        """
         job = self.get_job(job_id, principal=principal)
         authorize_job(principal, job.to_dict(), action="write")
 
@@ -182,7 +217,23 @@ class JobService:
                 f"Job '{job_id}' is in state '{job.status.value}' and cannot be resumed",
             )
 
-        updated = self.repo.update_job(job_id, JobStatus.QUEUED, error=None)
+        # 1. Check if a valid completed result checkpoint is already recorded
+        latest_cp = self.repo.get_latest_checkpoint(job_id)
+        if latest_cp and latest_cp.state_data and "result" in latest_cp.state_data:
+            result = latest_cp.state_data["result"]
+            updated = self.repo.update_job(job_id, JobStatus.SUCCEEDED, result=result, clear_error=True)
+            self.record_checkpoint(
+                job_id,
+                stage="resumed_from_checkpoint",
+                progress_percent=100.0,
+                state_data={"reused_stage": latest_cp.stage},
+            )
+            return updated
+
+        # 2. Otherwise, restart the uncompleted stage: re-queue with a fresh attempt budget
+        #    so claim_next_job (which gates on attempts < max_attempts) can claim it again.
+        #    Explicit user resume is treated as a new execution generation.
+        updated = self.repo.update_job(job_id, JobStatus.QUEUED, clear_error=True, reset_attempts=True)
         self.record_checkpoint(
             job_id,
             stage="resumed",

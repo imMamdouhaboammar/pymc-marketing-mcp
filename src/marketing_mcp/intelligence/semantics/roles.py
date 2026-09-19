@@ -37,6 +37,8 @@ def infer_all_column_roles(
         # 1. User overrides take absolute precedence
         if col in user_overrides:
             ov = user_overrides[col]
+            if not isinstance(ov, dict):
+                ov = {"role": ov}
             role = ov.get("role", SemanticRole.UNKNOWN)
             sem_type = ov.get("semantic_type", SemanticType.UNKNOWN.value)
             currency = ov.get("currency")

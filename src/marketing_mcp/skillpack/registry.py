@@ -87,6 +87,8 @@ class SkillManifest(BaseModel):
     maturity: Literal["stable", "experimental", "deprecated"] = "stable"
     authoritative_sources: list[str] = Field(default_factory=list)
     files: ManifestFiles = Field(default_factory=ManifestFiles)
+    deny: list[str] = Field(default_factory=list)
+    hooks: dict[str, Any] = Field(default_factory=dict)
 
 
 class RoutingCase(BaseModel):

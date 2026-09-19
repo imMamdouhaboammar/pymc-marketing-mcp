@@ -230,7 +230,10 @@ class DatasetService:
         dimension_columns: list[str] | None = None,
         frequency: str = "D",
         principal: Any = None,
+        cancel_event: Any = None,
     ):
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            raise DomainError("OPERATION_CANCELLED", "Transformation was cancelled by client")
         from marketing_mcp.scientific.transformations import (
             generate_transformation_plan,
             transform_long_form_export,
@@ -247,6 +250,8 @@ class DatasetService:
             frequency=frequency,
         )
         transformed_df, provenance = transform_long_form_export(raw_df, plan)
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            raise DomainError("OPERATION_CANCELLED", "Transformation was cancelled by client")
         transformed_bytes = transformed_df.to_csv(index=False).encode("utf-8")
         registered = self.register_bytes(
             transformed_bytes,

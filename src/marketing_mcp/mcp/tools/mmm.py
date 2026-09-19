@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from marketing_mcp.app import Application
 from marketing_mcp.error_boundary import mcp_error_boundary
 from marketing_mcp.errors import DomainError
+from marketing_mcp.jobs.operation_guard import (
+    ConcurrencyCancellationGuard,
+    canonical_operation_identity,
+)
 from marketing_mcp.mcp.envelope import env
 from marketing_mcp.schemas.models import (
     ArchiveModelInput,
@@ -46,7 +51,18 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                 raise DomainError("DATASET_NOT_FOUND", f"Dataset '{config.dataset_id}' was not found")
             authorize_dataset(principal, dataset, action="read")
 
-            r = app.models.fit(config, principal=principal)
+            guard = getattr(app, "operation_guard", None)
+            if isinstance(guard, ConcurrencyCancellationGuard):
+                r = await guard.run_tracked_executor(
+                    "fit_mmm",
+                    lambda cancel_ev: app.models.fit(config, principal, cancel_event=cancel_ev),
+                    principal=principal,
+                    details={"dataset_id": config.dataset_id},
+                    identity_key=canonical_operation_identity("fit_mmm", principal, config),
+                )
+            else:
+                loop = asyncio.get_running_loop()
+                r = await loop.run_in_executor(None, lambda: app.models.fit(config, principal))
             return env(
                 summary=r.model_dump(),
                 provenance=r.config.get("provenance", {}),
@@ -101,6 +117,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                     "model_id": model_id,
                     "decision_status": r.decision_status,
                     "decision_tools_enabled": r.decision_tools_enabled,
+                    "failures": r.failures,
                 },
                 evidence=r.diagnostics,
                 warnings=[w.model_dump() for w in r.warnings],
@@ -126,7 +143,18 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                 raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
             authorize_model(principal, model_rec, action="read")
 
-            r = app.diagnostics.cross_validate(input)
+            guard = getattr(app, "operation_guard", None)
+            if isinstance(guard, ConcurrencyCancellationGuard):
+                r = await guard.run_tracked_executor(
+                    "cross_validate_mmm",
+                    lambda cancel_ev: app.diagnostics.cross_validate(input, cancel_event=cancel_ev),
+                    principal=principal,
+                    details={"model_id": input.model_id},
+                    identity_key=canonical_operation_identity("cross_validate_mmm", principal, input),
+                )
+            else:
+                loop = asyncio.get_running_loop()
+                r = await loop.run_in_executor(None, lambda: app.diagnostics.cross_validate(input))
             decision = r.get("decision_provenance", {}).get("decision") or r.get("decision_impact")
             if decision == "blocked_predictive_failure" or r.get("failures"):
                 next_acts = ["diagnose_mmm", "validate_dataset", "evaluate_prior_sensitivity"]
@@ -157,7 +185,18 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                 raise DomainError("MODEL_NOT_FOUND", f"Model '{input.model_id}' was not found")
             authorize_model(principal, model_rec, action="read")
 
-            r = app.diagnostics.prior_sensitivity(input)
+            guard = getattr(app, "operation_guard", None)
+            if isinstance(guard, ConcurrencyCancellationGuard):
+                r = await guard.run_tracked_executor(
+                    "evaluate_prior_sensitivity",
+                    lambda cancel_ev: app.diagnostics.prior_sensitivity(input, cancel_event=cancel_ev),
+                    principal=principal,
+                    details={"model_id": input.model_id},
+                    identity_key=canonical_operation_identity("evaluate_prior_sensitivity", principal, input),
+                )
+            else:
+                loop = asyncio.get_running_loop()
+                r = await loop.run_in_executor(None, lambda: app.diagnostics.prior_sensitivity(input))
             return env(
                 summary=r,
                 warnings=r.get("findings", []),

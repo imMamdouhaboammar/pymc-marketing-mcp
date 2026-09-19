@@ -166,6 +166,11 @@ class Settings(BaseModel):
                 evidence={"host": self.host, "profile": profile.value},
                 next_action="Select http-private-api-key or http-production-oauth",
             )
+        if self.rate_limit_per_minute <= 0:
+            raise DomainError(
+                "CONFIG_INVALID",
+                f"rate_limit_per_minute must be greater than zero, got {self.rate_limit_per_minute}",
+            )
 
         # Canonicalize filesystem paths to absolute paths
         self.data_dir = self.data_dir.expanduser().resolve()
@@ -207,6 +212,20 @@ class Settings(BaseModel):
             "MARKETING_MCP_OAUTH_REQUIRE_TENANT", "true"
         ).strip().lower() in ("1", "true", "yes")
 
+        rate_limit_raw = os.getenv("MARKETING_MCP_RATE_LIMIT_PER_MINUTE", "120").strip()
+        try:
+            rate_limit_val = int(rate_limit_raw)
+        except ValueError as exc:
+            raise DomainError(
+                "CONFIG_INVALID",
+                f"MARKETING_MCP_RATE_LIMIT_PER_MINUTE must be an integer, got '{rate_limit_raw}'",
+            ) from exc
+        if rate_limit_val <= 0:
+            raise DomainError(
+                "CONFIG_INVALID",
+                f"MARKETING_MCP_RATE_LIMIT_PER_MINUTE must be greater than zero, got {rate_limit_val}",
+            )
+
         base: dict[str, Any] = {
             "data_dir": Path(os.getenv("MARKETING_MCP_DATA_DIR", "data")),
             "ingest_dir": Path(os.getenv("MARKETING_MCP_INGEST_DIR", "inbox")),
@@ -238,6 +257,12 @@ class Settings(BaseModel):
                 "MARKETING_MCP_PERSISTENCE_BACKEND", "sqlite"
             ).strip(),
             "shared_sql_url": os.getenv("MARKETING_MCP_SHARED_SQL_URL", "").strip() or None,
+            "rate_limit_per_minute": rate_limit_val,
+            "gateway_url": os.getenv("MARKETING_MCP_GATEWAY_URL", "http://127.0.0.1:8080"),
+            "organization_id": os.getenv("MARKETING_MCP_ORGANIZATION_ID", "").strip() or None,
+            "principal_id": os.getenv("MARKETING_MCP_PRINCIPAL_ID", "").strip() or None,
+            "principal_role": os.getenv("MARKETING_MCP_PRINCIPAL_ROLE", "analyst").strip(),
+            "platform_client_enabled": os.getenv("MARKETING_MCP_PLATFORM_CLIENT_ENABLED", "false").strip().lower() in ("1", "true", "yes"),
         }
         if profile is not None:
             base["security_profile"] = profile

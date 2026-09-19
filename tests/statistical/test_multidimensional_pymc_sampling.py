@@ -52,7 +52,7 @@ def test_real_multidimensional_mmm_panel_sampling(tmp_path):
         control_columns=["discount"],
         dims=["geo"],
         adstock={"l_max": 4},
-        sampler={"draws": 400, "tune": 400, "chains": 2, "target_accept": 0.95, "random_seed": 42},
+        sampler={"draws": 400, "tune": 500, "chains": 2, "target_accept": 0.98, "random_seed": 42},
     )
     model_record = app.models.fit(fit_input)
     assert model_record.status == "completed"
