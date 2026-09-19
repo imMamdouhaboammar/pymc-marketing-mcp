@@ -19,15 +19,9 @@ APPROVED_ACTIONS = {
     "astral-sh/setup-uv": ("20cfd1bf945f4377ade1205e4dbc17946fc9a30d", "node24"),
     "docker/build-push-action": ("53b7df96c91f9c12dcc8a07bcb9ccacbed38856a", "node24"),
     "docker/setup-buildx-action": ("37fe631027851001ddb9b187196cc803df7f5f0e", "node24"),
-    "Schneegans/dynamic-badges-action": ("28b0fa8bdeb46170ac397105ece0c1fe58f68910", "node24"),
     "softprops/action-gh-release": ("efb35369e0ad2afab669f228072c1b0d510eae64", "node24"),
     "super-linter/super-linter/slim": ("4ce20838b8ab83717e78138c5b3a1407148e0918", "docker"),
-    "The-PR-Agent/pr-agent": ("f3b385ea2927247ddcff2fe252472380b9c8f5fc", "docker"),
     "trufflesecurity/trufflehog": ("363923b901c911a9164f50b6c423f47c15372b1c", "composite"),
-    "vn7n24fzkq/github-profile-summary-cards": (
-        "d9632798b299e9ad6940449a859c30742eb5b549",
-        "node24",
-    ),
 }
 
 
@@ -44,7 +38,7 @@ def _active_uses() -> list[tuple[Path, str, str]]:
 def test_all_active_actions_use_reviewed_immutable_runtime_refs() -> None:
     uses = _active_uses()
 
-    assert len(uses) == 66
+    assert len(uses) == 56
     assert {action for _, action, _ in uses} == set(APPROVED_ACTIONS)
     for workflow, action, ref in uses:
         expected_ref, _kind = APPROVED_ACTIONS[action]
@@ -55,7 +49,8 @@ def test_all_active_actions_use_reviewed_immutable_runtime_refs() -> None:
 def test_runtime_inventory_distinguishes_node_composite_and_docker_actions() -> None:
     kinds = {action: kind for action, (_ref, kind) in APPROVED_ACTIONS.items()}
 
-    assert sum(kind == "node24" for kind in kinds.values()) == 10
+    assert sum(kind == "node24" for kind in kinds.values()) == 8
     assert sum(kind == "composite" for kind in kinds.values()) == 2
-    assert sum(kind == "docker" for kind in kinds.values()) == 2
+    assert sum(kind == "docker" for kind in kinds.values()) == 1
     assert "node20" not in kinds.values()
+

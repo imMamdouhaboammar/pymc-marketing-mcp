@@ -173,7 +173,7 @@ async def test_full_analyst_journey_e2e(app_env):
         "adstock": {"type": "geometric"},
         "saturation": {"type": "tanh"},
         "sampler": {
-            "draws": 250,
+            "draws": 400,
             "tune": 500,
             "chains": 2,
             "target_accept": 0.99,
