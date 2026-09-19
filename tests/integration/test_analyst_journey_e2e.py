@@ -72,7 +72,7 @@ async def test_full_analyst_journey_e2e(app_env):
     for country in ["US", "UK"]:
         country_mult = 1.8 if country == "US" else 1.0
         for i, dt in enumerate(dates):
-            base_sales = (2000.0 + i * 25.0 + np.sin(i / 4.0) * 300.0) * country_mult
+            base_sales = 5000.0 * country_mult + float(np.random.normal(0, 50.0) * country_mult)
             for ch in channels:
                 spend = float(np.random.uniform(200.0, 800.0) * country_mult)
                 records.append({
@@ -174,9 +174,9 @@ async def test_full_analyst_journey_e2e(app_env):
         "saturation": {"type": "tanh"},
         "sampler": {
             "draws": 250,
-            "tune": 250,
+            "tune": 500,
             "chains": 2,
-            "target_accept": 0.9,
+            "target_accept": 0.99,
             "random_seed": 42,
         },
     }

@@ -114,6 +114,7 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
                     "model_id": model_id,
                     "decision_status": r.decision_status,
                     "decision_tools_enabled": r.decision_tools_enabled,
+                    "failures": r.failures,
                 },
                 evidence=r.diagnostics,
                 warnings=[w.model_dump() for w in r.warnings],

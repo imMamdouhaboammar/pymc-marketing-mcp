@@ -143,7 +143,7 @@ def test_standalone_worker_cli_executes_real_job_lifecycle(tmp_path: Path) -> No
             "spend_column": "spend_amount",
             "target_columns": ["revenue_usd"],
             "dimension_columns": ["market"],
-            "frequency": "D",
+            "frequency": "W-MON",
         },
         principal=principal,
     )
