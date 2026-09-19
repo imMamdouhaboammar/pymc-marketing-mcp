@@ -201,3 +201,19 @@ class TestPortfolioGraph:
     def test_deterministic_portfolio_graph_alias(self):
         """DeterministicPortfolioGraph must be honest alias for PortfolioGraph."""
         assert DeterministicPortfolioGraph is PortfolioGraph
+
+    def test_edge_validation_rejects_provenance_without_confidence(self):
+        """confidence_provenance without confidence score must be rejected."""
+        with pytest.raises(
+            ValidationError,
+            match="confidence_provenance must be 'unspecified' when confidence is None",
+        ):
+            PortfolioEffectEdge(
+                source_entity_id="b1",
+                target_entity_id="b2",
+                source_channel="tv",
+                effect_type="halo_umbrella",
+                coefficient=0.10,
+                confidence=None,
+                confidence_provenance="empirical_precision",
+            )

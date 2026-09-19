@@ -96,6 +96,11 @@ class PortfolioEffectEdge(BaseModel):
                     f"Cross-entity effect '{self.effect_type}' requires source_entity_id must not equal target_entity_id, "
                     f"got identical entity '{self.source_entity_id}'"
                 )
+        if self.confidence is None and self.confidence_provenance != "unspecified":
+            raise ValueError(
+                f"confidence_provenance must be 'unspecified' when confidence is None, "
+                f"got '{self.confidence_provenance}'"
+            )
         if self.confidence is not None and self.confidence_provenance == "unspecified":
             self.confidence_provenance = "caller_specified"
         return self
