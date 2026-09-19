@@ -140,10 +140,10 @@ export const UsageTracker: React.FC = () => {
           <table className="w-full text-left text-xs text-zinc-300">
             <thead className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 bg-zinc-950 border-b border-zinc-800">
               <tr>
-                <th className="py-2 px-3.5">Status</th>
-                <th className="py-2 px-3.5">Tool Name</th>
-                <th className="py-2 px-3.5">Duration</th>
-                <th className="py-2 px-3.5 text-right">Timestamp</th>
+                <th scope="col" className="py-2 px-3.5">Status</th>
+                <th scope="col" className="py-2 px-3.5">Tool Name</th>
+                <th scope="col" className="py-2 px-3.5">Duration</th>
+                <th scope="col" className="py-2 px-3.5 text-right">Timestamp</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/20 font-mono text-[11px]">

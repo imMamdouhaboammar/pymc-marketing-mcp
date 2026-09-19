@@ -77,7 +77,7 @@ export const AuthModal: React.FC = () => {
           disabled={loading}
           className="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-200 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 mb-3"
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+          <svg aria-hidden="true" className="w-3.5 h-3.5" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -105,12 +105,14 @@ export const AuthModal: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1">Email</label>
+            <label htmlFor="auth-email-input" className="block text-[11px] font-medium text-zinc-300 mb-1">Email</label>
             <div className="relative">
               <Mail className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
               <input
+                id="auth-email-input"
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@work.com"
@@ -120,12 +122,14 @@ export const AuthModal: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1">Password</label>
+            <label htmlFor="auth-password-input" className="block text-[11px] font-medium text-zinc-300 mb-1">Password</label>
             <div className="relative">
               <Lock className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
               <input
+                id="auth-password-input"
                 type="password"
                 required
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
@@ -147,6 +151,7 @@ export const AuthModal: React.FC = () => {
         <div className="text-center mt-4 pt-3 border-t border-zinc-800/80">
           <button
             type="button"
+            aria-label={isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(null);

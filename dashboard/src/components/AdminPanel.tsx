@@ -158,10 +158,10 @@ export const AdminPanel: React.FC = () => {
           <table className="w-full text-left text-xs text-zinc-300">
             <thead className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 bg-zinc-950 border-b border-zinc-800">
               <tr>
-                <th className="py-2 px-3.5">User</th>
-                <th className="py-2 px-3.5">Role</th>
-                <th className="py-2 px-3.5">Joined</th>
-                <th className="py-2 px-3.5 text-right">Invocations</th>
+                <th scope="col" className="py-2 px-3.5">User</th>
+                <th scope="col" className="py-2 px-3.5">Role</th>
+                <th scope="col" className="py-2 px-3.5">Joined</th>
+                <th scope="col" className="py-2 px-3.5 text-right">Invocations</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/20 font-mono text-[11px]">
@@ -205,12 +205,12 @@ export const AdminPanel: React.FC = () => {
           <table className="w-full text-left text-xs text-zinc-300">
             <thead className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 bg-zinc-950 border-b border-zinc-800">
               <tr>
-                <th className="py-2 px-3.5">Key Label</th>
-                <th className="py-2 px-3.5">Owner</th>
-                <th className="py-2 px-3.5">Token Prefix</th>
-                <th className="py-2 px-3.5">Status</th>
-                <th className="py-2 px-3.5">Requests</th>
-                <th className="py-2 px-3.5 text-right">Action</th>
+                <th scope="col" className="py-2 px-3.5">Key Label</th>
+                <th scope="col" className="py-2 px-3.5">Owner</th>
+                <th scope="col" className="py-2 px-3.5">Token Prefix</th>
+                <th scope="col" className="py-2 px-3.5">Status</th>
+                <th scope="col" className="py-2 px-3.5">Requests</th>
+                <th scope="col" className="py-2 px-3.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/20 font-mono text-[11px]">

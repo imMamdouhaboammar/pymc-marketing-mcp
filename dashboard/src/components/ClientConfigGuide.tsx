@@ -121,6 +121,8 @@ asyncio.run(main())`,
             return (
               <button
                 key={key}
+                type="button"
+                aria-label={tab.title}
                 onClick={() => setActiveTab(key)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                   activeTab === key

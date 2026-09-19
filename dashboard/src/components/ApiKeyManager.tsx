@@ -174,9 +174,10 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
       {/* Create Key Form */}
       {isCreating && (
         <form onSubmit={handleCreateKey} className="mb-4 p-3.5 bg-zinc-950 border border-zinc-800 rounded-lg">
-          <label className="block text-[11px] font-medium text-zinc-400 mb-1.5">Key Description</label>
+          <label htmlFor="key-description-input" className="block text-[11px] font-medium text-zinc-400 mb-1.5">Key Description</label>
           <div className="flex flex-col sm:flex-row items-center gap-2">
             <input
+              id="key-description-input"
               type="text"
               required
               value={keyName}
@@ -213,12 +214,12 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onSelectKey, selec
           <table className="w-full text-left text-xs text-zinc-300">
             <thead className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 bg-zinc-950 border-b border-zinc-800">
               <tr>
-                <th className="py-2 px-3.5">Name</th>
-                <th className="py-2 px-3.5 font-mono">Token Prefix</th>
-                <th className="py-2 px-3.5">Status</th>
-                <th className="py-2 px-3.5">Created</th>
-                <th className="py-2 px-3.5">Scopes</th>
-                <th className="py-2 px-3.5 text-right">Actions</th>
+                <th scope="col" className="py-2 px-3.5">Name</th>
+                <th scope="col" className="py-2 px-3.5 font-mono">Token Prefix</th>
+                <th scope="col" className="py-2 px-3.5">Status</th>
+                <th scope="col" className="py-2 px-3.5">Created</th>
+                <th scope="col" className="py-2 px-3.5">Scopes</th>
+                <th scope="col" className="py-2 px-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/20">
