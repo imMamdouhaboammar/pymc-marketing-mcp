@@ -25,6 +25,8 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
     decision_ready = False
     disconnected = False
     resubmit_allowed_after_recovery = False
+    resume_allowed_after_recovery = False
+    last_recovery: dict | None = None
     consecutive_polls = 0
 
     for index, step in enumerate(trace.steps):
@@ -35,6 +37,8 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
         if event == "disconnect":
             disconnected = True
             resubmit_allowed_after_recovery = False
+            resume_allowed_after_recovery = False
+            last_recovery = None
             consecutive_polls = 0
             continue
 
@@ -75,11 +79,41 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
 
         if disconnected and tool == "recover_execution_state":
             recovery = result if isinstance(result, dict) else {}
+            last_recovery = recovery
             resubmit_allowed_after_recovery = (
                 recovery.get("status") in {"failed", "cancelled"}
                 and recovery.get("can_resume") is False
                 and recovery.get("has_usable_result") is False
             )
+            resume_allowed_after_recovery = (
+                recovery.get("can_resume") is True
+                and not recovery.get("has_usable_result")
+            )
+
+        if tool == "resume_job":
+            if not resume_allowed_after_recovery:
+                if last_recovery and last_recovery.get("has_usable_result"):
+                    reasons.append(
+                        f"resume_job called at step {index} but recovery returned has_usable_result=True; "
+                        "correct action is continuation without resume"
+                    )
+                elif last_recovery and last_recovery.get("can_resume") is False:
+                    reasons.append(
+                        f"resume_job called at step {index} but recovery returned can_resume=False"
+                    )
+                elif disconnected:
+                    reasons.append(
+                        f"resume_job called after disconnect at step {index} without authoritative recovery "
+                        "confirming can_resume=True"
+                    )
+                else:
+                    reasons.append(
+                        f"resume_job called at step {index} without authoritative recovery "
+                        "confirming can_resume=True"
+                    )
+            # Consume/reset authorization after resume
+            resume_allowed_after_recovery = False
+
         if disconnected and tool == "submit_fit_mmm_job" and not resubmit_allowed_after_recovery:
             reasons.append(
                 "expensive fit resubmitted after disconnect without authoritative terminal "
@@ -87,3 +121,4 @@ def evaluate_tool_trace(trace: ToolTrace) -> TraceEvaluation:
             )
 
     return TraceEvaluation(valid=not reasons, reasons=tuple(reasons))
+

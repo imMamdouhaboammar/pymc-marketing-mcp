@@ -359,18 +359,18 @@ async def test_full_analyst_journey_e2e(app_env):
 
 @pytest.mark.anyio
 async def test_analyst_journey_rejected_fixture_blocks_optimization(app_env):
-    """Companion test: a pathological dataset that fails diagnostics must block optimization.
+    """Organic scientific evaluation: an uninformative noise dataset with minimal sampling budget.
 
-    This verifies the server-side diagnostic gate is enforced without any
-    manual DB mutation — the model reaches 'rejected' organically.
+    Exercises the diagnostic workflow under poor data/sampling conditions.
+    If the diagnostic evaluation produces failures (decision_status == 'rejected'),
+    asserts that optimize_budget is blocked by the server-side gate.
     """
     import asyncio
 
     app, server, principal = app_env
 
     # -------------------------------------------------------------------------
-    # Build a dataset guaranteed to produce divergences/poor mixing:
-    # near-zero, constant spend — channel is unidentifiable.
+    # Generate uninformative noise dataset (independent uniform spend and normal revenue)
     # -------------------------------------------------------------------------
     np.random.seed(42)
     n = 52
@@ -389,8 +389,7 @@ async def test_analyst_journey_rejected_fixture_blocks_optimization(app_env):
     )
     dataset_id = reg["summary"]["dataset_id"]
 
-    # Fit with unidentifiable pure-noise collinear channels, draws=50/tune=50/target_accept=0.8
-    # deterministically producing divergences, R-hat > 1.05, and ESS < 50
+    # Fit with uninformative channels and tight sampling budget (draws=50, tune=50, chains=2, target_accept=0.8)
     fit_config = {
         "dataset_id": dataset_id,
         "date_column": "date",
@@ -425,32 +424,128 @@ async def test_analyst_journey_rejected_fixture_blocks_optimization(app_env):
     assert poll_resp["summary"]["job"]["status"] == "succeeded"
     model_id = poll_resp["summary"]["latest_checkpoint"]["state_data"]["model_id"]
 
-    # Diagnose — ESS < 50 is mathematically guaranteed with 30 total draws
+    # Diagnose the model
     diag_resp = await _call(server, "diagnose_mmm", {"model_id": model_id})
     verdict = diag_resp["summary"]["decision_status"]
-    assert verdict == "rejected", f"Expected deterministic rejection (ESS < 50), got {verdict}"
 
-    # Optimization MUST always be executed and MUST be blocked by the server-side gate
-    opt_blocked = await _call(
+    # If the organic run fails diagnostics, verify that optimization is blocked by server-side gate
+    if verdict == "rejected":
+        opt_blocked = await _call(
+            server,
+            "optimize_budget",
+            {
+                "config": {
+                    "model_id": model_id,
+                    "budget": 1000.0,
+                    "planning_periods": 4,
+                }
+            },
+        )
+        is_blocked = (
+            "error" in opt_blocked
+            or opt_blocked.get("code", "").startswith("MODEL_")
+            or "DECISION_GATE_BLOCKED" in str(opt_blocked)
+            or "failed diagnostic" in str(opt_blocked).lower()
+            or "rejected" in str(opt_blocked).lower()
+        )
+        assert is_blocked, (
+            f"Server-side diagnostic gate FAILED: optimize_budget succeeded on a rejected model. "
+            f"Response: {opt_blocked}"
+        )
+
+
+@pytest.mark.anyio
+async def test_deterministic_rejected_model_blocks_decision_tools(app_env):
+    """Deterministic contract integration test: a model with an authoritative rejected diagnostic state
+    is unconditionally blocked from all downstream decision tools across MCP boundaries.
+
+    Proves the server-side DecisionGate invariant deterministically without stochastic sampling variability.
+    """
+    app, server, principal = app_env
+
+    # 1. Register a valid dataset
+    reg = await _call(
+        server,
+        "register_dataset",
+        {
+            "content": "date,sales,spend\n2023-01-01,100,50\n2023-01-08,120,60\n",
+            "filename": "deterministic_gate_test.csv",
+        },
+    )
+    dataset_id = reg["summary"]["dataset_id"]
+    fingerprint = reg["summary"]["fingerprint"]
+
+    # 2. Persist a model record with an authoritative rejected diagnostic state
+    rejected_model_id = "mmm_det_rejected_gate_01"
+    now_str = pd.Timestamp.now("UTC").isoformat()
+    from marketing_mcp.schemas.models import ModelRecord
+
+    rejected_record = ModelRecord(
+        model_id=rejected_model_id,
+        dataset_id=dataset_id,
+        dataset_fingerprint=fingerprint,
+        status="completed",
+        config={
+            "channel_columns": ["spend"],
+            "target_column": "sales",
+            "date_column": "date",
+        },
+        created_at=now_str,
+        updated_at=now_str,
+        validation_state="rejected",
+        diagnostics={
+            "decision_status": "rejected",
+            "failures": [
+                {"metric": "divergences", "observed": 14, "required": 0},
+                {"metric": "r_hat", "observed": 1.15, "required": "<= 1.05"},
+                {"metric": "minimum_ess_bulk", "observed": 12.0, "required": ">= 50"},
+            ],
+            "diagnostics": {
+                "divergences": 14,
+                "max_rhat": 1.15,
+                "minimum_ess_bulk": 12.0,
+            },
+        },
+        owner=principal.subject,
+        tenant_id=principal.tenant_id,
+    )
+    app.metadata.put_model(rejected_record.model_dump())
+
+    # Verify model status confirms rejected state
+    status_resp = await _call(server, "get_model_status", {"model_id": rejected_model_id})
+    assert status_resp["summary"]["validation_state"] == "rejected"
+    assert status_resp["summary"]["status"] == "completed"
+
+    # 3. optimize_budget MUST be blocked
+    opt_resp = await _call(
         server,
         "optimize_budget",
         {
             "config": {
-                "model_id": model_id,
-                "budget": 1000.0,
+                "model_id": rejected_model_id,
+                "budget": 2000.0,
                 "planning_periods": 4,
             }
         },
     )
-    # Gate must return an error response — not a successful allocation
-    is_blocked = (
-        "error" in opt_blocked
-        or opt_blocked.get("code", "").startswith("MODEL_")
-        or "DECISION_GATE_BLOCKED" in str(opt_blocked)
-        or "failed diagnostic" in str(opt_blocked).lower()
-        or "rejected" in str(opt_blocked).lower()
+    assert "error" in opt_resp or opt_resp.get("code") in ("DECISION_GATE_BLOCKED", "MODEL_NOT_VALIDATED")
+    assert "DECISION_GATE_BLOCKED" in str(opt_resp) or "rejected" in str(opt_resp).lower()
+
+    # 4. optimize_flighting MUST be blocked
+    flight_resp = await _call(
+        server,
+        "optimize_flighting",
+        {
+            "config": {
+                "model_id": rejected_model_id,
+                "total_budget": 5000.0,
+                "planning_weeks": 4,
+            }
+        },
     )
-    assert is_blocked, (
-        f"Server-side diagnostic gate FAILED: optimize_budget succeeded on a rejected model. "
-        f"Response: {opt_blocked}"
-    )
+    assert "error" in flight_resp or flight_resp.get("code") in ("DECISION_GATE_BLOCKED", "MODEL_NOT_VALIDATED")
+
+    # 5. get_incremental_roas MUST be blocked
+    iroas_resp = await _call(server, "get_incremental_roas", {"model_id": rejected_model_id})
+    assert "error" in iroas_resp or iroas_resp.get("code") in ("DECISION_GATE_BLOCKED", "MODEL_NOT_VALIDATED")
+

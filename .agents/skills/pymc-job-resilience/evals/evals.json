@@ -64,8 +64,9 @@
   ],
   "tool_traces": [
     {
-      "id": "recover-before-resubmit",
+      "id": "recover-fit-before-resume",
       "expected_valid": true,
+      "max_consecutive_polls": 2,
       "steps": [
         {
           "tool": "submit_fit_mmm_job"
@@ -77,17 +78,23 @@
           "event": "disconnect"
         },
         {
-          "tool": "recover_execution_state"
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
         },
         {
           "tool": "resume_job"
         }
-      ],
-      "max_consecutive_polls": 2
+      ]
     },
     {
-      "id": "recover-transform-before-resubmit",
+      "id": "recover-transform-before-resume",
       "expected_valid": true,
+      "max_consecutive_polls": 2,
       "steps": [
         {
           "tool": "submit_transform_ad_export_job"
@@ -99,17 +106,23 @@
           "event": "disconnect"
         },
         {
-          "tool": "recover_execution_state"
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
         },
         {
           "tool": "resume_job"
         }
-      ],
-      "max_consecutive_polls": 2
+      ]
     },
     {
-      "id": "recover-budget-optimization-before-resubmit",
+      "id": "recover-budget-optimization-before-resume",
       "expected_valid": true,
+      "max_consecutive_polls": 2,
       "steps": [
         {
           "tool": "submit_budget_optimization_job"
@@ -121,13 +134,224 @@
           "event": "disconnect"
         },
         {
-          "tool": "recover_execution_state"
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
         },
         {
           "tool": "resume_job"
         }
-      ],
-      "max_consecutive_polls": 2
+      ]
+    },
+    {
+      "id": "recover-flighting-optimization-before-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_flighting_optimization_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "resume_job"
+        }
+      ]
+    },
+    {
+      "id": "recover-cross-validation-before-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_cross_validate_mmm_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "resume_job"
+        }
+      ]
+    },
+    {
+      "id": "recover-prior-sensitivity-before-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_prior_sensitivity_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "resume_job"
+        }
+      ]
+    },
+    {
+      "id": "recover-usable-result-continues-without-resume",
+      "expected_valid": true,
+      "max_consecutive_polls": 2,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "succeeded",
+            "can_resume": false,
+            "has_usable_result": true,
+            "recommended_action": "diagnose_mmm"
+          }
+        },
+        {
+          "tool": "diagnose_mmm",
+          "result": "approved"
+        },
+        {
+          "tool": "optimize_budget"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-without-recovery",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "resume_job"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-after-nonresumable-recovery",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": false,
+            "has_usable_result": false,
+            "recommended_action": "submit_fit_mmm_job"
+          }
+        },
+        {
+          "tool": "resume_job"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-when-usable-result-exists",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "succeeded",
+            "can_resume": false,
+            "has_usable_result": true,
+            "recommended_action": "diagnose_mmm"
+          }
+        },
+        {
+          "tool": "resume_job"
+        }
+      ]
+    },
+    {
+      "id": "invalid-resume-consumed-authorization",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "event": "disconnect"
+        },
+        {
+          "tool": "recover_execution_state",
+          "result": {
+            "status": "failed",
+            "can_resume": true,
+            "has_usable_result": false,
+            "recommended_action": "resume_job"
+          }
+        },
+        {
+          "tool": "resume_job"
+        },
+        {
+          "tool": "resume_job"
+        }
+      ]
     },
     {
       "id": "invalid-unbounded-polling",

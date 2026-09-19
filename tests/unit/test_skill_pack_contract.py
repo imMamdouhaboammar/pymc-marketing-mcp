@@ -220,3 +220,95 @@ def test_tool_trace_evaluator_edge_cases():
     eval_res3 = evaluate_tool_trace(unbounded_default_poll_trace)
     assert eval_res3.valid is False
     assert any("unbounded polling" in r for r in eval_res3.reasons)
+
+
+def test_tool_trace_evaluator_resume_authorization_contract():
+    from marketing_mcp.skillpack.evals import evaluate_tool_trace
+    from marketing_mcp.skillpack.registry import ToolTrace
+
+    # 1. Resume without recovery after disconnect is rejected
+    t1 = ToolTrace(
+        id="resume-without-recovery",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job"},
+            {"event": "disconnect"},
+            {"tool": "resume_job"},
+        ],
+    )
+    res1 = evaluate_tool_trace(t1)
+    assert res1.valid is False
+    assert any("resume_job called after disconnect" in r for r in res1.reasons)
+
+    # 2. Resume after recovery with can_resume=False is rejected
+    t2 = ToolTrace(
+        id="resume-nonresumable",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job"},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {"status": "failed", "can_resume": False, "has_usable_result": False},
+            },
+            {"tool": "resume_job"},
+        ],
+    )
+    res2 = evaluate_tool_trace(t2)
+    assert res2.valid is False
+    assert any("can_resume=False" in r for r in res2.reasons)
+
+    # 3. Resume when has_usable_result=True is rejected (should continue without resume)
+    t3 = ToolTrace(
+        id="resume-usable-result",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job"},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {"status": "succeeded", "can_resume": False, "has_usable_result": True},
+            },
+            {"tool": "resume_job"},
+        ],
+    )
+    res3 = evaluate_tool_trace(t3)
+    assert res3.valid is False
+    assert any("has_usable_result=True" in r for r in res3.reasons)
+
+    # 4. Resume after recovery with can_resume=True and has_usable_result=False is authorized
+    t4 = ToolTrace(
+        id="resume-authorized",
+        expected_valid=True,
+        steps=[
+            {"tool": "submit_fit_mmm_job"},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {"status": "failed", "can_resume": True, "has_usable_result": False},
+            },
+            {"tool": "resume_job"},
+        ],
+    )
+    res4 = evaluate_tool_trace(t4)
+    assert res4.valid is True
+
+    # 5. Resume authorization is consumed/reset after invocation; second resume is rejected
+    t5 = ToolTrace(
+        id="resume-consumed-authorization",
+        expected_valid=False,
+        steps=[
+            {"tool": "submit_fit_mmm_job"},
+            {"event": "disconnect"},
+            {
+                "tool": "recover_execution_state",
+                "result": {"status": "failed", "can_resume": True, "has_usable_result": False},
+            },
+            {"tool": "resume_job"},
+            {"tool": "resume_job"},
+        ],
+    )
+    res5 = evaluate_tool_trace(t5)
+    assert res5.valid is False
+    assert any("without authoritative recovery" in r for r in res5.reasons)
+
