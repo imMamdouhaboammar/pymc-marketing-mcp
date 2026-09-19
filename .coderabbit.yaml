@@ -1,0 +1,92 @@
+# CodeRabbit Configuration for PyMC Marketing MCP Server
+# Repository: https://github.com/imMamdouhaboammar/pymc-marketing-mcp
+# Schema & Reference: https://docs.coderabbit.ai/reference/configuration
+
+version: "2"
+language: "en-US"
+
+reviews:
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  enable_prompt_for_ai_agents: true
+
+  # Path Filters: Scoped to primary source trees while excluding build/binary artifacts
+  path_filters:
+    - "src/**"
+    - "crates/**"
+    - "dashboard/**"
+    - "tests/**"
+    - "docs/**"
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/target/**"
+    - "!**/.venv/**"
+    - "!uv.lock"
+    - "!metadata.db"
+    - "!**/*.csv"
+
+  # Path-based instructions for the MCP codebase
+  path_instructions:
+    # 1. MCP Scientific & Service Core
+    - path: "src/marketing_mcp/**"
+      instructions: |
+        CRITICAL OPERATING INVARIANTS:
+        - Python Runtime: Python 3.12 strictly (avoid features incompatible with 3.12 or dependencies broken by 3.14).
+        - Statistical Decision Gates: Enforce strict MCMC diagnostic thresholds (`max_rhat <= 1.05`, zero divergences, `min_bfmi >= 0.2`). Downstream optimizations and allocations must be hard-blocked if diagnostics fail policy.
+        - Multi-Tenant Isolation: Every storage call, job dispatch, and MCP resource lookup MUST be scoped by tenant/organization. Lookups by un-scoped IDs are strictly prohibited.
+        - MCP Contract Adherence: Tool inputs and outputs must strictly conform to their Pydantic schemas. Preserve error classification and diagnostic reason payloads.
+
+    # 2. Rust Acceleration Crates
+    - path: "crates/**"
+      instructions: |
+        - Rust Crates are used strictly for native acceleration, serialization, and high-throughput bridging.
+        - Maintain memory safety, Tokio async correctness, and robust error propagation back to the Python runtime.
+
+    # 3. Dashboard Web Components
+    - path: "dashboard/**"
+      instructions: |
+        - Ensure components respect diagnostic decision gates and do not allow client-side bypass of blocked states.
+        - Adhere to WCAG accessibility compliance standards and responsive layout best practices.
+
+    # 4. Test Suites
+    - path: "tests/**"
+      instructions: |
+        - Statistical & Invariant Tests: Ensure tests verify mathematical convergence, parameter recovery, and diagnostic boundary conditions.
+        - Security Tests: Strictly enforce tenant isolation, credential leak prevention, and adversarial payload rejection.
+
+  # Finishing Touches: Custom Agent Tasks
+  finishing_touches:
+    unit_tests:
+      enabled: true
+    fix_ci:
+      enabled: true
+    docstrings:
+      enabled: true
+    simplify:
+      enabled: true
+    custom:
+      - name: "enforce tenant scoping"
+        instructions: |
+          Scan the changed database queries, repository methods, and tool handlers.
+          Verify that every query includes tenant/organization scoping.
+          Add missing tenant scoping if any query performs direct un-scoped lookups.
+
+      - name: "verify diagnostic gates"
+        instructions: |
+          Audit any changes touching MCMC sampling, run evaluations, or downstream optimization.
+          Ensure that diagnostic decision gates (`pass`, `caution`, `block`) are evaluated
+          against thresholds before allowing downstream optimization.
+
+      - name: "cleanup stale imports"
+        instructions: |
+          Scan changed Python files for unused imports and remove them without disturbing comments or formatting.
+
+# Knowledge Base & Guidelines Integration
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    file_patterns:
+      - "**/AGENTS.md"
+      - "**/task_plan.md"
