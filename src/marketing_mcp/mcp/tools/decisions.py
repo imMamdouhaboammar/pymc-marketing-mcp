@@ -127,7 +127,8 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
         authorize_model(principal, model_rec, action="read")
 
         loop = asyncio.get_running_loop()
-        r = await loop.run_in_executor(None, lambda: app.decisions.optimize(config))
+        async with app.operation_guard.track("optimize_budget", principal=principal, details={"model_id": config.model_id}) as op:
+            r = await loop.run_in_executor(None, lambda: app.decisions.optimize(config, cancel_event=op.cancel_event))
         return env(
             summary=r,
             warnings=r.get("warnings", []),
@@ -177,7 +178,8 @@ def register_decisions_tools(mcp, app: Application, context_provider: Any = None
         authorize_model(principal, model_rec, action="read")
 
         loop = asyncio.get_running_loop()
-        r = await loop.run_in_executor(None, lambda: app.decisions.optimize_flighting(config))
+        async with app.operation_guard.track("optimize_flighting", principal=principal, details={"model_id": config.model_id}) as op:
+            r = await loop.run_in_executor(None, lambda: app.decisions.optimize_flighting(config, cancel_event=op.cancel_event))
         return env(
             summary={
                 "model_id": config.model_id,

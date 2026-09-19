@@ -48,7 +48,9 @@ class DiagnosticsService:
         self.metadata.put_model(rec.model_dump())
         return result
 
-    def cross_validate(self, input: CrossValidateMMMInput) -> dict[str, Any]:
+    def cross_validate(self, input: CrossValidateMMMInput, cancel_event: Any = None) -> dict[str, Any]:
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            raise DomainError("OPERATION_CANCELLED", "Cross-validation was cancelled by client")
         rec = self.modeling.status(input.model_id)
         df = self.modeling.datasets.load(rec.dataset_id)
         adapter = self.modeling.adapter_factory()
@@ -60,6 +62,8 @@ class DiagnosticsService:
             step_size=input.step_size,
             sampler_config=input.sampler.model_dump(),
         )
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            raise DomainError("OPERATION_CANCELLED", "Cross-validation was cancelled by client")
         res["model_id"] = input.model_id
 
         # Persist cross-validation results into model record diagnostics
@@ -78,7 +82,9 @@ class DiagnosticsService:
         self.metadata.put_model(rec.model_dump())
         return res
 
-    def prior_sensitivity(self, input: PriorSensitivityInput) -> dict[str, Any]:
+    def prior_sensitivity(self, input: PriorSensitivityInput, cancel_event: Any = None) -> dict[str, Any]:
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            raise DomainError("OPERATION_CANCELLED", "Prior sensitivity was cancelled by client")
         model, rec = self.modeling.load_model(input.model_id)
         df = self.modeling.datasets.load(rec.dataset_id)
         adapter = self.modeling.adapter_factory()
@@ -87,5 +93,7 @@ class DiagnosticsService:
             df=df,
             config=rec.config,
         )
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            raise DomainError("OPERATION_CANCELLED", "Prior sensitivity was cancelled by client")
         res["model_id"] = input.model_id
         return res

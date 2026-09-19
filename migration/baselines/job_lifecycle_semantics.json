@@ -10,8 +10,8 @@
     "running": ["succeeded", "failed", "cancelling", "cancelled"],
     "cancelling": ["cancelled", "failed"],
     "succeeded": [],
-    "failed": [],
-    "cancelled": []
+    "failed": ["queued", "succeeded"],
+    "cancelled": ["queued", "succeeded"]
   },
   "invariants": {
     "fencing_monotonic": true,

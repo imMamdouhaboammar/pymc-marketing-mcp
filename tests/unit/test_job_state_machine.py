@@ -35,10 +35,14 @@ class TestJobStateMachine:
 
     def test_invalid_transitions_fail(self):
         assert not can_transition(JobStatus.SUCCEEDED, JobStatus.RUNNING)
-        assert not can_transition(JobStatus.FAILED, JobStatus.SUCCEEDED)
+        # FAILED → RUNNING is never allowed (jobs must re-queue first)
+        assert not can_transition(JobStatus.FAILED, JobStatus.RUNNING)
         with pytest.raises(DomainError) as exc:
             validate_transition(JobStatus.SUCCEEDED, JobStatus.RUNNING)
         assert exc.value.code == "INVALID_STATE"
+        # FAILED → QUEUED and FAILED → SUCCEEDED are valid for resume_job checkpoint reuse
+        assert can_transition(JobStatus.FAILED, JobStatus.QUEUED)
+        assert can_transition(JobStatus.FAILED, JobStatus.SUCCEEDED)
 
 
 class TestJobRepositoryAndService:

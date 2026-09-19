@@ -348,19 +348,21 @@ def register_datasets_tools(mcp, app: Application, context_provider: Any = None)
             authorize_dataset(principal, dataset, action="read")
 
             loop = asyncio.get_running_loop()
-            registered, provenance, plan = await loop.run_in_executor(
-                None,
-                lambda: app.datasets.transform_long_form(
-                    dataset_id=dataset_id,
-                    date_column=date_column,
-                    channel_column=channel_column,
-                    spend_column=spend_column,
-                    target_columns=target_columns,
-                    dimension_columns=dimension_columns,
-                    frequency=frequency,
-                    principal=principal,
-                ),
-            )
+            async with app.operation_guard.track("transform_ad_export", principal=principal, details={"dataset_id": dataset_id}) as op:
+                registered, provenance, plan = await loop.run_in_executor(
+                    None,
+                    lambda: app.datasets.transform_long_form(
+                        dataset_id=dataset_id,
+                        date_column=date_column,
+                        channel_column=channel_column,
+                        spend_column=spend_column,
+                        target_columns=target_columns,
+                        dimension_columns=dimension_columns,
+                        frequency=frequency,
+                        principal=principal,
+                        cancel_event=op.cancel_event,
+                    ),
+                )
 
             from dataclasses import asdict
 

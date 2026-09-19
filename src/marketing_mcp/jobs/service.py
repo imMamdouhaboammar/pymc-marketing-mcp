@@ -25,7 +25,7 @@ class JobService:
         self,
         job_type: str,
         payload: dict[str, Any],
-        runner_fn: Callable[..., Coroutine[Any, Any, dict[str, Any]]],
+        runner_fn: Callable[..., Coroutine[Any, Any, dict[str, Any]]] | None = None,
         principal: Principal | None = None,
         idempotency_key: str | None = None,
     ) -> JobRecord:
@@ -49,7 +49,8 @@ class JobService:
             payload=payload,
         )
         created = self.repo.create_job(record)
-        self.executor.submit(created, runner_fn)
+        if runner_fn is not None:
+            self.executor.submit(created, runner_fn)
         return created
 
     def get_job(self, job_id: str, principal: Principal | None = None) -> JobRecord:
@@ -200,7 +201,13 @@ class JobService:
         runner_fn: Callable[..., Coroutine[Any, Any, dict[str, Any]]],
         principal: Principal | None = None,
     ) -> JobRecord:
-        """Resume an interrupted or failed job from its last recorded checkpoint."""
+        """Resume or retry an interrupted or failed job.
+
+        If a completed result checkpoint already exists in the repository, the job
+        is marked SUCCEEDED with that result without re-executing computation.
+        Otherwise, execution restarts/retries the uncompleted stage with persisted
+        configuration and ownership. (Does not support intra-MCMC step resumption).
+        """
         job = self.get_job(job_id, principal=principal)
         authorize_job(principal, job.to_dict(), action="write")
 
@@ -210,7 +217,21 @@ class JobService:
                 f"Job '{job_id}' is in state '{job.status.value}' and cannot be resumed",
             )
 
-        updated = self.repo.update_job(job_id, JobStatus.QUEUED, error=None)
+        # 1. Check if a valid completed result checkpoint is already recorded
+        latest_cp = self.repo.get_latest_checkpoint(job_id)
+        if latest_cp and latest_cp.state_data and "result" in latest_cp.state_data:
+            result = latest_cp.state_data["result"]
+            updated = self.repo.update_job(job_id, JobStatus.SUCCEEDED, result=result, clear_error=True)
+            self.record_checkpoint(
+                job_id,
+                stage="resumed_from_checkpoint",
+                progress_percent=100.0,
+                state_data={"reused_stage": latest_cp.stage},
+            )
+            return updated
+
+        # 2. Otherwise, restart the uncompleted stage with persisted payload/ownership
+        updated = self.repo.update_job(job_id, JobStatus.QUEUED, clear_error=True)
         self.record_checkpoint(
             job_id,
             stage="resumed",

@@ -121,6 +121,7 @@ class SQLiteJobRepository:
         status: JobStatus,
         result: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
+        clear_error: bool = False,
     ) -> JobRecord:
         with self._lock:
             current = self.get_job(job_id)
@@ -128,7 +129,12 @@ class SQLiteJobRepository:
 
             now = datetime.now(UTC).isoformat()
             res_json = json.dumps(result) if result is not None else (json.dumps(current.result) if current.result else None)
-            err_json = json.dumps(error) if error is not None else (json.dumps(current.error) if current.error else None)
+            if clear_error or status == JobStatus.SUCCEEDED:
+                err_json = None
+            elif error is not None:
+                err_json = json.dumps(error)
+            else:
+                err_json = json.dumps(current.error) if current.error else None
 
             self.conn.execute(
                 """

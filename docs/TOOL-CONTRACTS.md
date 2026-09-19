@@ -231,7 +231,14 @@ Recover execution state and intermediate checkpoints after an unexpected disconn
 
 ### `resume_job`
 
-Resume an interrupted or failed job from its last valid checkpoint without repeating completed work
+Resume an interrupted or failed job from its last valid checkpoint without repeating completed work.
+
+If a completed result checkpoint already exists in the job repository, the job is marked `succeeded`
+and that result is returned immediately without re-executing computation. If no completed checkpoint
+exists, execution restarts/retries the uncompleted stage with the persisted payload, configuration,
+and ownership. Intra-MCMC step resumption is not supported — uncompleted sampling stages restart.
+
+**Valid resume sources**: `failed`, `cancelled`, `queued`.
 
 ## Artifact and storage tools
 

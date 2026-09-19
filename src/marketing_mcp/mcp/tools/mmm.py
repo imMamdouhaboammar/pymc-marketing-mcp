@@ -48,7 +48,8 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             authorize_dataset(principal, dataset, action="read")
 
             loop = asyncio.get_running_loop()
-            r = await loop.run_in_executor(None, lambda: app.models.fit(config, principal))
+            async with app.operation_guard.track("fit_mmm", principal=principal, details={"dataset_id": config.dataset_id}) as op:
+                r = await loop.run_in_executor(None, lambda: app.models.fit(config, principal, cancel_event=op.cancel_event))
             return env(
                 summary=r.model_dump(),
                 provenance=r.config.get("provenance", {}),
@@ -129,7 +130,8 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             authorize_model(principal, model_rec, action="read")
 
             loop = asyncio.get_running_loop()
-            r = await loop.run_in_executor(None, lambda: app.diagnostics.cross_validate(input))
+            async with app.operation_guard.track("cross_validate_mmm", principal=principal, details={"model_id": input.model_id}) as op:
+                r = await loop.run_in_executor(None, lambda: app.diagnostics.cross_validate(input, cancel_event=op.cancel_event))
             decision = r.get("decision_provenance", {}).get("decision") or r.get("decision_impact")
             if decision == "blocked_predictive_failure" or r.get("failures"):
                 next_acts = ["diagnose_mmm", "validate_dataset", "evaluate_prior_sensitivity"]
@@ -161,7 +163,8 @@ def register_mmm_tools(mcp, app: Application, context_provider: Any = None) -> N
             authorize_model(principal, model_rec, action="read")
 
             loop = asyncio.get_running_loop()
-            r = await loop.run_in_executor(None, lambda: app.diagnostics.prior_sensitivity(input))
+            async with app.operation_guard.track("evaluate_prior_sensitivity", principal=principal, details={"model_id": input.model_id}) as op:
+                r = await loop.run_in_executor(None, lambda: app.diagnostics.prior_sensitivity(input, cancel_event=op.cancel_event))
             return env(
                 summary=r,
                 warnings=r.get("findings", []),

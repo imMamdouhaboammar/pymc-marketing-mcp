@@ -273,7 +273,9 @@ class DecisionService:
 
         return warnings, channel_confidence
 
-    def optimize(self, input):
+    def optimize(self, input, cancel_event: Any = None):
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            raise DomainError("OPERATION_CANCELLED", "Optimization was cancelled by client")
         model, record = self._approved(input.model_id)
         result = self.modeling.adapter_factory().optimize_budget(
             model,
@@ -539,7 +541,9 @@ class DecisionService:
             )
         return {"model_id": model_id, "recommendations": findings}
 
-    def optimize_flighting(self, input):
+    def optimize_flighting(self, input, cancel_event: Any = None):
+        if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
+            raise DomainError("OPERATION_CANCELLED", "Flighting optimization was cancelled by client")
         model, record = self._approved(input.model_id)
         import numpy as np
 
@@ -672,10 +676,40 @@ class DecisionService:
             total_budget=input.total_budget,
         )
 
+        from marketing_mcp.domain.decisions.allocation import model_dimensions
+        dims = model_dimensions(model)
+        if dims and isinstance(baseline_channel_spend, dict) and "cells" in baseline_channel_spend:
+            channel_baseline_totals: dict[str, float] = {}
+            for cell in baseline_channel_spend["cells"]:
+                ch = cell["channel"]
+                channel_baseline_totals[ch] = channel_baseline_totals.get(ch, 0.0) + float(cell["amount"])
+
+            scenario_cells = []
+            for cell in baseline_channel_spend["cells"]:
+                ch = cell["channel"]
+                base_tot = channel_baseline_totals.get(ch, 0.0)
+                rec_ch_spend = total_channel_spend.get(ch, 0.0)
+                if base_tot > 0:
+                    scaled_amt = float(cell["amount"]) * (rec_ch_spend / base_tot)
+                else:
+                    cells_for_ch = sum(1 for c in baseline_channel_spend["cells"] if c["channel"] == ch)
+                    scaled_amt = rec_ch_spend / max(1, cells_for_ch)
+                scenario_cells.append({
+                    "channel": ch,
+                    "dimensions": dict(cell["dimensions"]),
+                    "amount": round(scaled_amt, 4),
+                })
+            scenario_allocation: dict[str, Any] = {
+                "dimensions": list(dims),
+                "cells": scenario_cells,
+            }
+        else:
+            scenario_allocation = total_channel_spend
+
         sim_res = self.modeling.adapter_factory().simulate_budget(
             model,
             baseline_allocation=baseline_channel_spend,
-            scenario_allocation=total_channel_spend,
+            scenario_allocation=scenario_allocation,
             planning_periods=input.planning_weeks,
         )
 

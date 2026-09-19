@@ -130,9 +130,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="marketing-mcp-worker", description="Background compute worker")
     parser.add_argument("--once", action="store_true", help="Process at most one job and exit")
     parser.add_argument("--poll-interval", type=float, default=2.0, help="Interval in seconds to poll for queued jobs")
+    parser.add_argument("--metadata-db", "--db", dest="metadata_db", type=str, help="Path to SQLite metadata database")
+    parser.add_argument("--data-dir", type=str, help="Path to data directory")
+    parser.add_argument("--artifact-dir", type=str, help="Path to artifact directory")
     args = parser.parse_args(argv)
 
-    app = Application()
+    from pathlib import Path
+    from marketing_mcp.config import Settings
+
+    settings_kwargs = {}
+    if args.metadata_db:
+        settings_kwargs["metadata_db"] = Path(args.metadata_db)
+    if args.data_dir:
+        settings_kwargs["data_dir"] = Path(args.data_dir)
+    if args.artifact_dir:
+        settings_kwargs["artifact_dir"] = Path(args.artifact_dir)
+
+    settings = Settings(**settings_kwargs) if settings_kwargs else Settings()
+    app = Application(settings)
     heartbeat_store = SQLiteMetadataStore(app.settings.metadata_db)
     heartbeat_repo = SQLiteJobRepository(heartbeat_store.conn)
     worker = ProcessJobWorker(

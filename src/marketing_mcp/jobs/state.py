@@ -10,8 +10,8 @@ VALID_TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
     JobStatus.RUNNING: {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLING, JobStatus.CANCELLED},
     JobStatus.CANCELLING: {JobStatus.CANCELLED, JobStatus.FAILED},
     JobStatus.SUCCEEDED: set(),
-    JobStatus.CANCELLED: set(),
-    JobStatus.FAILED: set(),
+    JobStatus.CANCELLED: {JobStatus.QUEUED, JobStatus.SUCCEEDED},
+    JobStatus.FAILED: {JobStatus.QUEUED, JobStatus.SUCCEEDED},
 }
 
 

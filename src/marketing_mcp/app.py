@@ -35,6 +35,9 @@ class Application:
             EnqueueOnlyJobExecutor() if self.settings.job_execution_mode == "enqueue-only" else None
         )
         self.jobs = JobService(self.job_repo, executor=job_executor)
+        from marketing_mcp.jobs.operation_guard import ConcurrencyCancellationGuard
+
+        self.operation_guard = ConcurrencyCancellationGuard()
         self.credential_repo = self.persistence.credentials
         self.credentials = CredentialService(self.credential_repo)
         self.datasets = DatasetService(

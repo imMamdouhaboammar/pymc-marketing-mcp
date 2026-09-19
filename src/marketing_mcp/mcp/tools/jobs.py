@@ -497,6 +497,9 @@ def register_jobs_tools(mcp, app: Application, context_provider=None) -> None:
             loop = asyncio.get_running_loop()
             if cancel_event.is_set():
                 raise asyncio.CancelledError()
+            latest_cp = app.jobs.repo.get_latest_checkpoint(job.job_id)
+            if latest_cp and latest_cp.state_data and "result" in latest_cp.state_data:
+                return latest_cp.state_data["result"]
             jtype = rec.job_type
             if jtype in ("fit_mmm", "mmm.fit"):
                 config = FitMMMInput(**rec.payload)
