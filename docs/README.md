@@ -16,6 +16,25 @@ When documents disagree, use this order
 
 A test file existing in the repository is not enough to mark a release gate green. A green gate requires evidence produced for the exact commit being assessed, according to `docs/release-evidence/README.md`
 
+
+## SSOT ownership matrix
+
+Use pointers to the canonical owner for volatile facts instead of copying values into multiple documents
+
+| Fact | Canonical owner | Derived or interpretive docs | Rule |
+| --- | --- | --- | --- |
+| Public capability names, kind, maturity, decision-gate flag, evidence references | `src/marketing_mcp/capabilities.py` | generated `docs/CAPABILITIES.md`, README summaries | Regenerate the inventory; avoid hand-copying totals into overview prose |
+| Public tool and resource semantics | MCP registrations, schemas, application services, domain policy | `docs/TOOL-CONTRACTS.md` | Contracts may explain behavior, but names must stay aligned with the generated inventory |
+| Package version and dependency ranges | `pyproject.toml` plus the runtime package version | README, `docs/API-COMPATIBILITY.md` | Do not promote an unsupported version from historical prose |
+| Decision-gated operations and diagnostic policy | capability registry plus `src/marketing_mcp/domain/diagnostics/` | `docs/DECISION-INTEGRITY.md`, `docs/STATISTICAL-SAFETY.md` | A prose change cannot relax a runtime gate |
+| Supported CLI transports | CLI/runtime source | README and deployment docs | Document only accepted runtime values; upstream SDK capabilities are not automatically enabled here |
+| Release readiness | exact-commit machine evidence under `docs/release-evidence/` | `docs/PRODUCTION-READINESS.md` | Status prose interprets evidence; it does not create evidence |
+| Deployment and security behavior | runtime configuration, middleware, authorization, persistence and deployment code | `docs/DEPLOYMENT-GCP.md`, `docs/SECURITY.md` | Current behavior and target architecture must be labeled separately |
+
+### Copied-fact rule
+
+High-churn values such as capability totals, evidence counts, release-gate status, supported versions, and generated resource inventories should normally be linked to their canonical owner rather than repeated in overview documents. If a copied value is necessary for readability, it must be covered by an executable drift check or updated in the same change as its owner
+
 ## Current-state documents
 
 - `PRODUCTION-READINESS.md`: current release status, gate evidence and blockers

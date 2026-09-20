@@ -14,7 +14,9 @@ from marketing_mcp import __version__
 from marketing_mcp.docs_drift import (
     DOCUMENTED_DOCS,
     check_decision_gate_claims,
+    check_dependency_ranges,
     check_docs,
+    check_resource_contracts,
     check_tool_names,
     check_transform_vocabulary,
     check_transport_names,
@@ -116,13 +118,155 @@ def test_decision_gate_claim_drift_is_detected():
 def test_decision_gate_claim_matching_code_is_accepted():
     marker = (
         "<!-- drift-check: decision-gated-tools = "
-        "optimize_budget, optimize_flighting, simulate_budget -->\n"
+        "get_incremental_roas, optimize_budget, optimize_flighting, simulate_budget -->\n"
     )
     assert check_decision_gate_claims(marker, path="docs/FAKE.md") == []
 
 
 def test_missing_decision_gate_marker_is_ignored_for_unrelated_docs():
     assert check_decision_gate_claims("Nothing to declare here.\n", path="docs/FAKE.md") == []
+
+
+# --- resource contracts -----------------------------------------------------------------------
+
+
+def test_missing_documented_resource_is_detected():
+    incomplete_contract = "## MCP resources\n- `marketing://clv/{model_id}`: Stored CLV\n"
+    findings = check_resource_contracts(incomplete_contract, path="docs/TOOL-CONTRACTS.md")
+    assert findings
+    assert any(f.check == "resource-contract" for f in findings)
+    assert any("undocumented" in f.message.lower() or "missing" in f.message.lower() for f in findings)
+
+
+def test_documented_resource_that_does_not_exist_is_detected():
+    text = "## MCP resources\n- `marketing://nonexistent/{id}`: Fake resource\n"
+    findings = check_resource_contracts(text, path="docs/TOOL-CONTRACTS.md")
+    assert findings
+    assert any(f.check == "resource-name" for f in findings)
+    assert "marketing://nonexistent/{id}" in findings[0].message
+
+
+def test_documented_real_resources_are_accepted():
+    contract_text = (REPO_ROOT / "docs" / "TOOL-CONTRACTS.md").read_text(encoding="utf-8")
+    assert check_resource_contracts(contract_text, path="docs/TOOL-CONTRACTS.md") == []
+
+
+def test_resource_contracts_ignored_for_unrelated_docs():
+    assert check_resource_contracts("- `marketing://custom`\n", path="docs/OTHER.md") == []
+
+
+
+def test_resource_discovery_category_drift_is_detected():
+    contract_text = (REPO_ROOT / "docs" / "TOOL-CONTRACTS.md").read_text(encoding="utf-8")
+
+    static_line = (
+        "- `marketing://skills`: Compact deterministic catalog of available scientific "
+        "workflow skills.\n"
+    )
+    static_as_template = contract_text.replace(static_line, "").replace(
+        "### Static resources\n",
+        static_line + "\n### Static resources\n",
+        1,
+    )
+    static_findings = check_resource_contracts(
+        static_as_template, path="docs/TOOL-CONTRACTS.md"
+    )
+    assert any(f.check == "resource-category" for f in static_findings)
+
+    template_line = (
+        "- `marketing://clv/{model_id}`: Stored CLV model record and configuration.\n"
+    )
+    template_as_static = contract_text.replace(template_line, "").replace(
+        "Fixed URIs discovered through MCP `list_resources()`:\n",
+        "Fixed URIs discovered through MCP `list_resources()`:\n\n" + template_line,
+        1,
+    )
+    template_findings = check_resource_contracts(
+        template_as_static, path="docs/TOOL-CONTRACTS.md"
+    )
+    assert any(f.check == "resource-category" for f in template_findings)
+
+
+
+
+def test_resource_outside_discovery_sections_is_detected():
+    contract_text = (REPO_ROOT / "docs" / "TOOL-CONTRACTS.md").read_text(encoding="utf-8")
+    static_line = (
+        "- `marketing://skills`: Compact deterministic catalog of available scientific "
+        "workflow skills.\n"
+    )
+    moved_outside = contract_text.replace(static_line, "").replace(
+        "## Maturity semantics\n",
+        "## Maturity semantics\n\n" + static_line,
+        1,
+    )
+
+    findings = check_resource_contracts(moved_outside, path="docs/TOOL-CONTRACTS.md")
+
+    assert any(
+        f.check == "resource-category" and "marketing://skills" in f.message
+        for f in findings
+    )
+
+# --- dependency ranges ------------------------------------------------------------------------
+
+
+def test_dependency_range_drift_is_detected():
+    text = (
+        "| Package | Declared range | Role |\n"
+        "|---|---|---|\n"
+        "| `pymc-marketing` | `>=1.0.0` | MMM boundary |\n"
+    )
+    findings = check_dependency_ranges(
+        text,
+        path="docs/API-COMPATIBILITY.md",
+        canonical_dependencies={"pymc-marketing": ">=1.1.0,<2"},
+    )
+    assert findings
+    assert any(f.check == "dependency-range" for f in findings)
+    assert any(">=1.0.0" in f.message and ">=1.1.0,<2" in f.message for f in findings)
+
+
+def test_missing_dependency_is_detected():
+    text = (
+        "| Package | Declared range | Role |\n"
+        "|---|---|---|\n"
+        "| `pydantic` | `>=2.12,<2.13` | contracts |\n"
+    )
+    findings = check_dependency_ranges(
+        text,
+        path="docs/API-COMPATIBILITY.md",
+        canonical_dependencies={"pydantic": ">=2.12,<2.13", "httpx": ">=0.27,<1"},
+    )
+    assert findings
+    assert any(f.check == "dependency-completeness" for f in findings)
+    assert any("httpx" in f.message for f in findings)
+
+
+
+def test_stale_documented_dependency_is_detected():
+    text = (
+        "| Package | Declared range | Role |\n"
+        "|---|---|---|\n"
+        "| `pydantic` | `>=2.12,<2.13` | contracts |\n"
+        "| `removed-package` | `>=1,<2` | stale row |\n"
+    )
+    findings = check_dependency_ranges(
+        text,
+        path="docs/API-COMPATIBILITY.md",
+        canonical_dependencies={"pydantic": ">=2.12,<2.13"},
+    )
+    assert any(f.check == "dependency-name" for f in findings)
+    assert any("removed-package" in f.message for f in findings)
+
+
+def test_documented_real_dependencies_are_accepted():
+    text = (REPO_ROOT / "docs" / "API-COMPATIBILITY.md").read_text(encoding="utf-8")
+    assert check_dependency_ranges(text, path="docs/API-COMPATIBILITY.md") == []
+
+
+def test_dependency_ranges_ignored_for_unrelated_docs():
+    assert check_dependency_ranges("| `fake` | `>=1` | role |\n", path="docs/OTHER.md") == []
 
 
 # --- repository-wide -------------------------------------------------------------------------
@@ -165,3 +309,53 @@ def test_checker_script_exits_non_zero_on_drift(tmp_path):
     )
     assert result.returncode == 1
     assert "9.9.9" in result.stdout + result.stderr
+
+def test_checker_script_uses_dependency_ranges_from_requested_root(tmp_path):
+    fake_repo = tmp_path / "repo"
+    (fake_repo / "docs").mkdir(parents=True)
+    (fake_repo / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "fixture"\n'
+        'version = "0.0.0"\n'
+        'requires-python = ">=3.12,<3.14"\n'
+        'dependencies = ["pydantic>=9,<10"]\n',
+        encoding="utf-8",
+    )
+    (fake_repo / "docs" / "API-COMPATIBILITY.md").write_text(
+        "| Package | Declared range | Role |\n"
+        "|---|---|---|\n"
+        "| Python | `>=3.12,<3.14` | runtime |\n"
+        "| `pydantic` | `>=9,<10` | fixture contract |\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(CHECKER), "--root", str(fake_repo)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+def test_checker_script_checks_agents_md_under_requested_root(tmp_path):
+    fake_repo = tmp_path / "repo"
+    (fake_repo / "docs").mkdir(parents=True)
+    (fake_repo / "AGENTS.md").write_text(
+        "Run with --transport sse for local agents.\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(CHECKER), "--root", str(fake_repo)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "AGENTS.md" in result.stdout + result.stderr
+    assert "sse" in result.stdout + result.stderr
+

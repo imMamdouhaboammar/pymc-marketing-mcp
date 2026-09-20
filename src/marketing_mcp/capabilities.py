@@ -261,6 +261,7 @@ _INVENTORY: tuple[Capability, ...] = (
         "get_incremental_roas",
         "decisions",
         "Report total and marginal incremental ROAS per channel with uncertainty.",
+        decision_gate_required=True,
         delegates_to="decisions.iroas",
         status="stable",
         evidence_test_ids=(
@@ -595,7 +596,7 @@ _INVENTORY: tuple[Capability, ...] = (
     _resource(
         "marketing://models/{model_id}/lineage",
         "modeling",
-        "Parent/child lineage chain for a model.",
+        "Direct model record and parent_model_id provenance for a model.",
     ),
     _resource(
         "marketing://models/{model_id}/plots/{plot_type}",

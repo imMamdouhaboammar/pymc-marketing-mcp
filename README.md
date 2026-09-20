@@ -26,9 +26,9 @@ This is not a thin tool wrapper around a probabilistic library, and it is not an
 
 ## What you can do today
 
-The current public registry contains **39 MCP capabilities: 25 stable, 12 experimental, and 2 deprecated**
+`src/marketing_mcp/capabilities.py` is canonical for capability and resource names and maturity; the public surface is generated into [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md). Treat that generated inventory as the derived reference for current capability totals, maturity, and evidence instead of copying a fixed count into this README
 
-The generated source of truth is [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md). Capability maturity is evidence-backed, so an exposed tool is not automatically considered stable
+Capability maturity is evidence-backed, so an exposed tool is not automatically considered stable
 
 | Area | What the MCP can do | Representative capabilities |
 | --- | --- | --- |
@@ -39,8 +39,11 @@ The generated source of truth is [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md).
 | Decision science | Contributions, incremental ROAS, scenarios, budget allocation, and weekly flighting | `get_channel_contributions`, `get_incremental_roas`, `simulate_budget`, `optimize_budget`, `optimize_flighting` |
 | CLV | Purchase, churn, monetary-value, and lifetime-value modeling | `fit_purchase_model`, `fit_value_model`, `estimate_customer_lifetime_value` |
 | Visual evidence | Produce posterior plot artifacts | `get_posterior_plots` |
-| Durable work | Submit, inspect, list, cancel, and execute background jobs | `submit_fit_mmm_job`, `get_job_status`, `list_jobs`, `cancel_job` |
-| Provenance | Inspect datasets, models, diagnostics, plots, CLV records, and model lineage through MCP resources | `marketing://...` resources |
+| Durable work | Submit, inspect, list, cancel, resume, and recover background jobs | `submit_fit_mmm_job`, `get_job_status`, `list_jobs`, `cancel_job`, `resume_job` |
+| Artifact exchange | Export model/dataset artifacts to an AI-client sandbox and clean expired server storage | `export_artifact_to_sandbox`, `cleanup_server_storage` |
+| Agent evidence | Record and retrieve structured analytical or operational insights | `record_agent_insight`, `get_agent_insights` |
+| Scientific skill guidance | Route tasks to scientific workflows and inspect the skill dependency map | `get_skill_guidance`, `list_agentic_skills`, `get_skill_workflow_map` |
+| Provenance | Inspect datasets, models, diagnostics, plots, CLV records, model lineage, and scientific-skill references through MCP resources | `marketing://...` resources |
 
 Some capabilities above are still `experimental`. Check the generated inventory before treating a capability as verified behavior
 

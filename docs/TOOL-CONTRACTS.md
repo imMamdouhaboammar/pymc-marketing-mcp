@@ -2,7 +2,7 @@
 
 This document describes the current public MCP contract
 
-The generated capability inventory in `docs/CAPABILITIES.md` is the source of truth for public names and maturity. This document adds behavioral and safety semantics
+`src/marketing_mcp/capabilities.py` is canonical for capability and resource names and maturity; `docs/CAPABILITIES.md` is the generated human-readable inventory derived from it. This document adds behavioral and safety semantics
 
 All tool results use structured JSON-compatible envelopes and must not fabricate model-dependent quantities
 
@@ -276,14 +276,31 @@ Retrieve the dependency graph, prerequisites, and decision gates for all scienti
 
 ## MCP resources
 
-Current resource templates include
+`src/marketing_mcp/capabilities.py` is canonical for capability and resource names and maturity; `docs/CAPABILITIES.md` is the generated human-readable inventory derived from it. Public MCP resources are partitioned by discovery mechanism into parameterized resource templates and fixed static resources.
 
-- `marketing://datasets/{dataset_id}`
-- `marketing://models/{model_id}`
-- `marketing://models/{model_id}/diagnostics`
-- `marketing://models/{model_id}/lineage`
-- `marketing://models/{model_id}/plots/{plot_type}`
-- `marketing://clv/{model_id}`
+### Resource templates
+
+Parameterized URIs discovered through MCP `list_resource_templates()`:
+
+- `marketing://clv/{model_id}`: Stored CLV model record and configuration.
+- `marketing://datasets/{dataset_id}`: Registered dataset metadata and fingerprint.
+- `marketing://models/{model_id}`: Stored model record, configuration, and provenance.
+- `marketing://models/{model_id}/diagnostics`: Persisted diagnostics result and decision status for a model.
+- `marketing://models/{model_id}/lineage`: Direct model record and parent_model_id provenance (single record, no traversed lineage chain).
+- `marketing://models/{model_id}/plots/{plot_type}`: Rendered posterior plot artifact for a model.
+- `marketing://skills/{skill_name}`: Canonical operational SKILL.md content for one allowed skill name.
+- `marketing://skills/{skill_name}/manifest`: Machine-readable manifest for one allowed scientific workflow skill.
+
+### Static resources
+
+Fixed URIs discovered through MCP `list_resources()`:
+
+- `marketing://skills`: Compact deterministic catalog of available scientific workflow skills.
+- `marketing://skills/decision-gates`: Decision-gated tool map derived from the public capability registry.
+- `marketing://skills/references/scientific-answer-contract`: Shared contract for communicating scientific analytical results and uncertainty.
+- `marketing://skills/references/scientific-source-ledger`: Versioned source ledger for scientific rules used by the Skill Pack.
+- `marketing://skills/tool-map`: Machine-readable classification of every public MCP tool into skill guidance.
+- `marketing://skills/workflow-map`: Compact prerequisites, gates, continuations, and fallback workflow map.
 
 Current hardening note: these resources are public MCP resource contracts, but their request-scoped principal/scope/object-authorization path is not yet proven to match protected tool authorization. Remote production release is blocked until H2 closes
 

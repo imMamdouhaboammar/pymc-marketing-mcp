@@ -4,6 +4,11 @@
 Usage:
     python scripts/check_docs_drift.py
     python scripts/check_docs_drift.py --root /path/to/checkout
+
+`--root` relocates documentation and repository-owned declarative evidence such as
+`pyproject.toml`. Checks backed by imported runtime code (package version, capability registry,
+schemas, and transport constants) use the currently imported `marketing_mcp` package. Run this
+script from the target checkout when those code-backed checks must also describe that checkout.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from marketing_mcp.docs_drift import DOCUMENTED_DOCS, check_docs, discover_docs
+from marketing_mcp.docs_drift import DOCUMENTED_DOCS, check_docs, discover_docs  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:

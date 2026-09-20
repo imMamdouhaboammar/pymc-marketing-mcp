@@ -229,3 +229,18 @@ def _call(service, tool):
             )
         )
     raise AssertionError(f"unknown tool {tool}")
+
+
+def test_all_decision_tools_declared_gated_in_capability_registry():
+    from marketing_mcp.capabilities import get_capability
+
+    for tool_name in [
+        "get_incremental_roas",
+        "simulate_budget",
+        "optimize_budget",
+        "optimize_flighting",
+    ]:
+        cap = get_capability(tool_name)
+        assert cap.decision_gate_required is True, (
+            f"{tool_name} must be marked decision_gate_required=True in capability registry"
+        )
