@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from marketing_mcp.docs_drift import DOCUMENTED_DOCS, check_docs, discover_docs
+from marketing_mcp.docs_drift import DOCUMENTED_DOCS, check_docs, discover_docs  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
