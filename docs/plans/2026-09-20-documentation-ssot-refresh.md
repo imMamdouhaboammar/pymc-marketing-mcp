@@ -49,15 +49,14 @@ The next documentation pass should verify each claim against current source befo
 6. Historical plans, findings, and release notes: ensure they are explicitly labeled historical/target where they can otherwise be mistaken for current behavior.
 7. Failure lessons and agent guidance: ensure canonical indexes and pointers remain complete instead of duplicating operational truth in multiple places.
 
-## Proposed guardrail follow-up
+## Implemented and follow-up guardrails
 
-A separate code/test PR can extend documentation drift checks to cover:
+Implemented in this PR:
+- `check_resource_contracts` in `src/marketing_mcp/docs_drift.py` and unit tests in `tests/unit/test_docs_drift.py` verifying that every canonical MCP resource is documented in `docs/TOOL-CONTRACTS.md` and no unknown resource is documented.
 
-- every generated MCP resource being represented in the public contract document
+Follow-up guardrail considerations for future PRs:
 - accidental reintroduction of a hard-coded capability total in overview docs
 - optionally, explicit machine-readable SSOT markers for version, transport, decision-gate, and resource-owner claims
-
-That guardrail should be implemented with tests rather than relying on prose conventions alone.
 
 ## Acceptance criteria for this PR
 
@@ -66,6 +65,7 @@ That guardrail should be implemented with tests rather than relying on prose con
 - [x] `docs/README.md` identifies canonical owners for volatile documentation facts
 - [x] `docs/TOOL-CONTRACTS.md` represents all 14 current MCP resources partitioned into templates and static resources
 - [x] `marketing://models/{model_id}/lineage` accurately documented as single-record direct provenance
+- [x] Executable resource-contract drift check implemented and verified (`check_resource_contracts` in `src/marketing_mcp/docs_drift.py`)
 - [x] No runtime or statistical behavior is changed
 - [x] `uv run python scripts/generate_capability_inventory.py --check`
 - [x] `uv run python scripts/check_docs_drift.py`

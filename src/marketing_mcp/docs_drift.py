@@ -63,6 +63,9 @@ _TRANSPORT_FLAG = re.compile(r"--transport[=\s]+([a-z][a-z0-9-]*)")
 _GATE_MARKER = re.compile(
     r"<!--\s*drift-check:\s*decision-gated-tools\s*=\s*(?P<tools>[^>]*?)\s*-->"
 )
+_RESOURCE_CONTRACT_LINE = re.compile(
+    r"^\s*[-*]\s+`(?P<uri>marketing://[a-zA-Z0-9_\-\.\/\{\}]+)`"
+)
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,10 @@ class DriftFinding:
 
 def _tool_names() -> set[str]:
     return {c.name for c in get_capability_inventory() if c.kind == "tool"}
+
+
+def _resource_names() -> set[str]:
+    return {c.name for c in get_capability_inventory() if c.kind == "resource"}
 
 
 def _gated_tools() -> set[str]:
@@ -221,12 +228,60 @@ def check_decision_gate_claims(text: str, *, path: str) -> list[DriftFinding]:
     return findings
 
 
+def check_resource_contracts(
+    text: str,
+    *,
+    path: str,
+    canonical_resources: set[str] | None = None,
+) -> list[DriftFinding]:
+    """Flag documented resource drift in contract documentation."""
+    if not path.endswith("TOOL-CONTRACTS.md"):
+        return []
+
+    known = canonical_resources if canonical_resources is not None else _resource_names()
+    findings: list[DriftFinding] = []
+    documented: set[str] = set()
+
+    for number, line in enumerate(text.splitlines(), start=1):
+        match = _RESOURCE_CONTRACT_LINE.match(line)
+        if not match:
+            continue
+        uri = match.group("uri")
+        documented.add(uri)
+        if uri not in known:
+            findings.append(
+                DriftFinding(
+                    check="resource-name",
+                    path=path,
+                    line=number,
+                    message=(
+                        f"documents resource {uri!r}, which is not in the canonical "
+                        "capability registry"
+                    ),
+                )
+            )
+
+    missing = sorted(known - documented)
+    if missing:
+        findings.append(
+            DriftFinding(
+                check="resource-contract",
+                path=path,
+                line=1,
+                message=f"leaves canonical MCP resources undocumented: {missing}",
+            )
+        )
+
+    return findings
+
+
 _CHECKS = (
     check_version_references,
     check_tool_names,
     check_transform_vocabulary,
     check_transport_names,
     check_decision_gate_claims,
+    check_resource_contracts,
 )
 
 
@@ -259,6 +314,7 @@ __all__ = [
     "DriftFinding",
     "check_decision_gate_claims",
     "check_docs",
+    "check_resource_contracts",
     "check_tool_names",
     "check_transform_vocabulary",
     "check_transport_names",

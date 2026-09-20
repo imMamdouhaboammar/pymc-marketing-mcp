@@ -26,7 +26,7 @@ This is not a thin tool wrapper around a probabilistic library, and it is not an
 
 ## What you can do today
 
-The public MCP surface is generated from `src/marketing_mcp/capabilities.py` into [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md). Treat that generated inventory as the source of truth for current capability totals, maturity, and evidence instead of copying a fixed count into this README
+`src/marketing_mcp/capabilities.py` is canonical for capability and resource names and maturity; the public surface is generated into [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md). Treat that generated inventory as the derived reference for current capability totals, maturity, and evidence instead of copying a fixed count into this README
 
 Capability maturity is evidence-backed, so an exposed tool is not automatically considered stable
 

@@ -15,6 +15,7 @@ from marketing_mcp.docs_drift import (
     DOCUMENTED_DOCS,
     check_decision_gate_claims,
     check_docs,
+    check_resource_contracts,
     check_tool_names,
     check_transform_vocabulary,
     check_transport_names,
@@ -123,6 +124,34 @@ def test_decision_gate_claim_matching_code_is_accepted():
 
 def test_missing_decision_gate_marker_is_ignored_for_unrelated_docs():
     assert check_decision_gate_claims("Nothing to declare here.\n", path="docs/FAKE.md") == []
+
+
+# --- resource contracts -----------------------------------------------------------------------
+
+
+def test_missing_documented_resource_is_detected():
+    incomplete_contract = "## MCP resources\n- `marketing://clv/{model_id}`: Stored CLV\n"
+    findings = check_resource_contracts(incomplete_contract, path="docs/TOOL-CONTRACTS.md")
+    assert findings
+    assert any(f.check == "resource-contract" for f in findings)
+    assert any("undocumented" in f.message.lower() or "missing" in f.message.lower() for f in findings)
+
+
+def test_documented_resource_that_does_not_exist_is_detected():
+    text = "## MCP resources\n- `marketing://nonexistent/{id}`: Fake resource\n"
+    findings = check_resource_contracts(text, path="docs/TOOL-CONTRACTS.md")
+    assert findings
+    assert any(f.check == "resource-name" for f in findings)
+    assert "marketing://nonexistent/{id}" in findings[0].message
+
+
+def test_documented_real_resources_are_accepted():
+    contract_text = (REPO_ROOT / "docs" / "TOOL-CONTRACTS.md").read_text(encoding="utf-8")
+    assert check_resource_contracts(contract_text, path="docs/TOOL-CONTRACTS.md") == []
+
+
+def test_resource_contracts_ignored_for_unrelated_docs():
+    assert check_resource_contracts("- `marketing://custom`\n", path="docs/OTHER.md") == []
 
 
 # --- repository-wide -------------------------------------------------------------------------

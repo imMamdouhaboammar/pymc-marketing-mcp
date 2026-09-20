@@ -2,7 +2,7 @@
 
 This document describes the current public MCP contract
 
-The generated capability inventory in `docs/CAPABILITIES.md` is the source of truth for public names and maturity. This document adds behavioral and safety semantics
+`src/marketing_mcp/capabilities.py` is canonical for capability and resource names and maturity; `docs/CAPABILITIES.md` is the generated human-readable inventory derived from it. This document adds behavioral and safety semantics
 
 All tool results use structured JSON-compatible envelopes and must not fabricate model-dependent quantities
 
@@ -276,7 +276,7 @@ Retrieve the dependency graph, prerequisites, and decision gates for all scienti
 
 ## MCP resources
 
-The generated capability inventory in `docs/CAPABILITIES.md` is canonical for resource names and maturity. Public MCP resources are partitioned by discovery mechanism into parameterized resource templates and fixed static resources.
+`src/marketing_mcp/capabilities.py` is canonical for capability and resource names and maturity; `docs/CAPABILITIES.md` is the generated human-readable inventory derived from it. Public MCP resources are partitioned by discovery mechanism into parameterized resource templates and fixed static resources.
 
 ### Resource templates
 
