@@ -46,7 +46,7 @@ The comprehensive follow-up documentation audit verified each claim against sour
 2. `docs/PRODUCTION-READINESS.md`: audited gate status claims against commit evidence; maintained truthful advanced beta / release-candidate status.
 3. `docs/SECURITY.md`: clarified anonymous HTTP public beta posture (`MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true`) and fail-closed binding behavior.
 4. `docs/DEPLOYMENT-GCP.md`: verified staging/development boundaries for Cloud Run and storage configurations.
-5. `docs/API-COMPATIBILITY.md` & `docs/ARCHITECTURE.md`: aligned `pymc-marketing` declared range to `>=1.1.0,<2` and added `httpx>=0.27,<1` to match `pyproject.toml`.
+5. `docs/API-COMPATIBILITY.md`: aligned declared dependency ranges with `pyproject.toml` and added `httpx>=0.27,<1`; `docs/ARCHITECTURE.md` now points to the canonical compatibility source instead of copying volatile ranges.
 6. Decision gate alignment: marked `get_incremental_roas` as `decision_gate_required=True` in `src/marketing_mcp/capabilities.py`, regenerated `docs/CAPABILITIES.md`, and updated `docs/DECISION-INTEGRITY.md` drift-check marker to match runtime enforcement in `DecisionService.iroas()`.
 7. Executable dependency drift check: implemented `check_dependency_ranges` in `src/marketing_mcp/docs_drift.py` and unit tests in `tests/unit/test_docs_drift.py` to prevent declared dependency tables from diverging from `pyproject.toml`.
 
@@ -66,7 +66,7 @@ The comprehensive follow-up documentation audit verified each claim against sour
 - [x] `marketing://models/{model_id}/lineage` accurately documented as single-record direct provenance
 - [x] `get_incremental_roas` decision gate aligned across runtime, capability registry, generated inventory, and drift checks
 - [x] `AGENTS.md` reconciled with current runtime (workers, MCP SDK, native acceleration boundaries, failure lessons)
-- [x] `docs/API-COMPATIBILITY.md` and `docs/ARCHITECTURE.md` dependency ranges aligned with `pyproject.toml`
+- [x] `docs/API-COMPATIBILITY.md` ranges align with `pyproject.toml`; `docs/ARCHITECTURE.md` does not duplicate volatile ranges
 - [x] `docs/SECURITY.md` documents anonymous HTTP beta posture and fail-closed public interface binding
 - [x] Executable resource-contract and dependency drift checks implemented and verified
 - [x] No runtime or statistical behavior is changed
@@ -74,4 +74,4 @@ The comprehensive follow-up documentation audit verified each claim against sour
 - [x] `uv run python scripts/check_docs_drift.py`
 - [x] `uv run pytest tests/unit/test_docs_drift.py tests/release/test_g0_production_truth.py tests/contract/test_decision_gate_contract.py -v`
 
-All verification items verified and passing on this branch.
+Final-head verification evidence is recorded in the PR description after the remediation pass.
