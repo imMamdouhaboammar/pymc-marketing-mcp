@@ -187,6 +187,27 @@ def test_resource_discovery_category_drift_is_detected():
     assert any(f.check == "resource-category" for f in template_findings)
 
 
+
+
+def test_resource_outside_discovery_sections_is_detected():
+    contract_text = (REPO_ROOT / "docs" / "TOOL-CONTRACTS.md").read_text(encoding="utf-8")
+    static_line = (
+        "- `marketing://skills`: Compact deterministic catalog of available scientific "
+        "workflow skills.\n"
+    )
+    moved_outside = contract_text.replace(static_line, "").replace(
+        "## Maturity semantics\n",
+        "## Maturity semantics\n\n" + static_line,
+        1,
+    )
+
+    findings = check_resource_contracts(moved_outside, path="docs/TOOL-CONTRACTS.md")
+
+    assert any(
+        f.check == "resource-category" and "marketing://skills" in f.message
+        for f in findings
+    )
+
 # --- dependency ranges ------------------------------------------------------------------------
 
 
@@ -317,4 +338,24 @@ def test_checker_script_uses_dependency_ranges_from_requested_root(tmp_path):
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+def test_checker_script_checks_agents_md_under_requested_root(tmp_path):
+    fake_repo = tmp_path / "repo"
+    (fake_repo / "docs").mkdir(parents=True)
+    (fake_repo / "AGENTS.md").write_text(
+        "Run with --transport sse for local agents.\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(CHECKER), "--root", str(fake_repo)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "AGENTS.md" in result.stdout + result.stderr
+    assert "sse" in result.stdout + result.stderr
 
