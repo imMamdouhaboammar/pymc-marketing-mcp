@@ -1,7 +1,8 @@
 # Documentation SSOT Refresh Plan
 
 Date: 2026-09-20
-Scope: documentation-only correction and follow-up audit plan
+Original scope: documentation-only correction and follow-up audit plan
+Final implemented scope: documentation refresh plus capability metadata corrections, executable drift checks, contract/unit tests, generated docs, and agent-instruction reconciliation
 Repository: `imMamdouhaboammar/pymc-marketing-mcp`
 
 ## Why this change exists
@@ -51,8 +52,8 @@ The comprehensive follow-up documentation audit verified each claim against sour
 
 ## Implemented guardrails
 
-1. `check_resource_contracts` in `src/marketing_mcp/docs_drift.py` verifying every canonical MCP resource template and static resource is documented in `docs/TOOL-CONTRACTS.md`.
-2. `check_dependency_ranges` in `src/marketing_mcp/docs_drift.py` asserting table rows in `docs/API-COMPATIBILITY.md` match `pyproject.toml` declared dependencies.
+1. `check_resource_contracts` in `src/marketing_mcp/docs_drift.py` verifies every canonical MCP resource is documented in `docs/TOOL-CONTRACTS.md`, rejects unknown resources, and enforces the SDK discovery category (resource template vs static resource).
+2. `check_dependency_ranges` in `src/marketing_mcp/docs_drift.py` detects missing dependencies, range drift, and stale documented dependency names against the selected repository root's `pyproject.toml`.
 3. `AGENTS.md` included in `DOCUMENTED_DOCS` to prevent version, tool, and transport drift in contributor guides.
 4. `test_all_decision_tools_declared_gated_in_capability_registry` in `tests/contract/test_decision_gate_contract.py` asserting all runtime-gated decision tools are marked in the capability registry.
 

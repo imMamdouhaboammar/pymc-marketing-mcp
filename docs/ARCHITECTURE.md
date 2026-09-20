@@ -110,7 +110,7 @@ Compute can be run either via in-process async tasks or via the process-isolated
 
 ## Compatibility
 
-The project currently declares Python `>=3.12,<3.14`, PyMC-Marketing `>=1.1.0,<2` and MCP Python SDK `>=2,<3`
+Canonical runtime dependency ranges live in `pyproject.toml` and are mirrored in `docs/API-COMPATIBILITY.md` under executable drift checks. This architecture guide intentionally does not copy those volatile ranges.
 
 Exact versions for a verified release come from `uv.lock` plus machine-generated release evidence, not from a hand-maintained architecture statement
 

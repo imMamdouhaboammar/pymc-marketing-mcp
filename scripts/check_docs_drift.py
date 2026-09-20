@@ -4,6 +4,11 @@
 Usage:
     python scripts/check_docs_drift.py
     python scripts/check_docs_drift.py --root /path/to/checkout
+
+`--root` relocates documentation and repository-owned declarative evidence such as
+`pyproject.toml`. Checks backed by imported runtime code (package version, capability registry,
+schemas, and transport constants) use the currently imported `marketing_mcp` package. Run this
+script from the target checkout when those code-backed checks must also describe that checkout.
 """
 
 from __future__ import annotations
