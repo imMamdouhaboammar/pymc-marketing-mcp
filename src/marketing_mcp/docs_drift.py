@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
+from mcp.shared.uri_template import UriTemplate
+
 from marketing_mcp import __version__
 from marketing_mcp.capabilities import get_capability_inventory
 from marketing_mcp.schemas.models import AdstockType, SaturationType
@@ -91,6 +93,11 @@ def _tool_names() -> set[str]:
 
 def _resource_names() -> set[str]:
     return {c.name for c in get_capability_inventory() if c.kind == "resource"}
+
+
+def _resource_discovery_category(uri: str) -> str:
+    """Return the MCP discovery surface used by the SDK for a resource URI."""
+    return "template" if UriTemplate.parse(uri).variable_names else "static"
 
 
 def _gated_tools() -> set[str]:
@@ -238,15 +245,26 @@ def check_resource_contracts(
     path: str,
     canonical_resources: set[str] | None = None,
 ) -> list[DriftFinding]:
-    """Flag documented resource drift in contract documentation."""
+    """Flag resource-name, completeness, and MCP discovery-category drift."""
     if not path.endswith("TOOL-CONTRACTS.md"):
         return []
 
     known = canonical_resources if canonical_resources is not None else _resource_names()
     findings: list[DriftFinding] = []
     documented: set[str] = set()
+    section: str | None = None
 
     for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped == "### Resource templates":
+            section = "template"
+            continue
+        if stripped == "### Static resources":
+            section = "static"
+            continue
+        if stripped.startswith("### "):
+            section = None
+
         match = _RESOURCE_CONTRACT_LINE.match(line)
         if not match:
             continue
@@ -261,6 +279,31 @@ def check_resource_contracts(
                     message=(
                         f"documents resource {uri!r}, which is not in the canonical "
                         "capability registry"
+                    ),
+                )
+            )
+            continue
+
+        expected_section = _resource_discovery_category(uri)
+        if section != expected_section:
+            expected_call = (
+                "list_resource_templates()" if expected_section == "template" else "list_resources()"
+            )
+            actual_label = (
+                "Resource templates"
+                if section == "template"
+                else "Static resources"
+                if section == "static"
+                else "neither discovery section"
+            )
+            findings.append(
+                DriftFinding(
+                    check="resource-category",
+                    path=path,
+                    line=number,
+                    message=(
+                        f"documents resource {uri!r} under {actual_label}; MCP SDK "
+                        f"registration exposes it through {expected_call}"
                     ),
                 )
             )
@@ -325,20 +368,33 @@ def check_dependency_ranges(
             continue
         pkg = match.group("pkg")
         range_claim = match.group("range")
-        if pkg in canonical:
-            documented[pkg] = range_claim
-            if range_claim != canonical[pkg]:
-                findings.append(
-                    DriftFinding(
-                        check="dependency-range",
-                        path=path,
-                        line=number,
-                        message=(
-                            f"documents package {pkg!r} with range {range_claim!r}; "
-                            f"canonical range in pyproject.toml is {canonical[pkg]!r}"
-                        ),
-                    )
+        if pkg not in canonical:
+            findings.append(
+                DriftFinding(
+                    check="dependency-name",
+                    path=path,
+                    line=number,
+                    message=(
+                        f"documents package {pkg!r}, which is absent from the canonical "
+                        "direct dependencies in pyproject.toml"
+                    ),
                 )
+            )
+            continue
+
+        documented[pkg] = range_claim
+        if range_claim != canonical[pkg]:
+            findings.append(
+                DriftFinding(
+                    check="dependency-range",
+                    path=path,
+                    line=number,
+                    message=(
+                        f"documents package {pkg!r} with range {range_claim!r}; "
+                        f"canonical range in pyproject.toml is {canonical[pkg]!r}"
+                    ),
+                )
+            )
 
     missing = sorted(set(canonical) - set(documented))
     if missing:
@@ -369,13 +425,23 @@ def check_docs(root: Path, docs: tuple[str, ...] | None = None) -> list[DriftFin
     """Run every drift check over the documented surface, ordered by path then line."""
     findings: list[DriftFinding] = []
     candidates = docs if docs is not None else DOCUMENTED_DOCS
+    canonical_dependencies = _canonical_dependencies(root / "pyproject.toml")
     for relative in candidates:
         path = root / relative
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
         for check in _CHECKS:
-            findings.extend(check(text, path=relative))
+            if check is check_dependency_ranges:
+                findings.extend(
+                    check_dependency_ranges(
+                        text,
+                        path=relative,
+                        canonical_dependencies=canonical_dependencies,
+                    )
+                )
+            else:
+                findings.extend(check(text, path=relative))
     return sorted(findings, key=lambda f: (f.path, f.line, f.check))
 
 
