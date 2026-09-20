@@ -276,14 +276,22 @@ Retrieve the dependency graph, prerequisites, and decision gates for all scienti
 
 ## MCP resources
 
-Current resource templates include
+The generated capability inventory in `docs/CAPABILITIES.md` is canonical for resource names and maturity. The current public resource templates are
 
-- `marketing://datasets/{dataset_id}`
-- `marketing://models/{model_id}`
-- `marketing://models/{model_id}/diagnostics`
-- `marketing://models/{model_id}/lineage`
-- `marketing://models/{model_id}/plots/{plot_type}`
-- `marketing://clv/{model_id}`
+- `marketing://clv/{model_id}`: Stored CLV model record and configuration.
+- `marketing://datasets/{dataset_id}`: Registered dataset metadata and fingerprint.
+- `marketing://models/{model_id}/diagnostics`: Persisted diagnostics result and decision status for a model.
+- `marketing://models/{model_id}`: Stored model record, configuration, and provenance.
+- `marketing://models/{model_id}/lineage`: Parent/child lineage chain for a model.
+- `marketing://models/{model_id}/plots/{plot_type}`: Rendered posterior plot artifact for a model.
+- `marketing://skills`: Compact deterministic catalog of available scientific workflow skills.
+- `marketing://skills/decision-gates`: Decision-gated tool map derived from the public capability registry.
+- `marketing://skills/references/scientific-answer-contract`: Shared contract for communicating scientific analytical results and uncertainty.
+- `marketing://skills/references/scientific-source-ledger`: Versioned source ledger for scientific rules used by the Skill Pack.
+- `marketing://skills/tool-map`: Machine-readable classification of every public MCP tool into skill guidance.
+- `marketing://skills/workflow-map`: Compact prerequisites, gates, continuations, and fallback workflow map.
+- `marketing://skills/{skill_name}`: Canonical operational SKILL.md content for one allowed skill name.
+- `marketing://skills/{skill_name}/manifest`: Machine-readable manifest for one allowed scientific workflow skill.
 
 Current hardening note: these resources are public MCP resource contracts, but their request-scoped principal/scope/object-authorization path is not yet proven to match protected tool authorization. Remote production release is blocked until H2 closes
 
