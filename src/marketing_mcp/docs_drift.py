@@ -262,7 +262,7 @@ def check_resource_contracts(
         if stripped == "### Static resources":
             section = "static"
             continue
-        if stripped.startswith("### "):
+        if re.match(r"^#{1,6}\s", stripped):
             section = None
 
         match = _RESOURCE_CONTRACT_LINE.match(line)
@@ -447,7 +447,11 @@ def check_docs(root: Path, docs: tuple[str, ...] | None = None) -> list[DriftFin
 
 def discover_docs(root: Path) -> tuple[str, ...]:
     """Find documentation files to check when the declared set is not available."""
-    found = ["README.md"] if (root / "README.md").exists() else []
+    found = [
+        name
+        for name in ("AGENTS.md", "README.md")
+        if (root / name).exists()
+    ]
     docs_dir = root / "docs"
     if docs_dir.is_dir():
         found += sorted(f"docs/{p.name}" for p in docs_dir.glob("*.md"))
