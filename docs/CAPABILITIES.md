@@ -91,7 +91,7 @@ approved the model.
 | `marketing://datasets/{dataset_id}` | datasets | experimental | not enforced | `` | Registered dataset metadata and fingerprint. | none |
 | `marketing://models/{model_id}/diagnostics` | diagnostics | experimental | not enforced | `` | Persisted diagnostics result and decision status for a model. | none |
 | `marketing://models/{model_id}` | modeling | experimental | not enforced | `` | Stored model record, configuration, and provenance. | none |
-| `marketing://models/{model_id}/lineage` | modeling | experimental | not enforced | `` | Parent/child lineage chain for a model. | none |
+| `marketing://models/{model_id}/lineage` | modeling | experimental | not enforced | `` | Direct model record and parent_model_id provenance for a model. | none |
 | `marketing://models/{model_id}/plots/{plot_type}` | plots | experimental | not enforced | `plots.get_cached_plot` | Rendered posterior plot artifact for a model. | none |
 | `marketing://skills` | skills | experimental | not enforced | `` | Compact deterministic catalog of available scientific workflow skills. | none |
 | `marketing://skills/decision-gates` | skills | experimental | not enforced | `` | Decision-gated tool map derived from the public capability registry. | none |

@@ -595,7 +595,7 @@ _INVENTORY: tuple[Capability, ...] = (
     _resource(
         "marketing://models/{model_id}/lineage",
         "modeling",
-        "Parent/child lineage chain for a model.",
+        "Direct model record and parent_model_id provenance for a model.",
     ),
     _resource(
         "marketing://models/{model_id}/plots/{plot_type}",

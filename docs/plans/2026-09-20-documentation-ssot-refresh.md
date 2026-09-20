@@ -15,7 +15,7 @@ This plan treats documentation as a product surface. It separates facts verified
 1. `docs/CAPABILITIES.md` is generated from `src/marketing_mcp/capabilities.py` and currently lists **64 capabilities: 50 tools and 14 resources**.
 2. The root README still copied an older total of **39 capabilities**, so the overview disagreed with the generated inventory even though the inventory itself is current.
 3. `docs/TOOL-CONTRACTS.md` has headings for all **50 public tools** in the generated inventory.
-4. Its MCP resource summary listed only **6 of 14** current resources. The omitted entries were the 8 scientific-skill resources under `marketing://skills...`.
+4. Its MCP resource summary listed only **6 of 14** current resources. The omitted entries were the 8 scientific-skill resources under `marketing://skills...`. Additionally, all 14 resources were previously grouped as "resource templates", whereas runtime discovery separates 8 parameterized resource templates (`list_resource_templates()`) from 6 static resources (`list_resources()`), and `marketing://models/{model_id}/lineage` returns a single model record with direct `parent_model_id` provenance rather than a traversed lineage chain.
 5. `scripts/check_docs_drift.py` checks 11 current-state documents for release versions, tool headings, transform vocabulary, CLI transport names, and decision-gate markers. It does not currently assert resource-summary completeness or prevent copied capability totals from becoming stale.
 6. `docs/README.md` defines a truth hierarchy, but it did not explicitly map each volatile fact to one canonical owner or define when copied values are acceptable.
 
@@ -24,7 +24,8 @@ This plan treats documentation as a product surface. It separates facts verified
 - Remove the fixed capability count from the root README and point readers to the generated inventory for totals, maturity, and evidence.
 - Expand the README's representative capability map to include recovery/resume, artifact exchange, agent evidence, and scientific skill guidance.
 - Add an SSOT ownership matrix and copied-fact rule to `docs/README.md`.
-- Make the MCP resource section of `docs/TOOL-CONTRACTS.md` enumerate all resources in the current generated inventory.
+- Partition the MCP resource section of `docs/TOOL-CONTRACTS.md` into 8 parameterized resource templates and 6 static resources according to MCP discovery primitives.
+- Align `marketing://models/{model_id}/lineage` contract and capability registry descriptions with runtime reality (single model record with direct `parent_model_id` provenance, no traversed chain).
 - Keep runtime behavior, schemas, capability maturity, security policy, and release-gate status unchanged.
 
 ## Upstream terminology checks
@@ -63,10 +64,11 @@ That guardrail should be implemented with tests rather than relying on prose con
 - [x] README no longer hard-codes the stale capability total
 - [x] README links capability totals and maturity to the generated inventory
 - [x] `docs/README.md` identifies canonical owners for volatile documentation facts
-- [x] `docs/TOOL-CONTRACTS.md` represents all 14 current MCP resources
+- [x] `docs/TOOL-CONTRACTS.md` represents all 14 current MCP resources partitioned into templates and static resources
+- [x] `marketing://models/{model_id}/lineage` accurately documented as single-record direct provenance
 - [x] No runtime or statistical behavior is changed
-- [ ] `uv run python scripts/generate_capability_inventory.py --check`
-- [ ] `uv run python scripts/check_docs_drift.py`
-- [ ] `uv run pytest tests/unit/test_docs_drift.py tests/release/test_g0_production_truth.py -v`
+- [x] `uv run python scripts/generate_capability_inventory.py --check`
+- [x] `uv run python scripts/check_docs_drift.py`
+- [x] `uv run pytest tests/unit/test_docs_drift.py tests/release/test_g0_production_truth.py -v`
 
-The unchecked verification items should be satisfied by repository CI or an exact checkout before merge.
+All verification items verified and passing on this branch.
