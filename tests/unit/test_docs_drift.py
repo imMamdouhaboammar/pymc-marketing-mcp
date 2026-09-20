@@ -155,6 +155,38 @@ def test_resource_contracts_ignored_for_unrelated_docs():
     assert check_resource_contracts("- `marketing://custom`\n", path="docs/OTHER.md") == []
 
 
+
+def test_resource_discovery_category_drift_is_detected():
+    contract_text = (REPO_ROOT / "docs" / "TOOL-CONTRACTS.md").read_text(encoding="utf-8")
+
+    static_line = (
+        "- `marketing://skills`: Compact deterministic catalog of available scientific "
+        "workflow skills.\n"
+    )
+    static_as_template = contract_text.replace(static_line, "").replace(
+        "### Static resources\n",
+        static_line + "\n### Static resources\n",
+        1,
+    )
+    static_findings = check_resource_contracts(
+        static_as_template, path="docs/TOOL-CONTRACTS.md"
+    )
+    assert any(f.check == "resource-category" for f in static_findings)
+
+    template_line = (
+        "- `marketing://clv/{model_id}`: Stored CLV model record and configuration.\n"
+    )
+    template_as_static = contract_text.replace(template_line, "").replace(
+        "Fixed URIs discovered through MCP `list_resources()`:\n",
+        "Fixed URIs discovered through MCP `list_resources()`:\n\n" + template_line,
+        1,
+    )
+    template_findings = check_resource_contracts(
+        template_as_static, path="docs/TOOL-CONTRACTS.md"
+    )
+    assert any(f.check == "resource-category" for f in template_findings)
+
+
 # --- dependency ranges ------------------------------------------------------------------------
 
 
@@ -188,6 +220,23 @@ def test_missing_dependency_is_detected():
     assert findings
     assert any(f.check == "dependency-completeness" for f in findings)
     assert any("httpx" in f.message for f in findings)
+
+
+
+def test_stale_documented_dependency_is_detected():
+    text = (
+        "| Package | Declared range | Role |\n"
+        "|---|---|---|\n"
+        "| `pydantic` | `>=2.12,<2.13` | contracts |\n"
+        "| `removed-package` | `>=1,<2` | stale row |\n"
+    )
+    findings = check_dependency_ranges(
+        text,
+        path="docs/API-COMPATIBILITY.md",
+        canonical_dependencies={"pydantic": ">=2.12,<2.13"},
+    )
+    assert any(f.check == "dependency-name" for f in findings)
+    assert any("removed-package" in f.message for f in findings)
 
 
 def test_documented_real_dependencies_are_accepted():
@@ -239,3 +288,33 @@ def test_checker_script_exits_non_zero_on_drift(tmp_path):
     )
     assert result.returncode == 1
     assert "9.9.9" in result.stdout + result.stderr
+
+def test_checker_script_uses_dependency_ranges_from_requested_root(tmp_path):
+    fake_repo = tmp_path / "repo"
+    (fake_repo / "docs").mkdir(parents=True)
+    (fake_repo / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "fixture"\n'
+        'version = "0.0.0"\n'
+        'requires-python = ">=3.12,<3.14"\n'
+        'dependencies = ["pydantic>=9,<10"]\n',
+        encoding="utf-8",
+    )
+    (fake_repo / "docs" / "API-COMPATIBILITY.md").write_text(
+        "| Package | Declared range | Role |\n"
+        "|---|---|---|\n"
+        "| Python | `>=3.12,<3.14` | runtime |\n"
+        "| `pydantic` | `>=9,<10` | fixture contract |\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(CHECKER), "--root", str(fake_repo)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
