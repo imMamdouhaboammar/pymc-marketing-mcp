@@ -261,6 +261,7 @@ _INVENTORY: tuple[Capability, ...] = (
         "get_incremental_roas",
         "decisions",
         "Report total and marginal incremental ROAS per channel with uncertainty.",
+        decision_gate_required=True,
         delegates_to="decisions.iroas",
         status="stable",
         evidence_test_ids=(

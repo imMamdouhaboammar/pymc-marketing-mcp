@@ -102,8 +102,9 @@ Skill/router advice never overrides executable repository contracts or release g
 
 ## Jobs and persistence rules
 
-- Current local jobs use SQLite + in-process async execution
-- Do not call this production worker durability until process/worker isolation and restart evidence exist
+- Local and staging jobs use SQLite or shared-SQL with atomic state transitions and idempotency hashing
+- Both in-process async execution (`AsyncioJobExecutor`) and process-isolated worker loops (`ProcessJobWorker` / `marketing-mcp-worker` CLI) are implemented
+- Interrupted jobs are automatically recovered on server startup (`recover_stale_running_jobs()`)
 - Keep JobService transport-neutral so future MCP Tasks support can be an adapter rather than a second state model
 - Persistence changes require restart, partial-write and integrity tests
 
@@ -124,10 +125,12 @@ No document may mark G0-G5, H0-H6 or AQG green from assertion alone. Current-hea
 - **Persistent Storage**: Google Cloud Storage (GCS) FUSE volume mounted at `/var/lib/marketing-mcp` for durable storage of inbox datasets and posterior NetCDF traces across container lifecycles.
 - **Fail-Closed Default**: Public binding (`0.0.0.0`) requires authentication unless explicitly overridden by `MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true` for public beta deployments.
 
-## Public Beta & FastMCP Execution Context Rules
+## Public Beta & MCP Execution Context Rules
 
+- The MCP server is built using the official Model Context Protocol Python SDK (`mcp.server.mcpserver.MCPServer`).
 - When `AUTH_ENABLED=false` and `MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true`, the server defaults its context provider to `stdio_context_provider`.
-- FastMCP's streamable HTTP transport executes tools asynchronously in background coroutine pools where ASGI request context is decoupled. The ambient `stdio_context_provider` ensures all tools execute with valid scopes (`all_scopes()`) and default tenant ownership without dropping context.
+- The MCP Python SDK streamable HTTP transport executes tools asynchronously in background coroutine pools where ASGI request context is decoupled. The ambient `stdio_context_provider` ensures all tools execute with valid scopes (`all_scopes()`) and default tenant ownership without dropping context during public beta.
+- When `AUTH_ENABLED=true`, `RequestScopedContextProvider` propagates authenticated credentials and strictly fails closed (`AUTH_REQUIRED`) on unauthenticated requests.
 
 ## Storage Resiliency & Cloud Storage FUSE Invariants
 
@@ -176,30 +179,23 @@ The following resilient tools are exposed to prevent MCP connection dropouts and
 ## Native Rust Acceleration Engine (`marketing_mcp_fast`)
 
 To optimize latency and eliminate timeouts for conversational AI clients (Claude, Cursor, ChatGPT):
-- **C-Extension Module**: Compiled Rust crate `crates/marketing_mcp_fast` exposing native PyO3 functions linked to `src/marketing_mcp_fast.so`.
-- **Pillar 1 (SIMD CSV Preflight)**: Sniffs delimiters, counts rows, detects nulls, and validates non-negative spend in Rust before touching pandas. Benchmarked at **~2,800x speedup** (3.7s to 1.31ms on a 3,000-row x 10-col CSV).
-- **Pillar 2 (MCMC Diagnostics Gatekeeper)**: Evaluates Gelman-Rubin split $\hat{R}$ and Bulk-ESS across parameters in **0.10ms**, rejecting unconverged models before triggering heavy simulations.
-- **Pillar 3 (Curve Compression & Sparklines)**: Employs Largest-Triangle-Three-Buckets (LTTB) to compress 1,000-point response curves down to 25–50 points to preserve LLM token budgets; generates inline Unicode sparklines (` ▂▃▄▅▆▇█`).
+- **C-Extension Module**: Compiled Rust crate `crates/marketing_mcp_fast` exposing native PyO3 functions loaded dynamically from `src/marketing_mcp/accelerators/` or cargo release targets.
+- **Pillar 1 (SIMD CSV Preflight)**: Sniffs delimiters, counts rows, detects nulls, and validates non-negative spend in Rust before touching pandas (`csv_preflight.rs`). Benchmarked at **~2,800x speedup** (3.7s to 1.31ms on a 3,000-row x 10-col CSV).
+- **Pillar 2 (Native Request Admission & Protocol Validation)**: Enforces request payload size limits, validates JSON-RPC framing and `tools/call` parameters, parses HTTP Range headers, and issues lightweight interaction tokens (`engine.rs`). Note: Statistical diagnostics and decision gating (R-hat, ESS, divergences, model acceptance/rejection) are 100% authoritative in Python (`PyMC-Marketing` / `ArviZ`); native MCMC functions are experimental benchmarks only (Failure Lesson 28).
+- **Pillar 3 (Curve Compression & Sparklines)**: Employs Largest-Triangle-Three-Buckets (LTTB) in `sparklines.rs` to compress 1,000-point response curves down to 25–50 points to preserve LLM token budgets; generates inline Unicode sparklines (` ▂▃▄▅▆▇█`).
 - **Pillar 4 (Zero-Downtime Fallback Parity)**: If the native Rust binary is absent, pure Python implementations execute transparently with 100% test parity.
 - **Darwin/Linux Linker Flag**: Builds must use `RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"` so Python runtime symbols resolve dynamically. Rust unit tests run with `cargo test --no-default-features`.
 
 ## Failure Lessons & Operational Hardening
 
-All real-world post-mortems and architectural bug fixes are codified in `Failure-lessons/`:
-- `01-fail-closed-anonymous-http-binding.md`: Container crash on 0.0.0.0 without auth.
-- `02-fastmcp-async-worker-context-decoupling.md`: Background worker 401 AUTH_REQUIRED fix.
-- `03-gcs-fuse-posix-hardlink-incompatibility.md`: Errno 38 hardlink fallback for GCS FUSE.
-- `04-relative-ingest-path-resolution-boundary.md`: Resolving relative filenames against `ingest_root`.
-- `05-netcdf-materialization-file-write-omission.md`: Ensuring payload bytes written before native NetCDF read.
-- `06-bayesian-rfm-domain-invariants.md`: Enforcing $x = 0 \implies t_x = 0$ for BG/NBD models.
-- `07-remote-client-sandbox-data-ingestion.md`: Multi-modal data ingestion (content, base64, url) and actionable error diagnostics.
-- `08-large-artifact-streaming-and-ram-limits.md`: 1GB chunked streaming, HTTP Range requests, and zero-RAM symlink materialization.
-- `09-mcp-call-collapse-and-intermediate-checkpointing.md`: Intermediate stage checkpoints and bounded heartbeat polling to prevent HTTP timeouts.
-- `10-state-recovery-and-crash-resumption.md`: State machine transitions from FAILED/CANCELLED and automatic crash recovery on startup.
-- `11-artifact-sandbox-push-and-server-garbage-collection.md`: Direct curl/SHA256 sandbox export and automated server-side garbage collection.
-- `12-saturation-curves-response-fidelity-and-decision-caveats.md`: Saturation curve rendering, response curve granularity, and propagating data sparsity warnings to budget optimization.
-- `13-native-rust-acceleration-pyo3-and-mcmc-gatekeeper.md`: Rust C-extension acceleration, PyO3 dynamic linking on Darwin/Linux, split R-hat edge-case gatekeeping, and zero-downtime Python fallback parity.
-- `14-pyo3-major-version-breaking-api-changes.md`: Never auto-merge multi-version pyo3 bumps without `cargo check --workspace`; pyo3 0.24+ has breaking `IntoPyObject` / `Bound<'py, PyAny>` API changes incompatible with our 0.23 code. Dependabot PR #18 deferred pending migration sprint.
+All real-world post-mortems, architectural bug fixes, and engineering memory invariants are codified in `Failure-lessons/` (see `Failure-lessons/README.md` and `Failure-lessons/lessons-index.md` for the complete 64-lesson catalog across 11 primary failure classes):
+- Decision Integrity: `decision-integrity.md`, lessons 12, 22, 28, 39, 45, 62, 63, 64
+- Model Lineage & Validation: `model-lineage.md`, `validation-contracts.md`, lessons 04, 06, 20, 24, 25, 46, 47
+- Artifact & Storage Lifecycle: `artifact-lifecycle.md`, lessons 03, 05, 08, 11, 16, 17
+- Job Lifecycle & Worker Isolation: `job-lifecycle.md`, lessons 02, 09, 10, 18, 19, 21, 32, 51, 53, 54
+- Native Acceleration & Boundary Safety: lessons 13, 14, 27, 28, 29, 30, 31, 33, 35, 37, 38
+- Remote Security, OAuth & Credential Authority: lessons 01, 02, 16, 23, 36, 43, 57
+- Release Integrity, CI Status Checks & Quality Gates: lessons 41, 42, 44, 48, 50, 56, 58, 60
 
 ## Release claim rule
 

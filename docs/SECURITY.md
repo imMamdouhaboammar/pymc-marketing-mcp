@@ -22,7 +22,7 @@ Dataset ingestion is restricted to controlled CSV/Parquet paths with identifier 
 - `http-private-api-key`: private remote HTTP with configured API key material or backend credential repository
 - `http-production-oauth`: remote profile requiring configured OAuth issuer and audience
 
-Production-oriented HTTP profiles fail closed when their required authentication configuration is missing
+Production-oriented HTTP profiles fail closed when their required authentication configuration is missing. Binding to a public interface (`0.0.0.0`) without authentication strictly refuses startup (`AUTH_REQUIRED`) unless explicitly overridden by `MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true` for public beta deployments. In anonymous beta mode, the server resolves execution context via `stdio_context_provider` with ambient default tenant ownership.
 
 ### Credential transport
 

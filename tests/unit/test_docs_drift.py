@@ -14,6 +14,7 @@ from marketing_mcp import __version__
 from marketing_mcp.docs_drift import (
     DOCUMENTED_DOCS,
     check_decision_gate_claims,
+    check_dependency_ranges,
     check_docs,
     check_resource_contracts,
     check_tool_names,
@@ -117,7 +118,7 @@ def test_decision_gate_claim_drift_is_detected():
 def test_decision_gate_claim_matching_code_is_accepted():
     marker = (
         "<!-- drift-check: decision-gated-tools = "
-        "optimize_budget, optimize_flighting, simulate_budget -->\n"
+        "get_incremental_roas, optimize_budget, optimize_flighting, simulate_budget -->\n"
     )
     assert check_decision_gate_claims(marker, path="docs/FAKE.md") == []
 
@@ -152,6 +153,50 @@ def test_documented_real_resources_are_accepted():
 
 def test_resource_contracts_ignored_for_unrelated_docs():
     assert check_resource_contracts("- `marketing://custom`\n", path="docs/OTHER.md") == []
+
+
+# --- dependency ranges ------------------------------------------------------------------------
+
+
+def test_dependency_range_drift_is_detected():
+    text = (
+        "| Package | Declared range | Role |\n"
+        "|---|---|---|\n"
+        "| `pymc-marketing` | `>=1.0.0` | MMM boundary |\n"
+    )
+    findings = check_dependency_ranges(
+        text,
+        path="docs/API-COMPATIBILITY.md",
+        canonical_dependencies={"pymc-marketing": ">=1.1.0,<2"},
+    )
+    assert findings
+    assert any(f.check == "dependency-range" for f in findings)
+    assert any(">=1.0.0" in f.message and ">=1.1.0,<2" in f.message for f in findings)
+
+
+def test_missing_dependency_is_detected():
+    text = (
+        "| Package | Declared range | Role |\n"
+        "|---|---|---|\n"
+        "| `pydantic` | `>=2.12,<2.13` | contracts |\n"
+    )
+    findings = check_dependency_ranges(
+        text,
+        path="docs/API-COMPATIBILITY.md",
+        canonical_dependencies={"pydantic": ">=2.12,<2.13", "httpx": ">=0.27,<1"},
+    )
+    assert findings
+    assert any(f.check == "dependency-completeness" for f in findings)
+    assert any("httpx" in f.message for f in findings)
+
+
+def test_documented_real_dependencies_are_accepted():
+    text = (REPO_ROOT / "docs" / "API-COMPATIBILITY.md").read_text(encoding="utf-8")
+    assert check_dependency_ranges(text, path="docs/API-COMPATIBILITY.md") == []
+
+
+def test_dependency_ranges_ignored_for_unrelated_docs():
+    assert check_dependency_ranges("| `fake` | `>=1` | role |\n", path="docs/OTHER.md") == []
 
 
 # --- repository-wide -------------------------------------------------------------------------

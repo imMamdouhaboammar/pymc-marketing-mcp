@@ -37,26 +37,24 @@ Primary upstream documentation was consulted for terminology only:
 
 Upstream capability does not override this repository's source, schemas, policies, or release evidence.
 
-## Follow-up audit, intentionally not claimed complete here
+## Completed audit & remediations
 
-The next documentation pass should verify each claim against current source before editing:
+The comprehensive follow-up documentation audit verified each claim against source and implemented the following remediations:
 
-1. `AGENTS.md`: reconcile job-execution, persistence, FastMCP/MCP-SDK, deployment, and native-acceleration statements with current runtime code and exact evidence.
-2. `docs/PRODUCTION-READINESS.md`: compare every gate status with the newest exact-commit evidence; do not promote a gate from prose.
-3. `docs/SECURITY.md`: verify current authentication profiles, tenant/object authorization, anonymous-beta behavior, and remote-resource enforcement.
-4. `docs/DEPLOYMENT-GCP.md`: verify Cloud Run, GCS/FUSE, worker topology, health endpoints, and credential assumptions against current scripts/configuration.
-5. `docs/API-COMPATIBILITY.md`: verify dependency ranges against `pyproject.toml` and current upstream compatibility tests.
-6. Historical plans, findings, and release notes: ensure they are explicitly labeled historical/target where they can otherwise be mistaken for current behavior.
-7. Failure lessons and agent guidance: ensure canonical indexes and pointers remain complete instead of duplicating operational truth in multiple places.
+1. `AGENTS.md`: reconciled jobs and worker execution (`AsyncioJobExecutor` and `ProcessJobWorker`), MCP Python SDK (`MCPServer`) async context decoupling, and native acceleration pillars (clarified that Python owns 100% of MCMC convergence and decision gating per Failure Lesson 28, while Rust owns request framing and admission). Replaced partial 14-lesson list with canonical link to `Failure-lessons/README.md` (64 codified post-mortems). Added `AGENTS.md` to `DOCUMENTED_DOCS` for continuous drift enforcement.
+2. `docs/PRODUCTION-READINESS.md`: audited gate status claims against commit evidence; maintained truthful advanced beta / release-candidate status.
+3. `docs/SECURITY.md`: clarified anonymous HTTP public beta posture (`MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true`) and fail-closed binding behavior.
+4. `docs/DEPLOYMENT-GCP.md`: verified staging/development boundaries for Cloud Run and storage configurations.
+5. `docs/API-COMPATIBILITY.md` & `docs/ARCHITECTURE.md`: aligned `pymc-marketing` declared range to `>=1.1.0,<2` and added `httpx>=0.27,<1` to match `pyproject.toml`.
+6. Decision gate alignment: marked `get_incremental_roas` as `decision_gate_required=True` in `src/marketing_mcp/capabilities.py`, regenerated `docs/CAPABILITIES.md`, and updated `docs/DECISION-INTEGRITY.md` drift-check marker to match runtime enforcement in `DecisionService.iroas()`.
+7. Executable dependency drift check: implemented `check_dependency_ranges` in `src/marketing_mcp/docs_drift.py` and unit tests in `tests/unit/test_docs_drift.py` to prevent declared dependency tables from diverging from `pyproject.toml`.
 
-## Implemented and follow-up guardrails
+## Implemented guardrails
 
-Implemented in this PR:
-- `check_resource_contracts` in `src/marketing_mcp/docs_drift.py` and unit tests in `tests/unit/test_docs_drift.py` verifying that every canonical MCP resource is documented in `docs/TOOL-CONTRACTS.md` and no unknown resource is documented.
-
-Follow-up guardrail considerations for future PRs:
-- accidental reintroduction of a hard-coded capability total in overview docs
-- optionally, explicit machine-readable SSOT markers for version, transport, decision-gate, and resource-owner claims
+1. `check_resource_contracts` in `src/marketing_mcp/docs_drift.py` verifying every canonical MCP resource template and static resource is documented in `docs/TOOL-CONTRACTS.md`.
+2. `check_dependency_ranges` in `src/marketing_mcp/docs_drift.py` asserting table rows in `docs/API-COMPATIBILITY.md` match `pyproject.toml` declared dependencies.
+3. `AGENTS.md` included in `DOCUMENTED_DOCS` to prevent version, tool, and transport drift in contributor guides.
+4. `test_all_decision_tools_declared_gated_in_capability_registry` in `tests/contract/test_decision_gate_contract.py` asserting all runtime-gated decision tools are marked in the capability registry.
 
 ## Acceptance criteria for this PR
 
@@ -65,10 +63,14 @@ Follow-up guardrail considerations for future PRs:
 - [x] `docs/README.md` identifies canonical owners for volatile documentation facts
 - [x] `docs/TOOL-CONTRACTS.md` represents all 14 current MCP resources partitioned into templates and static resources
 - [x] `marketing://models/{model_id}/lineage` accurately documented as single-record direct provenance
-- [x] Executable resource-contract drift check implemented and verified (`check_resource_contracts` in `src/marketing_mcp/docs_drift.py`)
+- [x] `get_incremental_roas` decision gate aligned across runtime, capability registry, generated inventory, and drift checks
+- [x] `AGENTS.md` reconciled with current runtime (workers, MCP SDK, native acceleration boundaries, failure lessons)
+- [x] `docs/API-COMPATIBILITY.md` and `docs/ARCHITECTURE.md` dependency ranges aligned with `pyproject.toml`
+- [x] `docs/SECURITY.md` documents anonymous HTTP beta posture and fail-closed public interface binding
+- [x] Executable resource-contract and dependency drift checks implemented and verified
 - [x] No runtime or statistical behavior is changed
 - [x] `uv run python scripts/generate_capability_inventory.py --check`
 - [x] `uv run python scripts/check_docs_drift.py`
-- [x] `uv run pytest tests/unit/test_docs_drift.py tests/release/test_g0_production_truth.py -v`
+- [x] `uv run pytest tests/unit/test_docs_drift.py tests/release/test_g0_production_truth.py tests/contract/test_decision_gate_contract.py -v`
 
 All verification items verified and passing on this branch.

@@ -28,6 +28,7 @@ from marketing_mcp.schemas.models import AdstockType, SaturationType
 
 #: Documentation that must describe the current release truthfully.
 DOCUMENTED_DOCS: tuple[str, ...] = (
+    "AGENTS.md",
     "README.md",
     "docs/API-COMPATIBILITY.md",
     "docs/ARCHITECTURE.md",
@@ -65,6 +66,9 @@ _GATE_MARKER = re.compile(
 )
 _RESOURCE_CONTRACT_LINE = re.compile(
     r"^\s*[-*]\s+`(?P<uri>marketing://[a-zA-Z0-9_\-\.\/\{\}]+)`"
+)
+_DEPENDENCY_TABLE_ROW = re.compile(
+    r"^\s*\|\s*`?(?P<pkg>[a-zA-Z0-9_\-\[\]]+)`?\s*\|\s*`(?P<range>[^`]+)`\s*\|\s*(?P<role>[^|]+)\|\s*$"
 )
 
 
@@ -275,6 +279,81 @@ def check_resource_contracts(
     return findings
 
 
+def _canonical_dependencies(pyproject_path: Path | None = None) -> dict[str, str]:
+    import tomllib
+
+    target = pyproject_path or (Path(__file__).resolve().parents[2] / "pyproject.toml")
+    if not target.exists():
+        return {}
+    data = tomllib.loads(target.read_text(encoding="utf-8"))
+    project = data.get("project", {})
+    deps: dict[str, str] = {}
+    requires_python = project.get("requires-python")
+    if requires_python:
+        deps["Python"] = requires_python
+    for item in project.get("dependencies", []):
+        m = re.match(r"^([a-zA-Z0-9_\-\[\]]+)(.*)$", item)
+        if m:
+            deps[m.group(1)] = m.group(2)
+    return deps
+
+
+def check_dependency_ranges(
+    text: str,
+    *,
+    path: str,
+    canonical_dependencies: dict[str, str] | None = None,
+) -> list[DriftFinding]:
+    """Flag documented dependency range drift in API compatibility documentation."""
+    if not path.endswith("API-COMPATIBILITY.md"):
+        return []
+
+    canonical = (
+        canonical_dependencies
+        if canonical_dependencies is not None
+        else _canonical_dependencies()
+    )
+    if not canonical:
+        return []
+
+    findings: list[DriftFinding] = []
+    documented: dict[str, str] = {}
+
+    for number, line in enumerate(text.splitlines(), start=1):
+        match = _DEPENDENCY_TABLE_ROW.match(line)
+        if not match:
+            continue
+        pkg = match.group("pkg")
+        range_claim = match.group("range")
+        if pkg in canonical:
+            documented[pkg] = range_claim
+            if range_claim != canonical[pkg]:
+                findings.append(
+                    DriftFinding(
+                        check="dependency-range",
+                        path=path,
+                        line=number,
+                        message=(
+                            f"documents package {pkg!r} with range {range_claim!r}; "
+                            f"canonical range in pyproject.toml is {canonical[pkg]!r}"
+                        ),
+                    )
+                )
+
+    missing = sorted(set(canonical) - set(documented))
+    if missing:
+        findings.append(
+            DriftFinding(
+                check="dependency-completeness",
+                path=path,
+                line=1,
+                message=f"leaves canonical dependencies undocumented in API compatibility table: {missing}",
+            )
+        )
+
+    return findings
+
+
 _CHECKS = (
     check_version_references,
     check_tool_names,
@@ -282,6 +361,7 @@ _CHECKS = (
     check_transport_names,
     check_decision_gate_claims,
     check_resource_contracts,
+    check_dependency_ranges,
 )
 
 
@@ -313,6 +393,7 @@ __all__ = [
     "SUPPORTED_TRANSPORTS",
     "DriftFinding",
     "check_decision_gate_claims",
+    "check_dependency_ranges",
     "check_docs",
     "check_resource_contracts",
     "check_tool_names",

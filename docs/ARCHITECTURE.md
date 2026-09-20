@@ -110,7 +110,7 @@ Compute can be run either via in-process async tasks or via the process-isolated
 
 ## Compatibility
 
-The project currently declares Python `>=3.12,<3.14`, PyMC-Marketing `>=1.0.0` and MCP Python SDK `>=2,<3`
+The project currently declares Python `>=3.12,<3.14`, PyMC-Marketing `>=1.1.0,<2` and MCP Python SDK `>=2,<3`
 
 Exact versions for a verified release come from `uv.lock` plus machine-generated release evidence, not from a hand-maintained architecture statement
 
