@@ -22,7 +22,7 @@ Every submit tool also takes `idempotency_key`. Budget and flighting jobs still 
 
 ## Submit
 
-- Build the key from the work: `"<dataset_id>:fit:geometric-logistic:v1"`, `"<model_id>:cv:52-8-8"`, `"<model_id>:opt:400k-8p:v1"`.
+- Build the key from the complete input: `"<dataset_id>:fit:<config hash>"`, `"<model_id>:cv:<config hash>"`, `"<model_id>:opt:<config hash>"`, where the hash is the first 12 hex characters of a SHA-256 of the canonical JSON payload.
 - The server matches on the key alone. Same key returns the existing job; change the key whenever the inputs change.
 - Record `job_id` and the key in the ID ledger immediately, and tell the user both: they are how the work is found again after a disconnect.
 
@@ -42,7 +42,8 @@ Never resubmit expensive work first. Recover:
 1. If you lost the `job_id`, call `list_jobs(status="running", limit=20)` or pass the `idempotency_key` directly to recovery.
 2. `recover_execution_state(job_id_or_key="<job_id or idempotency_key>")` returns `status`, `can_resume`, `has_usable_result`, `checkpoint_count`, `latest_checkpoint`, `result`, `error`, and `recommended_action`.
 3. Act on the flags:
-   - `has_usable_result: true`: read `result` and continue; no rerun needed.
+   - `status: "succeeded"` with a non-empty `result`: read `result` and continue; no rerun needed.
+   - `status: "failed"` or `"cancelled"`: do not continue from `has_usable_result` alone. The server can set that flag from a completed checkpoint on a job that later failed. Use `can_resume`, or report `error`.
    - `status: "running"` or `"queued"`: keep watching with `poll_job_progress`.
    - `can_resume: true`: `resume_job(job_id)`. If a completed checkpoint exists, the job is restored to `succeeded` with its result; otherwise the unfinished stage restarts (sampling restarts from the beginning of that stage).
    - All false and status `failed` or `cancelled`: only now may you resubmit, and only after telling the user why the previous attempt ended.

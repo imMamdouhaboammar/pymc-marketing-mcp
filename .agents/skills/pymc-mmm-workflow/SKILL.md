@@ -48,9 +48,11 @@ On a remote connection, submit a background job so a dropped request does not lo
     "sampler": {"draws": 1000, "tune": 1000, "chains": 4, "target_accept": 0.9, "random_seed": 42},
     "dims": null
   },
-  "idempotency_key": "<dataset_id>:fit:geometric-logistic:v1"
+  "idempotency_key": "<dataset_id>:fit:<short hash of the full config>"
 }
 ```
+
+- The server matches jobs on `idempotency_key` alone, so the key must change whenever anything in `config` changes (channels, controls, seasonality, transforms, sampler, dims). Derive it from the complete config (for example the first 12 characters of a SHA-256 of the canonical JSON), or bump a revision for every edit. Reusing a key returns the earlier fit.
 
 - Tool: `submit_fit_mmm_job` with the payload above, then hand off to `pymc-job-resilience` to watch it. The succeeded job result carries the `model_id`.
 - `fit_mmm(config=...)` takes the same `config` and blocks until sampling ends. Use it only for small local datasets or when the user explicitly wants a synchronous run.

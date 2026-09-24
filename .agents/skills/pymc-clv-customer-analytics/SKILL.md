@@ -21,12 +21,12 @@ The server fits models on a customer-level summary; it does not summarize transa
 | --- | --- |
 | `customer_id` | Unique customer key |
 | `frequency` | Number of **repeat** purchases (total orders minus one) |
-| `recency` | Time between the first and the last purchase |
+| `recency` | BG/NBD: time between the first and the last purchase. Shifted Beta-Geometric: the last period the customer was active (an active subscriber has `recency == T`) |
 | `T` | Time between the first purchase and the end of the observation window |
 | `monetary_value` | Average value of the repeat purchases |
 | `cohort` | Acquisition cohort (needed for the Shifted Beta-Geometric model) |
 
-Use one time unit (days or weeks) for `recency` and `T`, and one currency for `monetary_value`. If the user only has a raw order log, the summary must be built before registering: PyMC-Marketing's `rfm_summary` utility or the user's own pipeline. Build it in a code sandbox if you have one, show the method, and never guess values. Register the table through `pymc-dataset-readiness` Step 1.
+Use one time unit (days or weeks) for `recency` and `T`, and one currency for `monetary_value`. If the user only has a raw order log, the summary must be built before registering: PyMC-Marketing's `rfm_summary` utility or the user's own pipeline for BG/NBD and Gamma-Gamma. Contractual data for `shifted_beta_geo` is prepared from subscription start, cancellation, and renewal periods; do not run it through `rfm_summary`, which would mark active subscribers as churned. Build it in a code sandbox if you have one, show the method, and never guess values. Register the table through `pymc-dataset-readiness` Step 1.
 
 ## Choose the model family
 

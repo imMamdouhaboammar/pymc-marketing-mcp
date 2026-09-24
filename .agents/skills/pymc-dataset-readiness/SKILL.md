@@ -36,12 +36,13 @@ Exports from Meta, Google Ads, TikTok, or LinkedIn usually arrive long: one row 
   "date_column": "date",
   "channel_column": "platform",
   "spend_column": "spend",
-  "target_columns": ["purchases", "revenue"],
+  "target_columns": ["impressions", "clicks"],
   "dimension_columns": ["country"],
   "frequency": "D"
 }
 ```
 
+- The export supplies **media spend** (and optional delivery metrics). Its `purchases` or `revenue` columns are platform-attributed, so they are not the MMM target. Take the target from an independent orders or CRM dataset and join it on date (and market) before fitting. If the user has no independent outcome, stop and ask for one.
 - `frequency` must match the grain the export already has: `"D"` for daily rows, a pandas weekly anchor such as `"W-MON"` when every row is dated on a Monday. It fills calendar gaps; it does **not** aggregate daily rows into weeks. A weekly frequency on daily data drops rows.
 - Read `summary.spend_reconciled` and `summary.spend_delta`. If spend did not reconcile, stop and show the delta; the reshaped file lost or duplicated spend.
 - `summary.inserted_periods` counts dates the server added. Spend in those rows is set to 0 (correct: no delivery) and targets are also set to 0, which is wrong if the gap is a tracking outage. Ask the user when inserted periods are more than a handful.

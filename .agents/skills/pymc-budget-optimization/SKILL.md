@@ -36,11 +36,13 @@ The server builds its comparison baseline from each channel's spend over the mos
   "model_id": "<approved model_id>",
   "planning_periods": 8,
   "changes": {
-    "tv_spend":   {"type": "percent_change", "value": -30},
-    "meta_spend": {"type": "percent_change", "value": 30}
+    "tv_spend":   {"type": "add_spend", "value": -36000},
+    "meta_spend": {"type": "add_spend", "value": 36000}
   }
 }}
 ```
+
+A transfer must keep the total unchanged. Percent changes on two channels with different spend levels do not balance: -30% of a large TV budget and +30% of a smaller Meta budget is a net cut. For "move 30% of TV to Meta", take TV's baseline spend over the horizon from a confirmed source (the user, or `baseline_allocation` from an earlier simulation), compute the amount moved, and pass that same amount as `add_spend` with opposite signs. The example assumes 120k of TV spend over 8 periods. If the baseline cannot be confirmed, ask the user for the absolute amount to move.
 
 Change types: `percent_change` (value 30 means +30%), `relative` (value 0.3 means +30%), `multiply_spend` (1.3 means x1.3), `add_spend` / `absolute` (add the value in spend units), `set_spend` (replace spend with the value). Negative resulting spend is rejected. For panel models use `cell_changes`: `[{"channel": "meta_spend", "dimensions": {"geo": "KSA"}, "type": "percent_change", "value": 20}]`.
 

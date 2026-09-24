@@ -26,7 +26,8 @@ Entry point for any agent connected to this server. It decides which specialist 
 | feed a lift test or geo experiment into the model | `pymc-lift-calibration` | `get_model_status` |
 | predict purchases, churn, P(alive), spend per order, or CLV | `pymc-clv-customer-analytics` | `list_datasets` |
 | handle a long fit, timeout, disconnect, progress, resume, or cancel | `pymc-job-resilience` | `list_jobs` |
-| get posterior plots or download a model or dataset artifact | `pymc-artifact-delivery` | `get_posterior_plots` |
+| get posterior plots | `pymc-artifact-delivery` | `get_posterior_plots` |
+| download a model or stored artifact | `pymc-artifact-delivery` | `export_artifact_to_sandbox` with the model ID or artifact URI |
 
 ## Multi-intent requests
 

@@ -24,7 +24,7 @@ Cross-validation (rolling time slices):
 
 ```json
 {"input": {"model_id": "<model_id>", "n_init": 40, "forecast_horizon": 10, "step_size": 10},
- "idempotency_key": "<model_id>:cv:40-10-10"}
+ "idempotency_key": "<model_id>:cv:<config hash>"}
 ```
 
 - `n_init` is the first training window in data periods and must leave room for at least one forecast window. With 104 weekly rows, `n_init` 52, `forecast_horizon` 8, `step_size` 8 gives several folds.
@@ -33,7 +33,7 @@ Cross-validation (rolling time slices):
 Prior sensitivity:
 
 ```json
-{"input": {"model_id": "<model_id>"}, "idempotency_key": "<model_id>:prior-sensitivity:v1"}
+{"input": {"model_id": "<model_id>"}, "idempotency_key": "<model_id>:prior-sensitivity:<config hash>"}
 ```
 
 Comparison and selection:

@@ -21,11 +21,13 @@ Each lift test becomes one `LiftTestMeasurement`:
 | --- | --- | --- |
 | `channel` | Model channel column, exact name | Parent model config |
 | `geo` | Panel value when the model has `dims` (for example `"KSA"`) | Test market |
-| `x` | Spend level of the channel before the test, in the model's spend units and time grain | Media plan or platform spend during the test window |
-| `delta_x` | Spend change applied during the test (> 0) | Test design: extra spend in treatment, or spend removed in a holdout expressed as a positive change |
-| `delta_y` | Incremental outcome measured | Experiment readout, same units as the model target |
+| `x` | Spend of the **lower-spend** arm, in the model's spend units and time grain | Scale-up test: the pre-test level. Holdout: the reduced (often zero) spend in the holdout |
+| `delta_x` | Higher-spend arm minus lower-spend arm (> 0) | Test design |
+| `delta_y` | Outcome of the higher-spend arm minus the lower-spend arm | Experiment readout, same units as the model target |
 | `sigma` | Standard error of `delta_y` (> 0) | Experiment readout |
 | `description` | Study name and dates | For lineage |
+
+The server compares modeled response at `x + delta_x` with response at `x`, so all three fields must describe the same contrast. For a holdout that removed spend, `x` is the holdout's spend and `delta_y` is the lift the exposed group showed over it; flipping only the sign of the spend change describes a different experiment. If the readout does not let you build that contrast, stop and ask.
 
 On `sigma`: use the standard error the study reports. If it only reports a symmetric 95% interval from a normal-approximation analysis, `sigma` is about the interval width divided by 3.92; confirm that assumption with the user before using it. Never shrink `sigma` to make the experiment count for more.
 

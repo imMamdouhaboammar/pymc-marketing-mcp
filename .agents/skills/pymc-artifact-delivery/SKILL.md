@@ -32,8 +32,15 @@ Gets visual evidence and model files from the server to the user. Artifacts are 
 
 `export_artifact_to_sandbox` stages a downloadable copy (up to about 1 GB):
 
+Export by model (MMM or CLV):
+
 ```json
 {"model_id": "<mmm or clv model_id>", "export_name": "mmm_q3_v2"}
+```
+
+Or, as an alternative, export by a server-issued artifact URI:
+
+```json
 {"artifact_uri": "blob://<namespace>/<sha256>"}
 ```
 

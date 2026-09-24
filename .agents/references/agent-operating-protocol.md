@@ -66,7 +66,7 @@ MCMC sampling usually takes minutes, and remote HTTP clients often drop long req
 
 `inspect_dataset`, `validate_dataset`, `diagnose_mmm`, `get_model_status`, contributions, iROAS, and CLV predictions are quick and stay synchronous.
 
-Give every job a deterministic `idempotency_key` built from the work it represents, for example `"<dataset_id>:fit:geometric-logistic:v1"`. If you are cut off and submit again with the same key, the server returns the existing job instead of paying for the same sampling twice. The server matches on the key alone, so change the key (`v2`, a new transform name) whenever the inputs change; reusing a key for different work silently returns the old job.
+Give every job a deterministic `idempotency_key` built from the work it represents, for example `"<dataset_id>:fit:<first 12 hex chars of SHA-256 of the canonical config JSON>"`. If you are cut off and submit again with the same key, the server returns the existing job instead of paying for the same sampling twice. The server matches on the key alone, so the key must change whenever any input changes; deriving it from a hash of the full config does that automatically; reusing a key for different work silently returns the old job.
 
 ## 5. Polling budget
 
