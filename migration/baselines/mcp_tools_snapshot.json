@@ -1420,7 +1420,7 @@
     },
     {
       "name": "get_skill_guidance",
-      "description": "Route a marketing-science task to one workflow skill, or fetch one named skill. Use this when the client has not already loaded marketing://skills guidance.",
+      "description": "Start here. Route a marketing-science task to one workflow skill and receive its full operating guidance inline (tool order, argument templates, gates, error recovery, and marketing interpretation). Pass task for routing, skill_name to fetch a named skill, or reference_name to fetch a shared reference such as 'agent-operating-protocol' or 'marketing-decision-playbook' when the client cannot read MCP resources.",
       "input_schema": {
         "properties": {
           "task": {
@@ -1446,6 +1446,18 @@
             ],
             "default": null,
             "title": "Skill Name"
+          },
+          "reference_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Name"
           }
         },
         "title": "get_skill_guidanceArguments",
@@ -2448,7 +2460,7 @@
           "ModelComparisonInput": {
             "properties": {
               "model_ids": {
-                "description": "List of 2\u201310 model IDs to compare. All must be fitted on the same dataset.",
+                "description": "List of 2–10 model IDs to compare. All must be fitted on the same dataset.",
                 "items": {
                   "type": "string"
                 },

@@ -1,13 +1,20 @@
 {
   "schema_version": "1",
   "name": "pymc-dataset-readiness",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domain": "dataset-readiness",
-  "summary": "Register, inspect, and validate datasets using the server\u2019s actual ingestion and MMM validation contract.",
+  "summary": "Register, inspect, and validate datasets using the server’s actual ingestion and MMM validation contract.",
   "triggers": [
     "inspect this marketing dataset",
     "validate my MMM data",
-    "register this CSV for MMM"
+    "register this CSV for MMM",
+    "upload my marketing data",
+    "ad platform export",
+    "reshape my Meta Ads export",
+    "is my data ready for an MMM",
+    "ارفع الداتا",
+    "تجهيز الداتا",
+    "ملف الإعلانات"
   ],
   "negative_triggers": [
     "fit the validated MMM",
@@ -37,6 +44,8 @@
   ],
   "maturity": "stable",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

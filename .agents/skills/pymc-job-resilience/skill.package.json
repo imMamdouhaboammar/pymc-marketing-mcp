@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "name": "pymc-job-resilience",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "domain": "jobs",
   "summary": "Manage long-running asynchronous compute jobs across fitting, transformation, budget optimization, flighting, cross-validation, and prior sensitivity with bounded polling, persisted-state recovery, resume/cancel semantics, and no duplicate resubmission after disconnects.",
   "triggers": [
@@ -12,7 +12,12 @@
     "recover budget optimization job",
     "recover flighting job",
     "recover cross-validation job",
-    "recover prior sensitivity job"
+    "recover prior sensitivity job",
+    "timed out",
+    "job status",
+    "resume job",
+    "الفيت وقف",
+    "انقطع الاتصال"
   ],
   "negative_triggers": [
     "fit a quick synchronous MMM",
@@ -53,6 +58,8 @@
   ],
   "maturity": "experimental",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

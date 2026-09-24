@@ -1,18 +1,53 @@
 ---
 name: pymc-artifact-delivery
-version: 1.0.0
-description: Use when a user needs posterior plots, a stored artifact, sandbox delivery, or safe artifact lifecycle guidance.
+version: 2.0.0
+description: Use when a user needs posterior plots, a stored model or dataset artifact, sandbox download delivery, or safe artifact lifecycle guidance.
 ---
-
 # PyMC Artifact Delivery
 
-Artifacts are server-owned outputs. Never derive arbitrary filesystem paths from user input and never read private files through the Skill layer.
+Gets visual evidence and model files from the server to the user. Artifacts are server-owned: the agent requests them by model ID or server-issued URI, never by filesystem path, and never builds file bytes itself.
 
-## Workflow
+## Posterior plots
 
-1. Identify the persisted model and requested artifact/plot.
-2. Use `get_posterior_plots` to generate supported plot types. Retrieve a generated plot through `marketing://models/{model_id}/plots/{plot_type}`; if the resource says it is not cached, generate it first.
-3. Use `export_artifact_to_sandbox` for the server-supported delivery path when the client needs a model/dataset artifact. Preserve the returned URI, size/integrity information, and any lifecycle status.
-4. Stop when the requested artifact does not exist or the server cannot authorize/read it; do not guess a path or synthesize bytes.
+`get_posterior_plots` renders and caches plots for a fitted model:
 
-`cleanup_server_storage` is experimental and administrative. It is intentionally excluded from normal analytical routing and should be used only when an authorized user explicitly requests storage cleanup with the current tool semantics. Skill resources themselves expose only an explicit allow-list of package names and never map arbitrary path fragments to disk.
+```json
+{"config": {"model_id": "<model_id>", "plot_types": ["channel_contribution_share", "saturation_curves"], "format": "png"}}
+```
+
+| `plot_types` value | Shows | Good for |
+| --- | --- | --- |
+| `channel_contribution_share` | Each channel's share of modeled outcome | "Which channels matter?" slides |
+| `waterfall_decomposition` | Baseline, controls, and channels adding up to the outcome | Explaining what drives revenue overall |
+| `saturation_curves` | Response vs spend per channel with uncertainty | Headroom and diminishing returns |
+| `actual_vs_predicted` | Model fit against history | Building trust in the model, spotting missed events |
+
+- Up to four types per call; `format` is `png` or `svg`.
+- The result lists `generated` and `failed` types, with a `PLOT_FAILED` warning per failure. Report failures; do not describe a plot that was not generated.
+- After generation, `marketing://models/{model_id}/plots/{plot_type}` returns the cached image. Reading it before generation returns `PLOT_NOT_CACHED`.
+- Plots illustrate. Numbers in your answer still come from the typed tools (`get_channel_contributions`, `get_incremental_roas`, `get_response_curves`), never from reading values off an image.
+- Plots of a rejected model get the label "model failed diagnostics; descriptive only".
+
+## Model and dataset files
+
+`export_artifact_to_sandbox` stages a downloadable copy (up to about 1 GB):
+
+```json
+{"model_id": "<mmm or clv model_id>", "export_name": "mmm_q3_v2"}
+{"artifact_uri": "blob://<namespace>/<sha256>"}
+```
+
+Pass `model_id` for a model's posterior artifact (MMM or CLV), or an `artifact_uri` exactly as the server issued it. The result includes `download_url`, `sandbox_curl_command`, `python_snippet`, `sha256`, `size_bytes`, `filename`, and `retention_policy`.
+
+- Give the user the download URL or curl command and the `sha256`, and tell them to verify the checksum after download.
+- Exports are tracked for about 24 hours; downloads should happen within that window.
+- If your host has a code sandbox, use the returned `python_snippet` to load the file there; otherwise hand the link to the user.
+- The result's `next_actions` mentions `cleanup_server_storage`. Ignore that hint unless the user asked for cleanup.
+
+## Administrative cleanup
+
+`cleanup_server_storage(older_than_hours=24, dry_run=true)` lists what would be purged: scratch files, expired exports, orphan blobs. Run it only when an authorized user explicitly asks, show the dry-run report first, and run with `dry_run=false` only after they confirm.
+
+## Stop conditions
+
+Stop when the model or artifact does not exist (`MODEL_NOT_FOUND`, `ARTIFACT_NOT_FOUND`), when the caller is not authorized, or when the user supplies a local path or an arbitrary URL as an artifact location. Never guess a path or synthesize bytes.

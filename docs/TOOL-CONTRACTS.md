@@ -264,7 +264,7 @@ Retrieve previously recorded agent insights, filterable by model, dataset, or ca
 
 ### `get_skill_guidance`
 
-Route a task to one scientific workflow skill or fetch one selected skill package
+Route a task to one scientific workflow skill and return its full guidance inline, fetch one named skill package (`skill_name`), or fetch one shared reference (`reference_name`, for example `agent-operating-protocol` or `marketing-decision-playbook`) for clients that cannot read MCP resources. Unknown reference names fail closed with `SKILL_REFERENCE_NOT_FOUND`
 
 ### `list_agentic_skills`
 
@@ -297,6 +297,8 @@ Fixed URIs discovered through MCP `list_resources()`:
 
 - `marketing://skills`: Compact deterministic catalog of available scientific workflow skills.
 - `marketing://skills/decision-gates`: Decision-gated tool map derived from the public capability registry.
+- `marketing://skills/references/agent-operating-protocol`: Shared protocol for operating the server: bootstrap, envelopes, IDs, jobs, and error recovery.
+- `marketing://skills/references/marketing-decision-playbook`: Shared playbook translating marketing questions into server workflows and decision-ready answers.
 - `marketing://skills/references/scientific-answer-contract`: Shared contract for communicating scientific analytical results and uncertainty.
 - `marketing://skills/references/scientific-source-ledger`: Versioned source ledger for scientific rules used by the Skill Pack.
 - `marketing://skills/tool-map`: Machine-readable classification of every public MCP tool into skill guidance.

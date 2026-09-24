@@ -87,6 +87,14 @@ def test_catalog_and_selected_skill_are_readable(server):
             await server.read_resource("marketing://skills/references/scientific-source-ledger")
         )
         assert "Scientific Source Ledger" in ledger_text
+        protocol_text = _text(
+            await server.read_resource("marketing://skills/references/agent-operating-protocol")
+        )
+        assert "Agent Operating Protocol" in protocol_text
+        playbook_text = _text(
+            await server.read_resource("marketing://skills/references/marketing-decision-playbook")
+        )
+        assert "Marketing Decision Playbook" in playbook_text
 
     asyncio.run(_run())
 
@@ -99,6 +107,13 @@ def test_model_callable_guidance_routes_and_fetches(server):
         )
         payload = json.loads(routed.content[0].text)
         assert payload["summary"]["recommended_skill"] == "pymc-job-resilience"
+        # Routing returns the skill guidance inline so hosts without resource access
+        # can act on it without a second round trip.
+        assert "# PyMC Job Resilience" in payload["evidence"]["guidance"]
+        assert (
+            "marketing://skills/references/agent-operating-protocol"
+            in payload["evidence"]["references"]
+        )
         fetched = await server.call_tool(
             "get_skill_guidance",
             {"skill_name": "pymc-budget-optimization"},
@@ -163,3 +178,26 @@ def test_skill_resources_do_not_expose_unknown_or_traversal_paths(server):
             await server.read_resource("marketing://skills/%2e%2e%2f.env")
 
     asyncio.run(_run())
+
+
+def test_guidance_tool_fetches_shared_references(server):
+    async def _run():
+        result = await server.call_tool(
+            "get_skill_guidance", {"reference_name": "marketing-decision-playbook"}
+        )
+        payload = json.loads(result.content[0].text)
+        assert payload["summary"]["reference_name"] == "marketing-decision-playbook"
+        assert "Marketing Decision Playbook" in payload["evidence"]["reference"]
+
+        for name in ("unknown-reference", "../.env"):
+            missing = await server.call_tool("get_skill_guidance", {"reference_name": name})
+            missing_payload = json.loads(missing.content[0].text)
+            assert missing_payload["error"]["code"] == "SKILL_REFERENCE_NOT_FOUND"
+
+    asyncio.run(_run())
+
+
+def test_server_instructions_route_agents_to_skill_guidance(server):
+    instructions = server.instructions
+    assert "get_skill_guidance" in instructions
+    assert "diagnose_mmm" in instructions

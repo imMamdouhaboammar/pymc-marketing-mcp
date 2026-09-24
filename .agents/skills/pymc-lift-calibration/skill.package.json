@@ -1,13 +1,18 @@
 {
   "schema_version": "1",
   "name": "pymc-lift-calibration",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "domain": "mmm-calibration",
   "summary": "Calibrate an existing MMM with experimental lift measurements while preserving lineage and requiring fresh diagnosis of the child model.",
   "triggers": [
     "calibrate this MMM with our lift test",
     "incorporate this geo experiment",
-    "reconcile MMM with an experiment"
+    "reconcile MMM with an experiment",
+    "geo experiment",
+    "conversion lift study",
+    "holdout test results",
+    "نتيجة تجربة lift",
+    "اختبار جغرافي"
   ],
   "negative_triggers": [
     "fit the first MMM",
@@ -55,6 +60,8 @@
   ],
   "maturity": "stable",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

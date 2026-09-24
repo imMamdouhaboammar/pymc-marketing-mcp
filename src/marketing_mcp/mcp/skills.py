@@ -126,17 +126,68 @@ def register_skill_delivery(mcp, app, context_provider: Any = None) -> None:
         except DomainError as exc:
             return _json_error(exc)
 
+    @mcp.resource(
+        "marketing://skills/references/agent-operating-protocol",
+        name="agent_operating_protocol",
+        description="How an agent operates this server: bootstrap, envelopes, IDs, jobs, polling, error recovery.",
+        mime_type="text/markdown",
+    )
+    async def agent_operating_protocol() -> str:
+        try:
+            _authorize()
+            return registry.get_reference("agent-operating-protocol")
+        except DomainError as exc:
+            return _json_error(exc)
+
+    @mcp.resource(
+        "marketing://skills/references/marketing-decision-playbook",
+        name="marketing_decision_playbook",
+        description="Translate marketing questions into server workflows and results into decision-ready language.",
+        mime_type="text/markdown",
+    )
+    async def marketing_decision_playbook() -> str:
+        try:
+            _authorize()
+            return registry.get_reference("marketing-decision-playbook")
+        except DomainError as exc:
+            return _json_error(exc)
+
+    def _session_references(record) -> list[str]:
+        return [
+            source
+            for source in record.manifest.authoritative_sources
+            if source.startswith("marketing://skills/references/")
+        ]
+
     @mcp.tool(
         name="get_skill_guidance",
         description=(
-            "Route a marketing-science task to one workflow skill, or fetch one named skill. "
-            "Use this when the client has not already loaded marketing://skills guidance."
+            "Start here. Route a marketing-science task to one workflow skill and receive its full "
+            "operating guidance inline (tool order, argument templates, gates, error recovery, and "
+            "marketing interpretation). Pass task for routing, skill_name to fetch a named skill, or "
+            "reference_name to fetch a shared reference such as 'agent-operating-protocol' or "
+            "'marketing-decision-playbook' when the client cannot read MCP resources."
         ),
     )
-    async def get_skill_guidance(task: str | None = None, skill_name: str | None = None):
+    async def get_skill_guidance(
+        task: str | None = None,
+        skill_name: str | None = None,
+        reference_name: str | None = None,
+    ):
         try:
             _authorize()
+            if reference_name and not (task or skill_name):
+                content = registry.get_reference(reference_name)
+                return env(
+                    summary={"reference_name": reference_name},
+                    evidence={
+                        "reference": content,
+                        "resource_uri": f"marketing://skills/references/{reference_name}",
+                    },
+                    next_actions=["get_skill_guidance(task=...) to route the user's request"],
+                )
             mode, record, alternatives = app.skillpack.resolve_guidance(task, skill_name)
+            references = _session_references(record)
             if mode == "fetch":
                 return env(
                     summary={"skill_name": record.manifest.name, "version": record.manifest.version},
@@ -144,6 +195,7 @@ def register_skill_delivery(mcp, app, context_provider: Any = None) -> None:
                         "manifest": record.manifest.model_dump(mode="json"),
                         "guidance": record.markdown,
                         "content_hash": record.content_hash,
+                        "references": references,
                     },
                     next_actions=[f"marketing://skills/{record.manifest.name}"],
                 )
@@ -152,17 +204,27 @@ def register_skill_delivery(mcp, app, context_provider: Any = None) -> None:
                     "recommended_skill": record.manifest.name,
                     "purpose": record.manifest.summary,
                     "maturity": record.manifest.maturity,
+                    "first_tools": record.manifest.primary_tools[:3],
                 },
                 evidence={
+                    "guidance": record.markdown,
+                    "content_hash": record.content_hash,
                     "resource_uri": f"marketing://skills/{record.manifest.name}",
                     "manifest_uri": f"marketing://skills/{record.manifest.name}/manifest",
+                    "prerequisites": record.manifest.prerequisites,
+                    "gates": record.manifest.gates,
+                    "continuations": record.manifest.continuations,
+                    "references": references,
                     "alternatives": [
                         {"skill": name, "routing_score": score}
                         for name, score in alternatives
                         if name != record.manifest.name and score > 0
                     ],
                 },
-                next_actions=[f"marketing://skills/{record.manifest.name}"],
+                next_actions=[
+                    f"Follow the {record.manifest.name} guidance in evidence.guidance",
+                    "Read marketing://skills/references/agent-operating-protocol once per session",
+                ],
             )
         except DomainError as exc:
             return exc.to_dict()

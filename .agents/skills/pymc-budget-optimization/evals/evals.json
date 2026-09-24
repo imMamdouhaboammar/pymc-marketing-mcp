@@ -30,6 +30,30 @@
       "type": "recovery",
       "query": "Optimization returned infeasible constraints; preserve my floors and caps and explain the failure instead of relaxing them.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-budget-optimization-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "where should the next dollar go",
+      "expected_skill": "pymc-budget-optimization"
+    },
+    {
+      "id": "pymc-budget-optimization-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "we need to cut the budget by 20%",
+      "expected_skill": "pymc-budget-optimization"
+    },
+    {
+      "id": "pymc-budget-optimization-trigger-v2-3",
+      "type": "should_trigger",
+      "query": "اعملي خطة رمضان للإعلانات",
+      "expected_skill": "pymc-budget-optimization"
+    },
+    {
+      "id": "pymc-budget-optimization-trigger-v2-4",
+      "type": "should_trigger",
+      "query": "توزيع الميزانية على القنوات",
+      "expected_skill": "pymc-budget-optimization"
     }
   ],
   "tool_traces": [
@@ -71,6 +95,47 @@
         },
         {
           "tool": "optimize_budget"
+        }
+      ]
+    },
+    {
+      "id": "invalid-flighting-after-refit-without-rediagnosis",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "diagnose_mmm",
+          "result": "approved"
+        },
+        {
+          "tool": "fit_mmm"
+        },
+        {
+          "tool": "optimize_flighting"
+        }
+      ]
+    },
+    {
+      "id": "valid-async-optimization-after-approval",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "get_model_status"
+        },
+        {
+          "tool": "diagnose_mmm",
+          "result": "approved"
+        },
+        {
+          "tool": "submit_budget_optimization_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "tool": "get_job_status"
+        },
+        {
+          "tool": "simulate_budget"
         }
       ]
     }

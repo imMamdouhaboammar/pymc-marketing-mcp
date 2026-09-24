@@ -60,6 +60,18 @@
       "type": "recovery",
       "query": "Recover execution state for submit_prior_sensitivity_job after a network disconnect.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-job-resilience-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "the fit timed out, check job status",
+      "expected_skill": "pymc-job-resilience"
+    },
+    {
+      "id": "pymc-job-resilience-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "انقطع الاتصال والفيت وقف",
+      "expected_skill": "pymc-job-resilience"
     }
   ],
   "tool_traces": [

@@ -30,6 +30,18 @@
       "type": "recovery",
       "query": "The value model failed but the purchase model completed; do not invent CLV from purchase frequency alone.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-clv-customer-analytics-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "what is our customer lifetime value",
+      "expected_skill": "pymc-clv-customer-analytics"
+    },
+    {
+      "id": "pymc-clv-customer-analytics-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "قيمة العميل على مدار سنة",
+      "expected_skill": "pymc-clv-customer-analytics"
     }
   ],
   "tool_traces": []

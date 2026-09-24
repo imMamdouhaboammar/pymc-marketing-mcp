@@ -48,6 +48,8 @@ The installed MCP SDK v2 supports cache hints. The server applies private five-m
 | `marketing://models/{model_id}/plots/{plot_type}` | resource | experimental | no | resource: pymc-artifact-delivery | none |
 | `marketing://skills` | resource | experimental | no | resource: pymc-marketing-router | none |
 | `marketing://skills/decision-gates` | resource | experimental | no | skill-delivery infrastructure | none |
+| `marketing://skills/references/agent-operating-protocol` | resource | experimental | no | skill-delivery infrastructure | none |
+| `marketing://skills/references/marketing-decision-playbook` | resource | experimental | no | skill-delivery infrastructure | none |
 | `marketing://skills/references/scientific-answer-contract` | resource | experimental | no | skill-delivery infrastructure | none |
 | `marketing://skills/references/scientific-source-ledger` | resource | experimental | no | skill-delivery infrastructure | none |
 | `marketing://skills/tool-map` | resource | experimental | no | skill-delivery infrastructure | none |
@@ -71,7 +73,7 @@ The installed MCP SDK v2 supports cache hints. The server applies private five-m
 | `get_agent_insights` | tool | stable | no | secondary: pymc-diagnostics-gate | none |
 | `get_channel_contributions` | tool | stable | no | primary: pymc-incrementality-evidence | none |
 | `get_churn_risk_cohorts` | tool | experimental | no | primary: pymc-clv-customer-analytics | none |
-| `get_incremental_roas` | tool | stable | no | primary: pymc-incrementality-evidence | none |
+| `get_incremental_roas` | tool | stable | yes | primary: pymc-incrementality-evidence | none |
 | `get_job_status` | tool | stable | no | primary: pymc-job-resilience | none |
 | `get_model_status` | tool | stable | no | secondary: pymc-artifact-delivery, pymc-budget-optimization, pymc-diagnostics-gate, pymc-incrementality-evidence, pymc-job-resilience, pymc-lift-calibration, pymc-mmm-workflow, pymc-model-validation | none |
 | `get_posterior_plots` | tool | experimental | no | primary: pymc-artifact-delivery | none |

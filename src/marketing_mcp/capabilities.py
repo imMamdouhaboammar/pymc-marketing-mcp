@@ -640,6 +640,16 @@ _INVENTORY: tuple[Capability, ...] = (
         "Decision-gated tool map derived from the public capability registry.",
     ),
     _resource(
+        "marketing://skills/references/agent-operating-protocol",
+        "skills",
+        "Shared protocol for operating the server: bootstrap, envelopes, IDs, jobs, and error recovery.",
+    ),
+    _resource(
+        "marketing://skills/references/marketing-decision-playbook",
+        "skills",
+        "Shared playbook translating marketing questions into server workflows and decision-ready answers.",
+    ),
+    _resource(
         "marketing://skills/references/scientific-answer-contract",
         "skills",
         "Shared contract for communicating scientific analytical results and uncertainty.",

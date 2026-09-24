@@ -30,6 +30,24 @@
       "type": "recovery",
       "query": "The server rejected my laptop path /Users/alice/Desktop/data.csv; use remote content or upload-compatible input instead.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-dataset-readiness-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "upload my marketing data from Shopify and Meta",
+      "expected_skill": "pymc-dataset-readiness"
+    },
+    {
+      "id": "pymc-dataset-readiness-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "I have a Meta Ads export by campaign, reshape my Meta Ads export for modeling",
+      "expected_skill": "pymc-dataset-readiness"
+    },
+    {
+      "id": "pymc-dataset-readiness-trigger-v2-3",
+      "type": "should_trigger",
+      "query": "ارفع الداتا دي وشوف هل تنفع",
+      "expected_skill": "pymc-dataset-readiness"
     }
   ],
   "tool_traces": [
@@ -43,6 +61,30 @@
           "arguments": {
             "path": "/Users/alice/Desktop/marketing.csv"
           }
+        }
+      ]
+    },
+    {
+      "id": "valid-remote-content-upload",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "list_datasets"
+        },
+        {
+          "tool": "register_dataset",
+          "client": "remote",
+          "arguments": {
+            "content": "date,revenue,meta_spend\n2024-01-01,100,10\n",
+            "filename": "weekly.csv"
+          }
+        },
+        {
+          "tool": "inspect_dataset"
+        },
+        {
+          "tool": "validate_dataset",
+          "result": "valid"
         }
       ]
     }

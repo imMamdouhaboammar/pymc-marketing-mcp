@@ -91,6 +91,8 @@ EXPECTED_STATIC_RESOURCES = frozenset(
         "marketing://skills/tool-map",
         "marketing://skills/workflow-map",
         "marketing://skills/decision-gates",
+        "marketing://skills/references/agent-operating-protocol",
+        "marketing://skills/references/marketing-decision-playbook",
         "marketing://skills/references/scientific-answer-contract",
         "marketing://skills/references/scientific-source-ledger",
     }

@@ -30,6 +30,18 @@
       "type": "recovery",
       "query": "The plot request failed after the model completed; check the stored artifact instead of recomputing model results.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-artifact-delivery-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "download the model file",
+      "expected_skill": "pymc-artifact-delivery"
+    },
+    {
+      "id": "pymc-artifact-delivery-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "تحميل الموديل",
+      "expected_skill": "pymc-artifact-delivery"
     }
   ],
   "tool_traces": []

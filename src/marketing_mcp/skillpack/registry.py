@@ -19,6 +19,8 @@ from marketing_mcp.capabilities import Capability, get_capability_inventory
 from marketing_mcp.errors import DomainError
 
 EXPECTED_SHARED_REFERENCES = (
+    "agent-operating-protocol",
+    "marketing-decision-playbook",
     "scientific-answer-contract",
     "scientific-source-ledger",
 )
