@@ -97,3 +97,21 @@ def test_snapshot_replaces_previous_copy_atomically(tmp_path: Path):
 def test_snapshot_path_must_differ_from_database(tmp_path: Path):
     with pytest.raises(DomainError):
         Settings(metadata_db=tmp_path / "m.db", metadata_snapshot=tmp_path / "m.db")
+
+
+def test_snapshot_of_wal_database_is_a_single_file(tmp_path: Path):
+    database = tmp_path / "live" / "metadata.db"
+    database.parent.mkdir()
+    connection = sqlite3.connect(database)
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("CREATE TABLE t (x)")
+    connection.execute("INSERT INTO t VALUES (1)")
+    connection.commit()
+    out = tmp_path / "durable"
+
+    write_snapshot(database, out / "metadata.db")
+
+    assert sorted(p.name for p in out.iterdir()) == ["metadata.db"]
+    snapshot = sqlite3.connect(out / "metadata.db")
+    assert snapshot.execute("PRAGMA journal_mode").fetchone() == ("delete",)
+    assert snapshot.execute("SELECT x FROM t").fetchall() == [(1,)]

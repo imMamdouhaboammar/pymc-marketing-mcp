@@ -45,6 +45,9 @@ def write_snapshot(database: Path, snapshot: Path) -> None:
         target = sqlite3.connect(staging)
         try:
             source.backup(target)
+            # The copy inherits WAL mode from the live database; a snapshot must be one
+            # self-contained file with no -wal/-shm companions on the durable store.
+            target.execute("PRAGMA journal_mode=DELETE")
         finally:
             target.close()
     finally:
