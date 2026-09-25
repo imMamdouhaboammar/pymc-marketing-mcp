@@ -45,6 +45,8 @@ class Settings(BaseModel):
     ingest_dir: Path = Field(default=Path("inbox"))
     artifact_dir: Path = Field(default=Path("artifacts"))
     metadata_db: Path = Field(default=Path("metadata.db"))
+    metadata_snapshot: Path | None = None
+    snapshot_interval_seconds: float = 300.0
     max_dataset_mb: int = 100
     log_level: str = "INFO"
     host: str = "127.0.0.1"
@@ -177,6 +179,15 @@ class Settings(BaseModel):
         self.ingest_dir = self.ingest_dir.expanduser().resolve()
         self.artifact_dir = self.artifact_dir.expanduser().resolve()
         self.metadata_db = self.metadata_db.expanduser().resolve()
+        if self.metadata_snapshot is not None:
+            self.metadata_snapshot = self.metadata_snapshot.expanduser().resolve()
+            if self.metadata_snapshot == self.metadata_db:
+                raise DomainError(
+                    "CONFIG_INVALID",
+                    "metadata_snapshot must be a different path from metadata_db",
+                )
+        if self.snapshot_interval_seconds <= 0:
+            raise DomainError("CONFIG_INVALID", "snapshot_interval_seconds must be positive")
         self.metadata_db.parent.mkdir(parents=True, exist_ok=True)
 
         return self
@@ -226,11 +237,16 @@ class Settings(BaseModel):
                 f"MARKETING_MCP_RATE_LIMIT_PER_MINUTE must be greater than zero, got {rate_limit_val}",
             )
 
+        snapshot_raw = os.getenv("MARKETING_MCP_METADATA_SNAPSHOT", "").strip()
         base: dict[str, Any] = {
             "data_dir": Path(os.getenv("MARKETING_MCP_DATA_DIR", "data")),
             "ingest_dir": Path(os.getenv("MARKETING_MCP_INGEST_DIR", "inbox")),
             "artifact_dir": Path(os.getenv("MARKETING_MCP_ARTIFACT_DIR", "artifacts")),
             "metadata_db": Path(os.getenv("MARKETING_MCP_METADATA_DB", "metadata.db")),
+            "metadata_snapshot": Path(snapshot_raw) if snapshot_raw else None,
+            "snapshot_interval_seconds": float(
+                os.getenv("MARKETING_MCP_SNAPSHOT_INTERVAL_SECONDS", "300")
+            ),
             "max_dataset_mb": int(os.getenv("MARKETING_MCP_MAX_DATASET_MB", "100")),
             "log_level": os.getenv("MARKETING_MCP_LOG_LEVEL", "INFO"),
             "host": os.getenv("MARKETING_MCP_HOST", os.getenv("HOST", "127.0.0.1")),
