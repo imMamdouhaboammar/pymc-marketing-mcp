@@ -22,6 +22,14 @@ The 2026-08-26 core hardening program implemented and verified all gates across 
 | G5 | Release Evidence | blocked | release-evidence collector and release identity helpers exist, PR CI, security CI, canary workflows exist | final CI release workflow run on tagged commit with signed artifacts |
 | AQG | Agent Quality Gate | partial | clean agent skills, decision gate enforcement, negative security evals, and trace-based scenarios exist | holdout eval suite execution across multiple frontier model APIs |
 
+## Supported deployment today
+
+Separate from the release gates above, one topology is supported for real use: a single instance in the `http-private-api-key` profile, with SQLite snapshotted to durable storage. `docs/OPERATIONS.md` describes how to run it and its limits (one writer; up to one snapshot interval of metadata lost on a hard crash)
+
+`http-production-oauth` cannot start yet because it requires a shared SQL backend that is not implemented. Multi-instance and multi-tenant-at-scale deployments stay blocked on G2
+
+This section records a deployment decision. It does not turn any gate green
+
 ## 2026-08-26 hardening gates
 
 The H-gates supplement the original G-gates. They do not replace them
