@@ -30,6 +30,18 @@
       "type": "recovery",
       "query": "Calibration completed but the child has not been diagnosed; do not inherit approval from the parent.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-lift-calibration-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "we ran a geo experiment in KSA",
+      "expected_skill": "pymc-lift-calibration"
+    },
+    {
+      "id": "pymc-lift-calibration-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "نتيجة تجربة lift على ميتا",
+      "expected_skill": "pymc-lift-calibration"
     }
   ],
   "tool_traces": [

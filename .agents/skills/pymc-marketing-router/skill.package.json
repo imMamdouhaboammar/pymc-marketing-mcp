@@ -1,13 +1,17 @@
 {
   "schema_version": "1",
   "name": "pymc-marketing-router",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domain": "routing",
   "summary": "Route PyMC Marketing MCP questions to the smallest specialist workflow without doing the analysis itself.",
   "triggers": [
     "which workflow should I use",
     "what can PyMC Marketing MCP do",
-    "route this marketing science task"
+    "route this marketing science task",
+    "where do I start",
+    "what can this server do",
+    "ابدأ منين",
+    "السيرفر ده بيعمل ايه"
   ],
   "negative_triggers": [
     "fit my MMM now",
@@ -44,6 +48,8 @@
   ],
   "maturity": "experimental",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

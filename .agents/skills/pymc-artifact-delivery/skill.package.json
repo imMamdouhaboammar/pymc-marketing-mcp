@@ -1,13 +1,18 @@
 {
   "schema_version": "1",
   "name": "pymc-artifact-delivery",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domain": "artifacts",
   "summary": "Generate posterior plots and deliver approved server artifacts without arbitrary filesystem access or unsafe cleanup.",
   "triggers": [
     "give me the posterior artifact",
     "generate posterior plots",
-    "export this model artifact to the sandbox"
+    "export this model artifact to the sandbox",
+    "download the model file",
+    "posterior plots",
+    "export artifact",
+    "تحميل الموديل",
+    "رسومات الموديل"
   ],
   "negative_triggers": [
     "fit my MMM",
@@ -38,6 +43,8 @@
   "continuations": [],
   "maturity": "experimental",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

@@ -1,13 +1,17 @@
 {
   "schema_version": "1",
   "name": "pymc-mmm-workflow",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "domain": "mmm-lifecycle",
   "summary": "Run the principal constrained MMM lifecycle through registered datasets, fitting, state inspection, diagnosis, and specialist continuations.",
   "triggers": [
     "fit a media mix model",
     "run MMM analysis",
-    "build an MMM from validated marketing data"
+    "build an MMM from validated marketing data",
+    "marketing mix model",
+    "build an MMM",
+    "ميديا ميكس",
+    "موديل MMM"
   ],
   "negative_triggers": [
     "why was my MMM rejected",
@@ -64,6 +68,8 @@
   ],
   "maturity": "stable",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

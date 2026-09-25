@@ -30,6 +30,18 @@
       "type": "recovery",
       "query": "diagnose_mmm rejected the model; explain the failures and remediation path without manually estimating ROAS or budget.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-diagnostics-gate-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "is the model reliable enough to use",
+      "expected_skill": "pymc-diagnostics-gate"
+    },
+    {
+      "id": "pymc-diagnostics-gate-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "الموديل اترفض ليه",
+      "expected_skill": "pymc-diagnostics-gate"
     }
   ],
   "tool_traces": [
@@ -43,6 +55,32 @@
         },
         {
           "tool": "optimize_flighting"
+        }
+      ]
+    },
+    {
+      "id": "valid-remediation-refit-then-rediagnose",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "diagnose_mmm",
+          "result": "rejected"
+        },
+        {
+          "tool": "record_agent_insight"
+        },
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "tool": "get_job_status"
+        },
+        {
+          "tool": "diagnose_mmm",
+          "result": "approved"
+        },
+        {
+          "tool": "optimize_budget"
         }
       ]
     }

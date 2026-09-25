@@ -1,13 +1,18 @@
 {
   "schema_version": "1",
   "name": "pymc-diagnostics-gate",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "domain": "mmm-diagnostics",
-  "summary": "Diagnose fitted MMMs, explain rejection/caution states, and enforce the repository\u2019s decision gate without bypasses.",
+  "summary": "Diagnose fitted MMMs, explain rejection/caution states, and enforce the repository’s decision gate without bypasses.",
   "triggers": [
     "why was my MMM rejected",
     "my fit has divergences",
-    "R-hat or ESS looks bad"
+    "R-hat or ESS looks bad",
+    "is the model reliable",
+    "divergences",
+    "r-hat",
+    "تشخيص الموديل",
+    "الموديل اترفض"
   ],
   "negative_triggers": [
     "compare model specifications by LOO",
@@ -51,6 +56,8 @@
   ],
   "maturity": "stable",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

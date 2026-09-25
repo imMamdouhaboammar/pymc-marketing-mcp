@@ -24,7 +24,7 @@ Status meanings:
 approved the model.
 
 
-**Totals:** 64 capabilities (28 experimental, 34 stable, 2 deprecated).
+**Totals:** 66 capabilities (30 experimental, 34 stable, 2 deprecated).
 
 
 ## Tools
@@ -95,6 +95,8 @@ approved the model.
 | `marketing://models/{model_id}/plots/{plot_type}` | plots | experimental | not enforced | `plots.get_cached_plot` | Rendered posterior plot artifact for a model. | none |
 | `marketing://skills` | skills | experimental | not enforced | `` | Compact deterministic catalog of available scientific workflow skills. | none |
 | `marketing://skills/decision-gates` | skills | experimental | not enforced | `` | Decision-gated tool map derived from the public capability registry. | none |
+| `marketing://skills/references/agent-operating-protocol` | skills | experimental | not enforced | `` | Shared protocol for operating the server: bootstrap, envelopes, IDs, jobs, and error recovery. | none |
+| `marketing://skills/references/marketing-decision-playbook` | skills | experimental | not enforced | `` | Shared playbook translating marketing questions into server workflows and decision-ready answers. | none |
 | `marketing://skills/references/scientific-answer-contract` | skills | experimental | not enforced | `` | Shared contract for communicating scientific analytical results and uncertainty. | none |
 | `marketing://skills/references/scientific-source-ledger` | skills | experimental | not enforced | `` | Versioned source ledger for scientific rules used by the Skill Pack. | none |
 | `marketing://skills/tool-map` | skills | experimental | not enforced | `` | Machine-readable classification of every public MCP tool into skill guidance. | none |

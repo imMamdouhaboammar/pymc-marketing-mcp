@@ -1,14 +1,18 @@
 {
   "schema_version": "1",
   "name": "pymc-model-validation",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domain": "mmm-validation",
   "summary": "Evaluate predictive performance, prior sensitivity, and model comparison without confusing those checks with diagnosis or causality.",
   "triggers": [
     "compare these MMM specifications",
     "run time-slice cross-validation",
     "check prior sensitivity",
-    "which MMM specification should I trust"
+    "which MMM specification should I trust",
+    "out of sample",
+    "compare models",
+    "which model is better",
+    "مقارنة الموديلات"
   ],
   "negative_triggers": [
     "why did diagnose_mmm reject this fit",
@@ -55,6 +59,8 @@
   ],
   "maturity": "experimental",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

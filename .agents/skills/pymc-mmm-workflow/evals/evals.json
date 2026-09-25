@@ -30,7 +30,70 @@
       "type": "recovery",
       "query": "Synchronous fitting disconnected; check whether an async/persisted job exists before fitting the same model again.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-mmm-workflow-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "build an MMM for our ecommerce brand",
+      "expected_skill": "pymc-mmm-workflow"
+    },
+    {
+      "id": "pymc-mmm-workflow-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "عايز ميديا ميكس للبراند",
+      "expected_skill": "pymc-mmm-workflow"
     }
   ],
-  "tool_traces": []
+  "tool_traces": [
+    {
+      "id": "valid-async-fit-then-diagnose-then-evidence",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "validate_dataset",
+          "result": "valid"
+        },
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "tool": "poll_job_progress"
+        },
+        {
+          "tool": "get_job_status"
+        },
+        {
+          "tool": "get_model_status"
+        },
+        {
+          "tool": "diagnose_mmm",
+          "result": "approved_with_caution"
+        },
+        {
+          "tool": "get_channel_contributions"
+        },
+        {
+          "tool": "get_incremental_roas"
+        }
+      ]
+    },
+    {
+      "id": "invalid-iroas-before-diagnosis",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "submit_fit_mmm_job"
+        },
+        {
+          "tool": "get_job_status"
+        },
+        {
+          "tool": "get_incremental_roas"
+        }
+      ]
+    }
+  ]
 }

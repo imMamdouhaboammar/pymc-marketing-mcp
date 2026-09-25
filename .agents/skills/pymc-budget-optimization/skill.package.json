@@ -1,13 +1,20 @@
 {
   "schema_version": "1",
   "name": "pymc-budget-optimization",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "domain": "mmm-decision",
-  "summary": "Evaluate spend scenarios, static allocations, and weekly flighting only after the model\u2019s diagnostic decision gate permits them.",
+  "summary": "Evaluate spend scenarios, static allocations, and weekly flighting only after the model’s diagnostic decision gate permits them.",
   "triggers": [
     "optimize my media budget",
     "simulate moving TV spend to Search",
-    "build a weekly flighting schedule"
+    "build a weekly flighting schedule",
+    "reallocate budget",
+    "cut the budget",
+    "ramadan flighting plan",
+    "where should the next dollar go",
+    "توزيع الميزانية",
+    "خطة رمضان",
+    "نقلل الميزانية"
   ],
   "negative_triggers": [
     "why is this MMM rejected",
@@ -53,6 +60,8 @@
   ],
   "maturity": "stable",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

@@ -30,6 +30,12 @@
       "type": "recovery",
       "query": "Model comparison failed because the models use different datasets; stop instead of manufacturing a ranking.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-model-validation-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "which model is better, v1 or v2",
+      "expected_skill": "pymc-model-validation"
     }
   ],
   "tool_traces": []

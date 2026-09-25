@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "name": "pymc-clv-customer-analytics",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "domain": "clv",
   "summary": "Use the current explicit PyMC-Marketing CLV tools for purchase frequency, survival/alive probability, monetary value, and combined customer lifetime value.",
   "triggers": [
@@ -9,7 +9,13 @@
     "predict probability alive",
     "fit a BG/NBD purchase model",
     "who is likely to churn",
-    "churn risk"
+    "churn risk",
+    "customer lifetime value",
+    "churn",
+    "repeat purchases",
+    "affordable CAC",
+    "قيمة العميل",
+    "العملاء اللي هيبطلوا يشتروا"
   ],
   "negative_triggers": [
     "run a media mix model",
@@ -43,6 +49,8 @@
   ],
   "maturity": "stable",
   "authoritative_sources": [
+    "marketing://skills/references/agent-operating-protocol",
+    "marketing://skills/references/marketing-decision-playbook",
     "marketing://skills/references/scientific-answer-contract",
     "marketing://skills/references/scientific-source-ledger"
   ],

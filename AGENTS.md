@@ -173,8 +173,8 @@ The following resilient tools are exposed to prevent MCP connection dropouts and
 - `poll_job_progress(job_id, timeout_seconds=5)`: Non-blocking heartbeat polling across MCMC sub-stages.
 - `recover_execution_state(job_id)`: Inspects recorded checkpoints after container restarts.
 - `resume_job(job_id)`: Resumes execution of failed/interrupted jobs from the latest valid checkpoint.
-- `export_artifact_to_sandbox(digest, namespace, client_sandbox_path)`: Provides direct download URLs, resumable `curl` commands, SHA256 checksum verification, and Python load scripts.
-- `cleanup_server_storage(max_age_hours=24)`: Purges `/tmp` scratch directories, expired delivered artifacts, and orphan blobs.
+- `export_artifact_to_sandbox(model_id=None, artifact_uri=None, export_name=None)`: Provides direct download URLs, resumable `curl` commands, SHA256 checksum verification, and Python load scripts.
+- `cleanup_server_storage(older_than_hours=24, dry_run=False)`: Purges `/tmp` scratch directories, expired delivered artifacts, and orphan blobs.
 
 ## Native Rust Acceleration Engine (`marketing_mcp_fast`)
 

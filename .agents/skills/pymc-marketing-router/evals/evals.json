@@ -84,6 +84,18 @@
       "type": "should_trigger",
       "query": "Give me the posterior artifact",
       "expected_skill": "pymc-artifact-delivery"
+    },
+    {
+      "id": "pymc-marketing-router-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "where do I start with this server",
+      "expected_skill": "pymc-marketing-router"
+    },
+    {
+      "id": "pymc-marketing-router-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "ابدأ منين",
+      "expected_skill": "pymc-marketing-router"
     }
   ],
   "tool_traces": []

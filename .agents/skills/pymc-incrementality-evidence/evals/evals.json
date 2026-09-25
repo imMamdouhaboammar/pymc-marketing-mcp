@@ -30,7 +30,58 @@
       "type": "recovery",
       "query": "The iROAS request is blocked by diagnostics; fall back to permitted descriptive evidence without presenting it as decision-grade.",
       "expected_behavior": "Use persisted state or the documented recovery path; stop when authoritative state is unavailable."
+    },
+    {
+      "id": "pymc-incrementality-evidence-trigger-v2-1",
+      "type": "should_trigger",
+      "query": "which channels are working best",
+      "expected_skill": "pymc-incrementality-evidence"
+    },
+    {
+      "id": "pymc-incrementality-evidence-trigger-v2-2",
+      "type": "should_trigger",
+      "query": "أنهي قناة شغالة أحسن",
+      "expected_skill": "pymc-incrementality-evidence"
+    },
+    {
+      "id": "pymc-incrementality-evidence-trigger-v2-3",
+      "type": "should_trigger",
+      "query": "platform roas vs mmm for Meta",
+      "expected_skill": "pymc-incrementality-evidence"
     }
   ],
-  "tool_traces": []
+  "tool_traces": [
+    {
+      "id": "valid-descriptive-evidence-on-rejected-model",
+      "expected_valid": true,
+      "steps": [
+        {
+          "tool": "diagnose_mmm",
+          "result": "rejected"
+        },
+        {
+          "tool": "get_channel_contributions"
+        },
+        {
+          "tool": "get_response_curves"
+        },
+        {
+          "tool": "recommend_next_measurement"
+        }
+      ]
+    },
+    {
+      "id": "invalid-iroas-on-rejected-model",
+      "expected_valid": false,
+      "steps": [
+        {
+          "tool": "diagnose_mmm",
+          "result": "rejected"
+        },
+        {
+          "tool": "get_incremental_roas"
+        }
+      ]
+    }
+  ]
 }
