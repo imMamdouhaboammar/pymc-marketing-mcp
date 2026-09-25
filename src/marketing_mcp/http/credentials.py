@@ -14,11 +14,20 @@ from marketing_mcp.security.principal import Principal
 class CredentialControlAPI:
     """HTTP endpoints for dashboard credential management."""
 
-    def __init__(self, credential_service: CredentialService):
+    def __init__(self, credential_service: CredentialService, *, auth_enabled: bool = True):
         self.credential_service = credential_service
+        self.auth_enabled = auth_enabled
 
     def _get_request_principal(self, request: Request) -> Principal:
         """Extract authenticated principal from request state or header."""
+        if not self.auth_enabled:
+            # With authentication off every caller is "anonymous". Keys minted in that
+            # mode would stay valid once authentication is switched on, so refuse.
+            raise DomainError(
+                "AUTH_FORBIDDEN",
+                "Credential management requires server authentication to be enabled",
+                next_action="Enable MARKETING_MCP_AUTH_ENABLED before issuing API keys",
+            )
         auth_ctx = getattr(request.state, "auth", None)
         if not auth_ctx or not auth_ctx.authenticated:
             raise DomainError("AUTH_REQUIRED", "Authentication required to access credential control plane")

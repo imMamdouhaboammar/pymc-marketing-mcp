@@ -7,11 +7,18 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
+
+# Used only when no secret is configured. It is random per process, so a token cannot be
+# forged from public source code; links then stop working after a restart.
+_EPHEMERAL_SIGNING_KEY = secrets.token_bytes(32)
 
 
 def _get_signing_key() -> bytes:
-    key = os.getenv("MARKETING_MCP_TOKEN_SECRET") or os.getenv("MARKETING_MCP_API_KEY") or "default-ephemeral-artifact-secret"
+    key = os.getenv("MARKETING_MCP_TOKEN_SECRET") or os.getenv("MARKETING_MCP_API_KEY")
+    if not key:
+        return _EPHEMERAL_SIGNING_KEY
     return hashlib.sha256(key.encode()).digest()
 
 

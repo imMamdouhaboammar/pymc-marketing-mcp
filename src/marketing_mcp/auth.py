@@ -279,12 +279,13 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
         self.public_paths = public_paths or {"/health", "/", "/openapi.json", "/.well-known/mcp.json"}
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # 1. Allow health check, dashboard static assets, and public endpoints without auth
+        # 1. Allow health checks, dashboard static assets, and the exact public endpoints.
+        # Matching on file extensions is deliberately avoided: any protected route whose
+        # path happens to end in ".json" would otherwise skip authentication.
         path = request.url.path
         if (
-            path.startswith(("/health", "/assets/"))
-            or path in self.public_paths
-            or path.endswith((".js", ".css", ".html", ".ico", ".svg", ".png", ".json"))
+            path in self.public_paths
+            or path.startswith(("/health/", "/assets/"))
         ):
             return await call_next(request)
 
@@ -324,6 +325,14 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 
 
 
+        # Artifact download links carry their own short-lived signed token so an AI sandbox
+        # can fetch them with plain curl. Without credentials the request goes on to the
+        # download handler, which refuses it unless that token verifies.
+        if path.startswith("/artifacts/") and not self.auth_manager.extract_token(
+            request.headers, request.query_params
+        ):
+            return await call_next(request)
+
         # 3. Authenticate request
         if self.auth_manager.bearer_token_verifier is not None:
             auth_ctx = await asyncio.to_thread(
@@ -345,7 +354,6 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
                             "supported_schemes": [
                                 "Authorization: Bearer <API_KEY_OR_JWT>",
                                 "X-API-Key: <API_KEY>",
-                                "URL Query Parameter: ?token=<TOKEN>",
                             ],
                         },
                     },

@@ -126,13 +126,13 @@ def create_http_app(
     app.add_route("/.well-known/mcp.json", well_known_mcp, methods=["GET"])
     app.add_route(
         "/artifacts/{namespace}/{digest}/download",
-        create_artifact_download_handler(app_instance),
+        create_artifact_download_handler(app_instance, auth_enabled=auth_mgr.enabled),
         methods=["GET"],
     )
     app.add_route("/", root_handler, methods=["GET"])
 
     # Mount Control Plane credential management routes
-    control_api = CredentialControlAPI(app_instance.credentials)
+    control_api = CredentialControlAPI(app_instance.credentials, auth_enabled=auth_mgr.enabled)
     for route in control_api.routes():
         app.routes.append(route)
 
