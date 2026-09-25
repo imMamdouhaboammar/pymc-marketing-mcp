@@ -13,6 +13,8 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH="/usr/local/cargo/bin:${PATH}"
 
+# Debian rotates patch versions out of the archive, so apt pins would break rebuilds.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/* \
     && cargo --version
@@ -32,6 +34,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # PyTensor compiles C/C++ at runtime, so the compiler toolchain stays in the image.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -46,7 +49,7 @@ COPY --from=rust-builder /build/crates/marketing_mcp_fast/target/release/libmark
 # Install exactly the locked dependency set; a lock mismatch fails the build instead of
 # silently resolving fresh versions. The project is installed editable so the native
 # extension copied into /app/src is the one that gets imported.
-RUN pip install --no-cache-dir uv && \
+RUN pip install --no-cache-dir uv==0.8.17 && \
     uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt && \
     uv pip install --system --no-cache -r /tmp/requirements.txt && \
     uv pip install --system --no-cache --no-deps -e . && \
@@ -73,7 +76,7 @@ RUN useradd --uid 10001 --create-home --home-dir /home/app --shell /usr/sbin/nol
              /var/lib/marketing-mcp/inbox /var/lib/marketing-mcp/state && \
     chown -R app:app /var/lib/marketing-mcp-local /var/lib/marketing-mcp
 
-USER app
+USER 10001:10001
 
 # Release identity, supplied by the build pipeline (deploy_cloud_run.sh / cloudbuild.yaml).
 # Declared late so a version/commit change does not invalidate the dependency layers above.
@@ -89,7 +92,7 @@ LABEL org.opencontainers.image.title="pymc-marketing-mcp" \
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"8080\")}/health/live', timeout=4)"
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8080') + '/health/live', timeout=4)"]
 
 CMD ["marketing-mcp", "--transport", "streamable-http"]
 
