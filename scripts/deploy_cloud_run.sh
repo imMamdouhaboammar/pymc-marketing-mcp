@@ -2,160 +2,140 @@
 set -euo pipefail
 
 # ==============================================================================
-# PyMC Marketing MCP - Google Cloud Run Deployment Script
-# Production-ready Bayesian Marketing Mix Modeling Serverless Deployment
+# PyMC Marketing MCP - Google Cloud Run deployment (single instance)
+#
+#   scripts/deploy_cloud_run.sh            # API-key protected (default)
+#   scripts/deploy_cloud_run.sh --beta     # anonymous, for throwaway demos only
+#
+# Topology: one Cloud Run instance, SQLite on instance disk snapshotted into a GCS
+# bucket mounted at /var/lib/marketing-mcp, secrets from Secret Manager.
+# max-instances stays at 1: the SQLite snapshot supports exactly one writer.
 # ==============================================================================
 
-# Load local .env if present
 if [ -f ".env" ]; then
     set -a
+    # shellcheck disable=SC1091
     source .env
-    set +a
-elif [ -f "../.env" ]; then
-    set -a
-    source ../.env
     set +a
 fi
 
-export CLOUDSDK_METRICS_ENVIRONMENT="${CLOUDSDK_METRICS_ENVIRONMENT:-datacloud.antigravity}"
+MODE="secure"
+case "${1:-}" in
+    --beta|beta) MODE="beta" ;;
+    ""|--secure|secure) MODE="secure" ;;
+    *) echo "usage: $0 [--secure|--beta]" >&2; exit 64 ;;
+esac
+
+if ! command -v gcloud >/dev/null 2>&1; then
+    echo "ERROR: gcloud CLI is required (https://cloud.google.com/sdk/docs/install)" >&2
+    exit 1
+fi
 
 PROJECT_ID="${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || echo '')}"
 if [ -z "${PROJECT_ID}" ]; then
-    echo "ERROR: No GCP Project ID configured. Set GCP_PROJECT_ID or run 'gcloud config set project <PROJECT_ID>'" >&2
+    echo "ERROR: set GCP_PROJECT_ID or run 'gcloud config set project <PROJECT_ID>'" >&2
     exit 1
 fi
 REGION="${GCP_REGION:-us-central1}"
 SERVICE_NAME="${GCP_SERVICE_NAME:-pymc-marketing-mcp}"
 REPO_NAME="${GCP_REPO_NAME:-mcp-servers}"
-BUCKET_NAME="${GCS_BUCKET_NAME:-${PROJECT_ID}-marketing-artifacts}"
-APP_VERSION="${APP_VERSION:-$(python3 -c 'import marketing_mcp; print(marketing_mcp.__version__)' 2>/dev/null || echo '0.4.0')}"
+BUCKET_NAME="${GCS_BUCKET_NAME:-${PROJECT_ID}-pymc-mcp-artifacts}"
+MIN_INSTANCES="${MIN_INSTANCES:-0}"
+APP_VERSION="${APP_VERSION:-$(python3 -c 'import marketing_mcp; print(marketing_mcp.__version__)' 2>/dev/null || echo 'unknown')}"
 GIT_SHA="${GIT_SHA:-$(git rev-parse --short=12 HEAD 2>/dev/null || echo 'unknown')}"
 IMAGE_TAG="${IMAGE_TAG:-${APP_VERSION}-g${GIT_SHA}}"
-AUTH_ENABLED="${MARKETING_MCP_AUTH_ENABLED:-false}"
-API_KEY="${MARKETING_MCP_API_KEY:-}"
-
-echo "=========================================================="
-echo " Starting PyMC Marketing MCP Deployment to Google Cloud"
-echo " Project:        ${PROJECT_ID}"
-echo " Region:         ${REGION}"
-echo " Service Name:   ${SERVICE_NAME}"
-echo " Storage Bucket: gs://${BUCKET_NAME}"
-echo " Auth Enabled:   ${AUTH_ENABLED}"
-echo "=========================================================="
-
-# 1. Set active project
-echo "--> Setting active GCP project..."
-gcloud config set project "${PROJECT_ID}"
-
-# 2. Enable necessary APIs
-echo "--> Verifying enabled GCP services..."
-gcloud services enable \
-    run.googleapis.com \
-    artifactregistry.googleapis.com \
-    cloudbuild.googleapis.com \
-    storage.googleapis.com
-
-# 3. Create Artifact Registry repository if it doesn't exist
-echo "--> Ensuring Artifact Registry repository '${REPO_NAME}' exists..."
-if ! gcloud artifacts repositories describe "${REPO_NAME}" --location="${REGION}" >/dev/null 2>&1; then
-    gcloud artifacts repositories create "${REPO_NAME}" \
-        --repository-format=docker \
-        --location="${REGION}" \
-        --description="MCP Servers Docker Repository"
-fi
-
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:${IMAGE_TAG}"
+API_KEY_SECRET="${SERVICE_NAME}-api-key"
+TOKEN_SECRET="${SERVICE_NAME}-token-secret"
 
-# 4. Create GCS Bucket for Model Artifacts and storage persistence if not exists
-echo "--> Ensuring Cloud Storage bucket 'gs://${BUCKET_NAME}' exists..."
-if ! gcloud storage buckets describe "gs://${BUCKET_NAME}" >/dev/null 2>&1; then
-    gcloud storage buckets create "gs://${BUCKET_NAME}" \
-        --location="${REGION}" \
-        --uniform-bucket-level-access
+echo "Project ${PROJECT_ID} | region ${REGION} | service ${SERVICE_NAME} | mode ${MODE}"
+echo "Image   ${IMAGE_URI}"
+echo "Bucket  gs://${BUCKET_NAME}"
+
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+    cloudbuild.googleapis.com storage.googleapis.com secretmanager.googleapis.com >/dev/null
+
+if ! gcloud artifacts repositories describe "${REPO_NAME}" --location="${REGION}" >/dev/null 2>&1; then
+    gcloud artifacts repositories create "${REPO_NAME}" --repository-format=docker \
+        --location="${REGION}" --description="PyMC Marketing MCP images" >/dev/null
 fi
 
-echo "--> Applying GCS bucket lifecycle policy for automatic artifact cleanup..."
-cat << 'LIFECYCLE_EOF' > /tmp/mcp-gcs-lifecycle.json
-{
-  "rule": [
-    {
-      "action": {"type": "Delete"},
-      "condition": {
-        "age": 7,
-        "matchesPrefix": ["artifacts/temp/"]
-      }
-    }
-  ]
+if ! gcloud storage buckets describe "gs://${BUCKET_NAME}" >/dev/null 2>&1; then
+    gcloud storage buckets create "gs://${BUCKET_NAME}" --location="${REGION}" \
+        --uniform-bucket-level-access >/dev/null
+fi
+# Object versioning keeps earlier metadata snapshots recoverable after a bad write.
+gcloud storage buckets update "gs://${BUCKET_NAME}" --versioning >/dev/null
+
+PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+# Create a secret with a random value once; later deploys reuse it.
+ensure_secret() {
+    local name="$1"
+    if ! gcloud secrets describe "${name}" >/dev/null 2>&1; then
+        python3 -c 'import secrets; print("mcp_" + secrets.token_hex(32), end="")' |
+            gcloud secrets create "${name}" --replication-policy=automatic --data-file=- >/dev/null
+        echo "Created secret ${name}"
+    fi
+    gcloud secrets add-iam-policy-binding "${name}" \
+        --member="serviceAccount:${RUNTIME_SA}" \
+        --role=roles/secretmanager.secretAccessor >/dev/null
 }
-LIFECYCLE_EOF
-gcloud storage buckets update "gs://${BUCKET_NAME}" --lifecycle-file=/tmp/mcp-gcs-lifecycle.json >/dev/null 2>&1 || true
-rm -f /tmp/mcp-gcs-lifecycle.json
 
-# 5. Build and submit container image via Cloud Build
-echo "--> Building container image via Google Cloud Build..."
-gcloud builds submit --tag "${IMAGE_URI}" .
+ensure_secret "${TOKEN_SECRET}"
+SECRETS="MARKETING_MCP_TOKEN_SECRET=${TOKEN_SECRET}:latest"
+if [ "${MODE}" = "secure" ]; then
+    ensure_secret "${API_KEY_SECRET}"
+    SECRETS="${SECRETS},MARKETING_MCP_API_KEY=${API_KEY_SECRET}:latest"
+    AUTH_ENV="MARKETING_MCP_SECURITY_PROFILE=http-private-api-key"
+else
+    echo "WARNING: --beta serves every tool and every stored dataset to anyone with the URL." >&2
+    AUTH_ENV="MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true"
+fi
 
-# 6. Deploy to Cloud Run with optimal MCMC and Bayesian compute settings
-echo "--> Deploying service to Google Cloud Run..."
+BUILD_CONFIG="$(mktemp)"
+trap 'rm -f "${BUILD_CONFIG}"' EXIT
+cat > "${BUILD_CONFIG}" <<EOF
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, --build-arg, APP_VERSION=${APP_VERSION}, --build-arg, GIT_COMMIT=${GIT_SHA}, -t, ${IMAGE_URI}, .]
+images: [${IMAGE_URI}]
+EOF
+gcloud builds submit --quiet --config="${BUILD_CONFIG}" .
+
 gcloud run deploy "${SERVICE_NAME}" \
     --image "${IMAGE_URI}" \
     --region "${REGION}" \
-    --platform managed \
     --cpu 4 \
     --memory 8Gi \
     --timeout 1800 \
     --concurrency 80 \
-    --min-instances 0 \
+    --min-instances "${MIN_INSTANCES}" \
     --max-instances 1 \
     --no-cpu-throttling \
     --execution-environment gen2 \
     --port 8080 \
-    --set-env-vars "MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_API_KEY=${API_KEY},MARKETING_MCP_AUTH_ENABLED=${AUTH_ENABLED},MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true,GCS_BUCKET_NAME=${BUCKET_NAME},MARKETING_MCP_MAX_ARTIFACT_SIZE_MB=2048" \
-    --add-volume "name=mcp-storage,type=cloud-storage,bucket=${BUCKET_NAME}" \
+    --set-env-vars "${AUTH_ENV},MARKETING_MCP_MAX_ARTIFACT_SIZE_MB=2048" \
+    --set-secrets "${SECRETS}" \
+    --add-volume "name=mcp-storage,type=cloud-storage,bucket=${BUCKET_NAME},mount-options=uid=10001;gid=10001" \
     --add-volume-mount "volume=mcp-storage,mount-path=/var/lib/marketing-mcp" \
-    --allow-unauthenticated
+    --allow-unauthenticated \
+    --quiet
 
-SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${REGION}" --format='value(status.url)')
+SERVICE_URL="$(gcloud run services describe "${SERVICE_NAME}" --region="${REGION}" --format='value(status.url)')"
+# Artifact export links are built from this base URL.
+gcloud run services update "${SERVICE_NAME}" --region="${REGION}" \
+    --update-env-vars "MARKETING_MCP_PUBLIC_BASE_URL=${SERVICE_URL}" --quiet >/dev/null
 
-echo "=========================================================="
-echo " Deployment Completed Successfully!"
-echo " Service Base URL:  ${SERVICE_URL}"
-echo " MCP Endpoint:      ${SERVICE_URL}/mcp"
-echo " Health Endpoint:   ${SERVICE_URL}/health"
-echo " Auth Enabled:      ${AUTH_ENABLED}"
-echo "=========================================================="
 echo ""
-echo "Claude Desktop / Cursor / Antigravity Config Snippet:"
-echo "----------------------------------------------------------"
-if [ "${AUTH_ENABLED}" = "true" ]; then
-cat << JSONEOF
-{
-  "mcpServers": {
-    "pymc-marketing": {
-      "url": "${SERVICE_URL}/mcp",
-      "headers": {
-        "Authorization": "Bearer ${API_KEY}"
-      }
-    }
-  }
-}
-JSONEOF
-echo "----------------------------------------------------------"
-echo "Claude Code CLI:"
-echo "  claude mcp add pymc-marketing ${SERVICE_URL}/mcp --header \"Authorization: Bearer ${API_KEY}\""
-else
-cat << JSONEOF
-{
-  "mcpServers": {
-    "pymc-marketing": {
-      "url": "${SERVICE_URL}/mcp"
-    }
-  }
-}
-JSONEOF
-echo "----------------------------------------------------------"
-echo "Claude Code CLI:"
-echo "  claude mcp add pymc-marketing ${SERVICE_URL}/mcp"
+echo "Deployed ${SERVICE_URL}"
+echo "  MCP endpoint: ${SERVICE_URL}/mcp"
+echo "  Readiness:    ${SERVICE_URL}/health/ready"
+if [ "${MODE}" = "secure" ]; then
+    echo ""
+    echo "Read the API key (never commit it):"
+    echo "  gcloud secrets versions access latest --secret=${API_KEY_SECRET}"
+    echo "Connect Claude Code:"
+    echo "  claude mcp add --transport http pymc-marketing ${SERVICE_URL}/mcp --header \"Authorization: Bearer <API_KEY>\""
 fi
-echo ""
-
