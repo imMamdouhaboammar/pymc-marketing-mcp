@@ -6,11 +6,20 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from marketing_mcp.app import Application
+from marketing_mcp.mcp.context import get_current_execution_context
 from marketing_mcp.security.artifact_token import verify_artifact_download_token
+from marketing_mcp.storage.artifacts import LocalArtifactStore
+
+_UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 
 
-def create_artifact_download_handler(app: Application):
-    """Factory creating the streaming artifact download handler with token & auth verification."""
+def create_artifact_download_handler(app: Application, *, auth_enabled: bool = True):
+    """Factory creating the streaming artifact download handler with token & auth verification.
+
+    A request is served when it carries a valid signed download token for this exact
+    artifact, or when the authenticated caller owns the artifact namespace. With
+    authentication disabled the server is a single trust domain and any caller may read.
+    """
 
     async def artifact_download_handler(request: Request) -> Response:
         namespace = request.path_params.get("namespace", "")
@@ -20,16 +29,18 @@ def create_artifact_download_handler(app: Application):
         if not re.match(r"^[a-f0-9]{12,64}$", namespace) or not re.match(r"^[a-f0-9]{64}$", digest):
             return JSONResponse({"error": "INVALID_IDENTIFIER", "message": "Invalid artifact path"}, status_code=400)
 
-        # 2. Authorization check: token query parameter or authenticated context
-        auth_ctx = getattr(request.state, "auth", None)
+        # 2. Authorization check: signed token, or the caller's own namespace
         token = request.query_params.get("token")
-
-        is_authorized = False
         if token and verify_artifact_download_token(token, expected_namespace=namespace, expected_digest=digest):
             is_authorized = True
-        elif auth_ctx and auth_ctx.authenticated:
-            # Check tenant isolation if tenant_id is set
+        elif not auth_enabled:
             is_authorized = True
+        else:
+            context = get_current_execution_context()
+            principal = context.principal if context is not None else None
+            is_authorized = principal is not None and namespace == LocalArtifactStore._namespace(
+                principal.subject, principal.tenant_id
+            )
 
         if not is_authorized:
             return JSONResponse(
@@ -44,7 +55,9 @@ def create_artifact_download_handler(app: Application):
         file_size = blob_path.stat().st_size
         range_header = request.headers.get("Range")
 
-        filename = request.query_params.get("filename") or f"{digest[:12]}.nc"
+        # The filename lands in a response header; keep it to a safe character set.
+        requested_name = _UNSAFE_FILENAME_CHARS.sub("_", request.query_params.get("filename", ""))[:128]
+        filename = requested_name if requested_name.strip("._") else f"{digest[:12]}.nc"
 
         headers = {
             "Accept-Ranges": "bytes",

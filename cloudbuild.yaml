@@ -1,26 +1,20 @@
+# CI/CD equivalent of scripts/deploy_cloud_run.sh (secure mode). Run the script once
+# first: it creates the bucket and the Secret Manager secrets this pipeline references.
 steps:
-  # 1. Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '--build-arg'
-      - 'APP_VERSION=0.4.0'
+      - 'APP_VERSION=$_APP_VERSION'
       - '--build-arg'
       - 'GIT_COMMIT=$COMMIT_SHA'
       - '-t'
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
-      - '-t'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:latest'
       - '.'
 
-  # 2. Push Docker image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'push'
-      - '--all-tags'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME'
+    args: ['push', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA']
 
-  # 3. Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -31,8 +25,6 @@ steps:
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
       - '--region'
       - '$_REGION'
-      - '--platform'
-      - 'managed'
       - '--cpu'
       - '4'
       - '--memory'
@@ -41,6 +33,7 @@ steps:
       - '1800'
       - '--concurrency'
       - '80'
+      # One writer: the SQLite metadata snapshot does not support concurrent instances.
       - '--max-instances'
       - '1'
       - '--no-cpu-throttling'
@@ -49,22 +42,25 @@ steps:
       - '--port'
       - '8080'
       - '--set-env-vars'
-      - 'MARKETING_MCP_DATA_DIR=/var/lib/marketing-mcp/data,MARKETING_MCP_INGEST_DIR=/var/lib/marketing-mcp/inbox,MARKETING_MCP_ARTIFACT_DIR=/var/lib/marketing-mcp/artifacts,MARKETING_MCP_METADATA_DB=/var/lib/marketing-mcp-local/metadata.db,MARKETING_MCP_TRANSPORT=streamable-http,MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true,GCS_BUCKET_NAME=$_BUCKET_NAME,MARKETING_MCP_MAX_ARTIFACT_SIZE_MB=2048'
+      - 'MARKETING_MCP_SECURITY_PROFILE=http-private-api-key,MARKETING_MCP_MAX_ARTIFACT_SIZE_MB=2048'
+      - '--set-secrets'
+      - 'MARKETING_MCP_API_KEY=$_SERVICE_NAME-api-key:latest,MARKETING_MCP_TOKEN_SECRET=$_SERVICE_NAME-token-secret:latest'
       - '--add-volume'
-      - 'name=mcp-storage,type=cloud-storage,bucket=$_BUCKET_NAME'
+      - 'name=mcp-storage,type=cloud-storage,bucket=$_BUCKET_NAME,mount-options=uid=10001;gid=10001'
       - '--add-volume-mount'
       - 'volume=mcp-storage,mount-path=/var/lib/marketing-mcp'
+      # Cloud Run IAM stays open so MCP clients can connect; the app enforces API keys.
       - '--allow-unauthenticated'
 
 substitutions:
   _REGION: 'us-central1'
   _REPO_NAME: 'mcp-servers'
   _SERVICE_NAME: 'pymc-marketing-mcp'
-  _BUCKET_NAME: '${PROJECT_ID}-marketing-artifacts'
+  _BUCKET_NAME: '${PROJECT_ID}-pymc-mcp-artifacts'
+  _APP_VERSION: '0.4.0'
 
 images:
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
-  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

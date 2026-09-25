@@ -17,7 +17,20 @@ See `docs/PRODUCTION-READINESS.md` and `docs/release-evidence/cb1d75d1fb82.md`.
 - **Gate H5 / AQG (Agent Quality Gate)**: Trace-driven eval suites verifying tool trace capture, Bayesian diagnostic gating, and negative security boundaries.
 - **Gate H6 (Upstream Compatibility)**: Compatibility canary test suite and capability inventory checks against the active PyMC-Marketing stack.
 
+### Security
+- `/control/credentials` refuses to issue API keys while server authentication is off; keys minted anonymously used to remain valid after auth was enabled.
+- The HTTP auth middleware no longer skips authentication for any path ending in `.json`, `.js`, `.html` and similar extensions.
+- Artifact downloads require a signed token or the caller's own tenant namespace; signed links work with authentication enabled.
+- Artifact download tokens no longer fall back to a hardcoded signing key.
+- Deploy scripts and `cloudbuild.yaml` default to API-key authentication with secrets from Secret Manager.
+
+### Added
+- `MARKETING_MCP_METADATA_SNAPSHOT`: durable SQLite snapshot restored at startup and refreshed on an interval and at shutdown.
+- `docs/OPERATIONS.md` single-instance runbook.
+
 ### Changed
+- Container runs as a non-root user with a `HEALTHCHECK`; `docker-compose.yml` starts in API-key mode on the correct port.
+- `scripts/deploy_cloud_run.sh` is the single deploy path; `scripts/fast_deploy.sh` forwards to it.
 - Production readiness documentation is machine-audited against executed evidence bundles (`render_production_readiness.py --check`).
 - Security architecture updated to reflect verifier-only credential persistence and request-scoped execution contexts.
 - Full fast test suite: 446 passed in ~23s with 0 ruff and 0 pyright errors.
