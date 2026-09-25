@@ -34,11 +34,19 @@ This topology can be useful for controlled testing, but it has production limits
 - current ownership/security paths are not yet proven end to end for remote MCP resources
 - current release does not have a generated CI evidence pack proving the deployment
 
-## Current deployment script warning
+## Supported single-instance deployment
 
-`scripts/deploy_cloud_run.sh` is not the production source of truth
+`scripts/deploy_cloud_run.sh` deploys the supported single-instance topology described in `docs/OPERATIONS.md`
 
-It currently carries assumptions that must be fixed before it can be promoted, including single-instance SQLite constraints, application-level API-key handling and deployment-specific storage variables. It must be covered by shell/static checks and release smoke tests before use as a release path
+- `http-private-api-key` profile by default; `--beta` is the only anonymous path and prints a warning
+- API key and artifact download-link secret come from Secret Manager (`--set-secrets`)
+- `--max-instances 1`, because SQLite runs on instance disk and is snapshotted to the GCS mount (`MARKETING_MCP_METADATA_SNAPSHOT`), which supports one writer
+- the bucket has object versioning, so earlier snapshots can be restored
+- the container runs as uid 10001 with a `HEALTHCHECK` on `/health/live`
+
+`cloudbuild.yaml` performs the same deploy from CI after the script has created the bucket and secrets once
+
+This is a supported deployment for one tenant or a small set of trusted API-key holders. The multi-instance target topology below still needs a shared SQL backend and is not implemented
 
 Raw credentials must never be printed as deployment output or committed into configuration
 

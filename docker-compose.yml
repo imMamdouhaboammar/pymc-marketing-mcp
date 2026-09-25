@@ -1,12 +1,25 @@
+# Single-host deployment. Put a TLS reverse proxy (Caddy, nginx, a cloud load balancer)
+# in front of port 8080 before exposing it beyond the host.
+#
+#   export MARKETING_MCP_API_KEY="$(python3 -c 'import secrets; print("mcp_" + secrets.token_hex(32))')"
+#   export MARKETING_MCP_TOKEN_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+#   docker compose up -d --build
 services:
   marketing-mcp:
     build: .
+    restart: unless-stopped
+    # Graceful shutdown writes the final metadata snapshot.
+    stop_grace_period: 30s
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8080:8080"
+    environment:
+      MARKETING_MCP_SECURITY_PROFILE: http-private-api-key
+      MARKETING_MCP_API_KEY: ${MARKETING_MCP_API_KEY:?set MARKETING_MCP_API_KEY}
+      MARKETING_MCP_TOKEN_SECRET: ${MARKETING_MCP_TOKEN_SECRET:?set MARKETING_MCP_TOKEN_SECRET}
+      MARKETING_MCP_PUBLIC_BASE_URL: ${MARKETING_MCP_PUBLIC_BASE_URL:-http://127.0.0.1:8080}
     volumes:
       - marketing_mcp_data:/var/lib/marketing-mcp
-    environment:
-      MARKETING_MCP_HOST: 0.0.0.0
-      MARKETING_MCP_PORT: 8000
+      - marketing_mcp_db:/var/lib/marketing-mcp-local
 volumes:
   marketing_mcp_data:
+  marketing_mcp_db:

@@ -123,7 +123,8 @@ No document may mark G0-G5, H0-H6 or AQG green from assertion alone. Current-hea
 - **Transport**: Streamable HTTP (`MARKETING_MCP_TRANSPORT=streamable-http`) on port `8080`.
 - **Compute Sizing**: 4 vCPUs, 8GiB RAM, `--no-cpu-throttling`, 1800s timeout to accommodate PyTensor C++/BLAS JIT compilation and MCMC multi-chain sampling.
 - **Persistent Storage**: Google Cloud Storage (GCS) FUSE volume mounted at `/var/lib/marketing-mcp` for durable storage of inbox datasets and posterior NetCDF traces across container lifecycles.
-- **Fail-Closed Default**: Public binding (`0.0.0.0`) requires authentication unless explicitly overridden by `MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true` for public beta deployments.
+- **Fail-Closed Default**: Public binding (`0.0.0.0`) requires authentication unless explicitly overridden by `MARKETING_MCP_ALLOW_ANONYMOUS_HTTP=true` for public beta deployments. With authentication off, `/control/credentials` refuses to issue keys.
+- **Metadata durability**: `metadata.db` stays on instance disk; `MARKETING_MCP_METADATA_SNAPSHOT` receives a consistent copy on an interval and at shutdown and is restored when the local file is missing.
 
 ## Public Beta & MCP Execution Context Rules
 
@@ -142,30 +143,19 @@ No document may mark G0-G5, H0-H6 or AQG green from assertion alone. Current-hea
 - Use `materialize()` with `symlink_to` rather than copying files into `/tmp`, preventing RAM exhaustion on Cloud Run's in-memory `tmpfs`.
 - Resumable downloads are served via `GET /artifacts/{namespace}/{digest}/download` with HTTP Range (`206 Partial Content`) support.
 
-## Fast Deploy Workflow & Credential Hygiene
+## Deploy Workflow & Credential Hygiene
 
-Deploy to Google Cloud Run with one command using dynamic placeholders and automatic GCP project detection:
+`scripts/deploy_cloud_run.sh` is the single deploy path; `scripts/fast_deploy.sh` forwards to it. Operating details live in `docs/OPERATIONS.md`
 
 ```bash
-# Public beta mode (unauthenticated, ready for all AI clients)
-./scripts/fast_deploy.sh beta
-
-# Secure production mode (with auto-generated or custom API key)
-./scripts/fast_deploy.sh secure
+./scripts/deploy_cloud_run.sh          # API-key protected (default)
+./scripts/deploy_cloud_run.sh --beta   # anonymous, throwaway demos with synthetic data only
 ```
 
-**Credential & Configuration Hygiene**:
-- **Zero Hardcoded Secrets**: Never commit `.env` files, API keys, service account JSON files, or personal emails to git.
-- **Dynamic Placeholders**: Scripts must always resolve configuration dynamically via `${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || echo '')}` and `${GCS_BUCKET_NAME:-${PROJECT_ID}-pymc-mcp-artifacts}`.
-- Automated 7-day TTL lifecycle policies are applied to GCS persistence buckets for temporary files.
-
-The script automatically:
-1. Validates `gcloud` authentication and project context.
-2. Enables required Google Cloud APIs (`run`, `artifactregistry`, `cloudbuild`, `storage`).
-3. Provisions the Artifact Registry repository and Cloud Storage persistence bucket.
-4. Builds the container image via Google Cloud Build.
-5. Deploys to Cloud Run with GCS FUSE volume mount and optimal compute flags.
-6. Prints ready-to-copy client configuration snippets for Claude Desktop, Cursor, Windsurf, OpenCode, and Claude Code CLI.
+- API key and download-link secret live in Secret Manager and reach Cloud Run through `--set-secrets`; scripts never print or commit them
+- `--max-instances 1` is required: SQLite runs on instance disk and is snapshotted to `MARKETING_MCP_METADATA_SNAPSHOT` on the GCS mount, which supports one writer
+- The container runs as uid 10001; the GCS volume is mounted with matching `uid`/`gid` options
+- Never commit `.env` files, API keys, service account JSON files, or personal emails
 
 ## Resilience, Checkpoints & Sandbox Tools
 

@@ -49,6 +49,7 @@ High-churn values such as capability totals, evidence counts, release-gate statu
 - `STATISTICAL-TESTING.md`: statistical test methodology and evidence rules
 - `VERIFICATION-MATRIX.md`: coverage map showing what is implemented, partially evidenced or still blocked
 - `DEPLOYMENT-GCP.md`: current deployment status and target Google Cloud topology
+- `OPERATIONS.md`: single-instance runbook (deploy, health checks, alerts, key rotation, backup/restore, incidents)
 
 ## Planning documents
 

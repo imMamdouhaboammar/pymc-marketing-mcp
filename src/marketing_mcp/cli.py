@@ -126,13 +126,13 @@ def create_http_app(
     app.add_route("/.well-known/mcp.json", well_known_mcp, methods=["GET"])
     app.add_route(
         "/artifacts/{namespace}/{digest}/download",
-        create_artifact_download_handler(app_instance),
+        create_artifact_download_handler(app_instance, auth_enabled=auth_mgr.enabled),
         methods=["GET"],
     )
     app.add_route("/", root_handler, methods=["GET"])
 
     # Mount Control Plane credential management routes
-    control_api = CredentialControlAPI(app_instance.credentials)
+    control_api = CredentialControlAPI(app_instance.credentials, auth_enabled=auth_mgr.enabled)
     for route in control_api.routes():
         app.routes.append(route)
 
@@ -198,12 +198,22 @@ def main():
     # HTTP deployment against its profile.
     from marketing_mcp.errors import DomainError
 
+    snapshotter = None
     try:
         settings = Settings.from_env()
         settings.security_profile.validate_http_posture(
             host=args.host,
             auth_enabled=bool(args.api_key) or settings.auth_enabled,
         )
+        if settings.metadata_snapshot is not None:
+            from marketing_mcp.storage.snapshot import MetadataSnapshotter, restore_if_missing
+
+            restore_if_missing(settings.metadata_db, settings.metadata_snapshot)
+            snapshotter = MetadataSnapshotter(
+                settings.metadata_db,
+                settings.metadata_snapshot,
+                settings.snapshot_interval_seconds,
+            )
         app = create_http_app(host=args.host, api_key=args.api_key, settings=settings)
     except DomainError as exc:
         import sys
@@ -213,7 +223,14 @@ def main():
 
     import uvicorn
 
-    uvicorn.run(app, host=args.host, port=args.port)
+    if snapshotter is not None:
+        snapshotter.start()
+    try:
+        uvicorn.run(app, host=args.host, port=args.port)
+    finally:
+        # Uvicorn returns after a graceful SIGTERM shutdown; persist the final state.
+        if snapshotter is not None:
+            snapshotter.stop()
 
 
 if __name__ == "__main__":
