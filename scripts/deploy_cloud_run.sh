@@ -36,6 +36,8 @@ if [ -z "${PROJECT_ID}" ]; then
     echo "ERROR: set GCP_PROJECT_ID or run 'gcloud config set project <PROJECT_ID>'" >&2
     exit 1
 fi
+# Every gcloud call below targets this project, whatever the active gcloud config says.
+export CLOUDSDK_CORE_PROJECT="${PROJECT_ID}"
 REGION="${GCP_REGION:-us-central1}"
 SERVICE_NAME="${GCP_SERVICE_NAME:-pymc-marketing-mcp}"
 REPO_NAME="${GCP_REPO_NAME:-mcp-servers}"

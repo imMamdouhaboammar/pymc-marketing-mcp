@@ -115,3 +115,25 @@ def test_snapshot_of_wal_database_is_a_single_file(tmp_path: Path):
     snapshot = sqlite3.connect(out / "metadata.db")
     assert snapshot.execute("PRAGMA journal_mode").fetchone() == ("delete",)
     assert snapshot.execute("SELECT x FROM t").fetchall() == [(1,)]
+
+
+def test_snapshot_never_opens_sqlite_on_the_durable_path(tmp_path: Path, monkeypatch):
+    database = tmp_path / "local" / "metadata.db"
+    database.parent.mkdir()
+    sqlite3.connect(database).execute("CREATE TABLE t (x)").connection.commit()
+    durable = tmp_path / "durable"
+    opened: list[str] = []
+    real_connect = sqlite3.connect
+
+    def tracking_connect(target, *args, **kwargs):
+        opened.append(str(target))
+        return real_connect(target, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", tracking_connect)
+    write_snapshot(database, durable / "metadata.db")
+    restore_if_missing(tmp_path / "fresh" / "metadata.db", durable / "metadata.db")
+
+    assert opened
+    assert not [path for path in opened if str(durable) in path]
+    assert sorted(p.name for p in durable.iterdir()) == ["metadata.db"]
+    assert not list(database.parent.glob(".metadata.db.snapshot*"))

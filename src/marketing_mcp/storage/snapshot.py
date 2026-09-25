@@ -26,34 +26,49 @@ def restore_if_missing(database: Path, snapshot: Path) -> bool:
     """Copy the snapshot into place when the local database does not exist yet."""
     if database.exists() or not snapshot.is_file():
         return False
-    _check_integrity(snapshot)
     database.parent.mkdir(parents=True, exist_ok=True)
+    # Plain byte copy off the durable mount; SQLite only ever opens the local copy.
     staging = database.with_name(f".{database.name}.restore")
     shutil.copyfile(snapshot, staging)
+    try:
+        _check_integrity(staging)
+    except BaseException:
+        staging.unlink(missing_ok=True)
+        raise
     os.replace(staging, database)
     logger.info("Restored metadata database from snapshot %s", snapshot)
     return True
 
 
 def write_snapshot(database: Path, snapshot: Path) -> None:
-    """Write a consistent copy of the live database, replacing the previous snapshot."""
-    snapshot.parent.mkdir(parents=True, exist_ok=True)
-    staging = snapshot.with_name(f".{snapshot.name}.tmp")
-    staging.unlink(missing_ok=True)
-    source = sqlite3.connect(database)
+    """Write a consistent copy of the live database, replacing the previous snapshot.
+
+    The backup and integrity check run on local disk next to the live database; the
+    durable path (often an object-store mount without POSIX locks) only receives a
+    finished file through a plain copy and rename.
+    """
+    local = database.with_name(f".{database.name}.snapshot")
+    local.unlink(missing_ok=True)
     try:
-        target = sqlite3.connect(staging)
+        source = sqlite3.connect(database)
         try:
-            source.backup(target)
-            # The copy inherits WAL mode from the live database; a snapshot must be one
-            # self-contained file with no -wal/-shm companions on the durable store.
-            target.execute("PRAGMA journal_mode=DELETE")
+            target = sqlite3.connect(local)
+            try:
+                source.backup(target)
+                # The copy inherits WAL mode from the live database; a snapshot must be
+                # one self-contained file with no -wal/-shm companions.
+                target.execute("PRAGMA journal_mode=DELETE")
+            finally:
+                target.close()
         finally:
-            target.close()
+            source.close()
+        _check_integrity(local)
+        snapshot.parent.mkdir(parents=True, exist_ok=True)
+        staging = snapshot.with_name(f".{snapshot.name}.tmp")
+        shutil.copyfile(local, staging)
+        os.replace(staging, snapshot)
     finally:
-        source.close()
-    _check_integrity(staging)
-    os.replace(staging, snapshot)
+        local.unlink(missing_ok=True)
 
 
 def _check_integrity(path: Path) -> None:
