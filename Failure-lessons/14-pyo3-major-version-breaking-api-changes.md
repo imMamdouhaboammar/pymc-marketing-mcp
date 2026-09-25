@@ -102,3 +102,18 @@ test result: ok. 14 passed; 0 failed
 $ pytest tests/ -v
 594 passed in 334.49s
 ```
+
+---
+
+## Resolution (2026-09-25)
+
+The migration pass landed and `pyo3` is on `0.29`, which closes RUSTSEC-2025-0020, RUSTSEC-2026-0177 and GHSA-36hh-v3qg-5jq4.
+
+The crate needed two mechanical changes in `src/lib.rs`:
+
+- `PyResult<PyObject>` became `PyResult<Py<PyAny>>` (`PyObject` was removed); `Ok(dict.into())` still converts
+- `Bound::downcast::<T>()` became `Bound::cast::<T>()`
+
+The `E0034` "multiple `wrap` found" errors listed above were a side effect of the missing `PyObject` type and went away with the first change.
+
+Verified with `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings`, `cargo test --no-default-features` (34 passed), the release build loading as `rust-native`, and the Python suite with the native extension active.

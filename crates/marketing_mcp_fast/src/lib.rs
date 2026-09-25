@@ -72,7 +72,7 @@ fn fast_admit_request(
     raw_bytes: &[u8],
     max_size: Option<usize>,
     tenant_id: Option<String>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let limit = max_size.unwrap_or(DEFAULT_MAX_REQUEST_SIZE);
     let dict = PyDict::new(py);
     match admit_and_validate_request(raw_bytes, limit, tenant_id.as_deref()) {
@@ -131,7 +131,7 @@ fn fast_admit_job(
     payload_size: usize,
     max_size: Option<usize>,
     tenant_id: Option<String>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let limit = max_size.unwrap_or(DEFAULT_MAX_REQUEST_SIZE);
     let dict = PyDict::new(py);
     match admit_job_submission(payload_size, limit, tenant_id.as_deref()) {
@@ -168,7 +168,11 @@ fn fast_admit_job(
 
 #[pyfunction]
 #[pyo3(signature = (job_id, in_process=true))]
-fn fast_acknowledge_cancellation(py: Python, job_id: &str, in_process: bool) -> PyResult<PyObject> {
+fn fast_acknowledge_cancellation(
+    py: Python,
+    job_id: &str,
+    in_process: bool,
+) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
     match acknowledge_job_cancellation(job_id, in_process) {
         Ok(ack) => {
@@ -206,7 +210,7 @@ fn increment_native_fallback_count() {
 }
 
 #[pyfunction]
-fn get_native_invocation_stats(py: Python) -> PyResult<PyObject> {
+fn get_native_invocation_stats(py: Python) -> PyResult<Py<PyAny>> {
     let stats = get_native_stats();
     let dict = PyDict::new(py);
     dict.set_item("native_admission_calls_total", stats.admission_calls)?;
@@ -257,7 +261,11 @@ fn compress_curve_lttb(xs: Vec<f64>, ys: Vec<f64>, max_points: usize) -> (Vec<f6
 // ---------------------------------------------------------------------------
 
 #[pyfunction]
-fn fast_compute_quantiles(py: Python, values: Vec<f64>, quantiles: Vec<f64>) -> PyResult<PyObject> {
+fn fast_compute_quantiles(
+    py: Python,
+    values: Vec<f64>,
+    quantiles: Vec<f64>,
+) -> PyResult<Py<PyAny>> {
     let summary = compute_quantiles(&values, &quantiles);
     let dict = PyDict::new(py);
     dict.set_item("mean", summary.mean)?;
@@ -282,7 +290,7 @@ fn fast_sniff_and_validate_csv(
     date_col: Option<String>,
     target_col: Option<String>,
     channel_cols: Option<Vec<String>>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let ch_refs: Option<Vec<&str>> = channel_cols
         .as_ref()
         .map(|v| v.iter().map(|s| s.as_str()).collect());
@@ -334,7 +342,7 @@ fn fast_mcmc_diagnostics(
     rhats: Vec<f64>,
     esses: Vec<f64>,
     divergences: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let summary = evaluate_mcmc_gates(&rhats, &esses, divergences);
     let dict = PyDict::new(py);
     dict.set_item("max_rhat", summary.max_rhat)?;
@@ -373,7 +381,7 @@ fn py_to_serde_value(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
         }
     } else if let Ok(s) = obj.extract::<String>() {
         Ok(serde_json::Value::String(s))
-    } else if let Ok(dict) = obj.downcast::<pyo3::types::PyDict>() {
+    } else if let Ok(dict) = obj.cast::<pyo3::types::PyDict>() {
         let mut map = serde_json::Map::new();
         for (k, v) in dict.iter() {
             let key_str = k.extract::<String>()?;
@@ -381,13 +389,13 @@ fn py_to_serde_value(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
             map.insert(key_str, val);
         }
         Ok(serde_json::Value::Object(map))
-    } else if let Ok(list) = obj.downcast::<pyo3::types::PyList>() {
+    } else if let Ok(list) = obj.cast::<pyo3::types::PyList>() {
         let mut vec = Vec::with_capacity(list.len());
         for item in list.iter() {
             vec.push(py_to_serde_value(&item)?);
         }
         Ok(serde_json::Value::Array(vec))
-    } else if let Ok(tuple) = obj.downcast::<pyo3::types::PyTuple>() {
+    } else if let Ok(tuple) = obj.cast::<pyo3::types::PyTuple>() {
         let mut vec = Vec::with_capacity(tuple.len());
         for item in tuple.iter() {
             vec.push(py_to_serde_value(&item)?);
@@ -426,7 +434,7 @@ fn fast_create_interaction_request(
     tenant_id: Option<String>,
     deadline_ms: Option<u64>,
     cancellation_token: Option<String>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let req = engine::create_interaction_request(
         request_id,
         correlation_id,
@@ -455,7 +463,7 @@ fn fast_create_interaction_response(
     status: String,
     payload_json: Option<String>,
     execution_time_ms: f64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let resp = engine::create_interaction_response(
         correlation_id,
         status,
