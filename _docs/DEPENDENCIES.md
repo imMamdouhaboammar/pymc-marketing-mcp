@@ -70,7 +70,7 @@ This file catalogues all third-party dependencies found across the project’s p
 | `h5netcdf` | `>=1.4.0` | Copyright (c) 2015, h5netcdf developers |
 | `h5py` | `>=3.10.0` | unknown |
 | `httpx` | `>=0.27` | BSD-3-Clause |
-| `mcp` | `>=2` | MIT |
+| `mcp` | `>=2.2.0,<3` | MIT |
 | `numpy` | `>=2.0` | unknown |
 | `pandas` | `>=2.2` | BSD 3-Clause License |
 | `pyarrow` | `>=18` | unknown |
