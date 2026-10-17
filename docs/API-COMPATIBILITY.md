@@ -10,7 +10,7 @@ Do not treat a hand-written tested-version table as release evidence. Declared r
 |---|---|---|
 | Python | `>=3.12,<3.14` | supported runtime, currently Python 3.12 and 3.13 |
 | `pymc-marketing` | `>=1.1.0,<2` | MMM, incrementality, optimizer and CLV computation boundary |
-| `mcp[cli]` | `>=2,<3` | MCP Python SDK, stdio and Streamable HTTP |
+| `mcp[cli]` | `>=2.2.0,<3` | MCP Python SDK, stdio and Streamable HTTP |
 | `pydantic` | `>=2.12,<2.13` | public input/output contracts |
 | `pandas` | `>=2.2,<3` | tabular ingestion and manipulation |
 | `numpy` | `>=2.0,<3` | numerical arrays |

@@ -1,6 +1,6 @@
 # 📚 pymc-marketing-mcp Documentation
 
-Welcome to the complete documentation for this repository. This documentation is automatically generated and maintained by Woden Docbot.
+This is the Woden DocBot-generated documentation index, not a complete set of project documentation. No generated source-file documentation sections are currently available here. For maintained project documentation, start with [docs/README.md](../docs/README.md).
 
 ![Files Documented: 0](https://img.shields.io/badge/Files_Documented-0-blue) ![Coverage: 0%](https://img.shields.io/badge/Coverage-0%-orange) ![Last Updated: 2026-10-17](https://img.shields.io/badge/Last_Updated-2026--10--17-gray)
 
@@ -30,7 +30,7 @@ No documentation sections available yet.
 ## 🧭 How to Navigate
 
 > ℹ️ **INFO**
-> Each directory has its own README.md with detailed information about that section. Use the breadcrumb navigation at the top of each page to navigate back to parent directories.
+> This generated index currently has no per-directory pages. Follow the maintained [documentation map](../docs/README.md) for the project's actual guides.
 
 ### Navigation Features
 

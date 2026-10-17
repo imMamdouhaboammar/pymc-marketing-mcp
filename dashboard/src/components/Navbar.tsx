@@ -41,7 +41,8 @@ function PublicNavbar({ onOpenAuth }: { onOpenAuth?: () => void }) {
           <a
             href="https://github.com/imMamdouhaboammar/pymc-marketing-mcp"
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
+            aria-label="GitHub repository (opens in a new tab)"
           >
             GitHub
           </a>
@@ -100,7 +101,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
             <div className="flex items-center p-1 bg-[#FAFAF7] border border-[#ECECEC] rounded-xl">
               <button
                 onClick={() => setActiveTab('user')}
-                className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                   activeTab === 'user'
                     ? 'bg-white text-[#0A0A0A] shadow-sm border border-[#ECECEC]'
                     : 'text-[#6B6B6B] hover:text-[#0A0A0A]'
@@ -113,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
               {isAdmin && (
                 <button
                   onClick={() => setActiveTab('admin')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                     activeTab === 'admin'
                       ? 'bg-white text-[#0A0A0A] shadow-sm border border-[#ECECEC]'
                       : 'text-[#6B6B6B] hover:text-[#0A0A0A]'
@@ -132,7 +133,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
               href="https://github.com/imMamdouhaboammar/pymc-marketing-mcp"
               target="_blank"
               rel="noreferrer"
-              aria-label="GitHub repository"
+              aria-label="GitHub repository (opens in a new tab)"
               className="p-2 rounded-xl text-[#6B6B6B] hover:text-[#0A0A0A] hover:bg-[#FAFAF7] border border-[#ECECEC] transition-colors"
             >
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
