@@ -23,7 +23,7 @@ def test_mcp_dependency_security_floor_matches_lock_and_catalog():
     """Reject vulnerable locked MCP SDK versions and stale Python inventory claims."""
     manifest = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependency = next(d for d in manifest["project"]["dependencies"] if d.startswith("mcp[cli]>="))
-    match = re.fullmatch(r"mcp\\[cli\\]>=(\\d+\\.\\d+\\.\\d+),<3", dependency)
+    match = re.fullmatch(r"mcp\[cli\]>=(\d+\.\d+\.\d+),<3", dependency)
     assert match, dependency
     min_version = tuple(map(int, match.group(1).split(".")))
     assert min_version >= (2, 2, 0), "CVE-2026-59951 requires MCP >=2.2.0"
