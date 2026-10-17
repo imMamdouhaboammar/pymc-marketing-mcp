@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/useAuth';
-import { LogOut, Key, LayoutGrid, ArrowRight } from 'lucide-react';
+import { LogOut, Key, LayoutGrid, Menu, ArrowRight } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'user' | 'admin';
@@ -8,8 +8,70 @@ interface NavbarProps {
   onOpenAuth?: () => void;
 }
 
+function PublicNavbar({ onOpenAuth }: { onOpenAuth?: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <header className="teaser-header">
+      <a className="teaser-skip" href="#main-content">
+        Skip to content
+      </a>
+      <div className="teaser-container teaser-nav-row">
+        <a
+          className="teaser-wordmark"
+          href="#hero-title"
+          aria-label="PyMC Marketing MCP home"
+        >
+          PyMC Marketing <span>MCP</span>
+        </a>
+        <nav
+          id="public-navigation"
+          className="teaser-public-nav"
+          aria-label="Public navigation"
+          data-open={open}
+        >
+          <a href="#how-it-works" onClick={() => setOpen(false)}>
+            How it works
+          </a>
+          <a href="#your-work" onClick={() => setOpen(false)}>
+            Your work
+          </a>
+          <a href="#quickstart" onClick={() => setOpen(false)}>
+            Get started
+          </a>
+          <a
+            href="https://github.com/imMamdouhaboammar/pymc-marketing-mcp"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub
+          </a>
+        </nav>
+        <div className="teaser-header-actions">
+          <button type="button" className="teaser-signin" onClick={onOpenAuth}>
+            Sign in
+          </button>
+          <a className="teaser-primary nav-sample" href="#quickstart">
+            Try the sample <ArrowRight size={15} aria-hidden="true" />
+          </a>
+          <button
+            type="button"
+            className="teaser-menu-button"
+            aria-expanded={open}
+            aria-controls="public-navigation"
+            onClick={() => setOpen(!open)}
+          >
+            Menu <Menu size={17} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenAuth }) => {
   const { user, profile, isAdmin, logout } = useAuth();
+
+  if (!user) return <PublicNavbar onOpenAuth={onOpenAuth} />;
 
   return (
     <header className="border-b border-[#ECECEC] bg-[#FFFFFF]/90 backdrop-blur-md sticky top-0 z-50">
@@ -17,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
         <div className="flex items-center justify-between h-16">
           {/* Brand Mark: PrePilot Wave Icon */}
           <div className="flex items-center space-x-3">
-            <a href="#" className="flex items-center space-x-2.5 group">
+            <a href="/" className="flex items-center space-x-2.5 group">
               <div className="w-8 h-8 rounded-xl bg-[#FFF4ED] border border-[#FFE8D6] flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
                 <svg className="w-5 h-5" viewBox="0 0 32 32" fill="none" aria-hidden="true">
                   <path d="M2 16 Q5 6 9 13 T16 13 T23 13 T30 13" stroke="#FF6A2C" strokeWidth="3.5" strokeLinecap="round" fill="none" />
@@ -32,33 +94,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
               </div>
             </a>
           </div>
-
-          {/* Navigation Links for Visitors */}
-          {!user && (
-            <nav className="hidden md:flex items-center space-x-7 text-xs font-medium text-[#6B6B6B]">
-              <a href="#how" className="hover:text-[#FF6A2C] transition-colors">
-                How it works
-              </a>
-              <a href="#gate" className="hover:text-[#FF6A2C] transition-colors">
-                Decision Gate
-              </a>
-              <a href="#simulator" className="hover:text-[#FF6A2C] transition-colors">
-                Interactive Simulator
-              </a>
-              <a href="#engine" className="hover:text-[#FF6A2C] transition-colors">
-                Engine & Stats
-              </a>
-              <a href="#capabilities" className="hover:text-[#FF6A2C] transition-colors">
-                Capabilities
-              </a>
-              <a href="#quickstart" className="hover:text-[#FF6A2C] transition-colors">
-                Quickstart
-              </a>
-              <a href="#faq" className="hover:text-[#FF6A2C] transition-colors">
-                FAQ
-              </a>
-            </nav>
-          )}
 
           {/* Center Navigation Switcher for Logged-In Users */}
           {user && (
@@ -125,23 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
-            ) : (
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={onOpenAuth}
-                  className="px-3.5 py-2 text-xs font-semibold text-[#0A0A0A] hover:text-[#FF6A2C] transition-colors"
-                >
-                  Sign in
-                </button>
-                <button
-                  onClick={onOpenAuth}
-                  className="flex items-center space-x-1.5 px-4 py-2 bg-[#FF6A2C] hover:bg-[#FF8A47] text-white font-semibold text-xs rounded-xl transition-all shadow-[0_2px_8px_rgba(255,106,44,0.25)] hover:shadow-[0_4px_12px_rgba(255,106,44,0.35)] active:scale-[0.99]"
-                >
-                  <span>Connect MCP</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

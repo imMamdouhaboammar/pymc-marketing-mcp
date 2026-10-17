@@ -50,3 +50,26 @@ The application will launch at `http://localhost:5173`.
 # 1. Build optimized bundle
 bun run build
 ```
+
+
+## Public teaser
+
+Anonymous visitors see a six-section, business-first teaser. The selected role changes the question, required inputs, useful output, and first prompt together; the prompt carries into setup. The preview is explicitly illustrative. Capability and readiness claims link to their canonical documents rather than hard-coded totals or release versions.
+
+The local Claude Desktop snippet shares `.demo-runtime` storage with the CLI sample via `uv --directory`. Replace the absolute project directory. The synthetic sample is MMM data, not customer transaction input for CLV. Statistical fitting and diagnostic approval are not guaranteed.
+
+The public visual contract lives in [DESIGN.md](DESIGN.md); its content brief and claim sources live in [PRODUCT.md](PRODUCT.md). Outfit, Inter, and JetBrains Mono are self-hosted Latin variable fonts from pinned Fontsource packages (OFL-1.1). The public page does not require Google Fonts requests.
+
+### Browser verification
+
+```bash
+bun install --frozen-lockfile
+bunx playwright install chromium
+bun run test:e2e
+```
+
+`test:e2e` builds the production client, then tests the built preview. Coverage includes role-specific setup context, keyboard tabs/disclosures, clipboard success/denial, sign-in entry/back, automated WCAG AA checks, 320/390/720/1440px reflow, 200% CSS zoom, loaded font faces, and screenshots. Existing authenticated backend operations require separate credentials and are not covered by these anonymous journeys.
+
+For environments supplying their own Chromium binary, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. The standard installation remains the default. Screenshots go to `test-results/review` unless `TEASER_SCREENSHOT_DIR` is supplied.
+
+The production build cleans superseded hashed client JS/CSS after Vite writes a valid index. It preserves existing non-client files in `dist`, which the Python Docker image copies verbatim.
