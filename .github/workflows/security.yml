@@ -49,14 +49,6 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
-      # Temporary verification step: capture the resolver-produced lockfile in CI logs.
-      - name: Produce patched MCP lockfile for follow-up commit
-        run: |
-          uv lock --upgrade-package mcp
-          echo 'BEGIN_UPDATED_UV_LOCK_BASE64'
-          base64 -w0 uv.lock | fold -w 180
-          echo 'END_UPDATED_UV_LOCK_BASE64'
-
       - name: Audit dependencies with pip-audit
         run: |
           uv run --with pip-audit pip-audit --desc
