@@ -9,7 +9,7 @@ metadata.db
 *.zarr
 .coverage
 htmlcov/
-dist/
+/dist/
 build/
 *.egg-info/
 .demo-runtime/

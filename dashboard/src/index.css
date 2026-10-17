@@ -1,41 +1,87 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --bg: #09090b;
-    --card: #121215;
-    --border: #27272a;
-    --border-subtle: #1e1e24;
-    --text-main: #fafafa;
-    --text-muted: #a1a1aa;
-    --text-subtle: #71717a;
-  }
+:root {
+  --bg: #ffffff;
+  --bg-2: #fafaf7;
+  --ink: #0a0a0a;
+  --ink-2: #1a1a1a;
+  --muted: #6b6b6b;
+  --muted-2: #8a8a8a;
+  --line: #ececec;
+  --line-2: #f3f3f0;
+  --coral: #FF6A2C;
+  --coral-2: #FF8A47;
+  --coral-3: #FFB088;
+  --coral-soft: #FFE8D6;
+  --coral-bg: #FFF4ED;
+  --blue: #3B7FE8;
+  --blue-2: #6FA8F5;
+  --blue-3: #B8D1FF;
+  --blue-soft: #E0EBFF;
+  --blue-dark: #1E5BC6;
+  --purple: #8B5CF6;
+  --purple-2: #6D4FE0;
+  --purple-soft: #EDE4FF;
+  --green: #1F9A65;
+  --dark-2: #141414;
+  --dark-3: #1a1a1a;
+  --radius: 20px;
+  --radius-lg: 28px;
+  --maxw: 1240px;
+}
 
-  body {
-    background-color: var(--bg);
-    color: var(--text-main);
-    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
-    letter-spacing: -0.011em;
-    min-height: 100vh;
-    margin: 0;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+}
 
-  /* Custom subtle scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: #09090b;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #27272a;
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #3f3f46;
-  }
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+em {
+  font-family: 'Newsreader', serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #fafaf7;
+}
+::-webkit-scrollbar-thumb {
+  background: #e2e2dd;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FF8A47;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
 }

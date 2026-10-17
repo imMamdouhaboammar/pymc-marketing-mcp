@@ -1,29 +1,74 @@
-import React, { useState } from 'react';
-import { AuthProvider } from './contexts/AuthContext';
-import { useAuth } from './contexts/useAuth';
+import React, { useState } from "react";
+import "./teaser.css";
+import { AuthProvider } from "./contexts/AuthContext";
+import { useAuth } from "./contexts/useAuth";
 
-import { Navbar } from './components/Navbar';
-import { AuthModal } from './components/AuthModal';
-import { ApiKeyManager } from './components/ApiKeyManager';
-import { ClientConfigGuide } from './components/ClientConfigGuide';
-import { UsageTracker } from './components/UsageTracker';
-import { AdminPanel } from './components/AdminPanel';
-import { ArrowUpRight } from 'lucide-react';
+import { Navbar } from "./components/Navbar";
+import { AuthModal } from "./components/AuthModal";
+import { TeaserLandingPage } from "./components/TeaserLandingPage";
+import { ApiKeyManager } from "./components/ApiKeyManager";
+import { ClientConfigGuide } from "./components/ClientConfigGuide";
+import { UsageTracker } from "./components/UsageTracker";
+import { AdminPanel } from "./components/AdminPanel";
+import { ArrowUpRight, ArrowLeft } from "lucide-react";
 
 const DashboardContent: React.FC = () => {
   const { user, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'user' | 'admin'>('user');
-  const [selectedKey, setSelectedKey] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<"user" | "admin">("user");
+  const [selectedKey, setSelectedKey] = useState<string>("");
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col justify-between">
-        <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
-        <section aria-label="Authentication" className="flex-1 flex items-center justify-center">
-          <AuthModal />
-        </section>
-        <footer className="border-t border-zinc-900 py-4 text-center text-xs text-zinc-600 font-mono">
-          PyMC Marketing MCP Server • v0.4.0
+      <div className="teaser-site min-h-screen flex flex-col">
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onOpenAuth={() => setShowAuthModal(true)}
+        />
+        {showAuthModal ? (
+          <main id="main-content" className="teaser-auth" tabIndex={-1}>
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="teaser-auth-back"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to platform overview</span>
+            </button>
+            <AuthModal />
+          </main>
+        ) : (
+          <main id="main-content" className="flex-1" tabIndex={-1}>
+            <TeaserLandingPage />
+          </main>
+        )}
+        <footer className="teaser-footer">
+          <div className="teaser-container teaser-footer-row">
+            <p>PyMC Marketing MCP · Open-source marketing science</p>
+            <nav aria-label="Footer navigation">
+              <a
+                href="https://github.com/imMamdouhaboammar/pymc-marketing-mcp"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GitHub
+              </a>
+              <a
+                href="https://github.com/imMamdouhaboammar/pymc-marketing-mcp/blob/main/docs/README.md"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Documentation
+              </a>
+              <a
+                href="https://github.com/imMamdouhaboammar/pymc-marketing-mcp/blob/main/LICENSE"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Apache 2.0
+              </a>
+            </nav>
+          </div>
         </footer>
       </div>
     );
